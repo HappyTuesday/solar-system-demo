@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getZoom, setZoom } from './cameraRef';
 
 export interface SceneSetup {
   scene: THREE.Scene;
@@ -27,14 +28,15 @@ export function initScene(canvas: HTMLCanvasElement): SceneSetup {
   renderer.setSize(w, h);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-  // Ambient light
-  const ambientLight = new THREE.AmbientLight(0x444466, 2);
+  // Ambient light — minimal visibility for shadow sides
+  const ambientLight = new THREE.AmbientLight(0x444466, 2.5);
   scene.add(ambientLight);
 
-  // Point light at sun position (origin)
-  const pointLight = new THREE.PointLight(0xffffff, 2, 0, 0);
-  pointLight.position.set(0, 0, 0);
-  scene.add(pointLight);
+  // Point light at sun position — illuminates planets, sun-facing bright, opposite dark
+  const sunLight = new THREE.PointLight(0xffeedd, 4, 0);
+  sunLight.decay = 0; // no distance falloff, uniform illumination from sun direction
+  sunLight.position.set(0, 0, 0);
+  scene.add(sunLight);
 
   return { scene, camera, renderer };
 }
@@ -49,15 +51,25 @@ export function handleResize(
   const h = parent ? parent.clientHeight : canvas.clientHeight;
   if (Math.abs(renderer.domElement.width - w) > 2 || Math.abs(renderer.domElement.height - h) > 2) {
     renderer.setSize(w, h, false);
-    camera.left = -w / 2;
-    camera.right = w / 2;
-    camera.top = h / 2;
-    camera.bottom = -h / 2;
-    camera.updateProjectionMatrix();
+    applyZoom(camera, w, h, getZoom());
   }
 }
 
 export const CAMERA_ROTATE_STEP = Math.PI / 36;
+
+export const ZOOM_STEP = 0.15;
+export const ZOOM_MIN = 0.5;
+export const ZOOM_MAX = 3.0;
+
+export function applyZoom(camera: THREE.OrthographicCamera, containerWidth: number, containerHeight: number, zoom: number): void {
+  const fw = containerWidth / zoom;
+  const fh = containerHeight / zoom;
+  camera.left = -fw / 2;
+  camera.right = fw / 2;
+  camera.top = fh / 2;
+  camera.bottom = -fh / 2;
+  camera.updateProjectionMatrix();
+}
 
 // Rotate around Z-axis (in XY plane)
 export function rotateCameraHorizontal(camera: THREE.OrthographicCamera, angle: number): void {
@@ -89,4 +101,21 @@ export function rotateCameraVertical(camera: THREE.OrthographicCamera, angle: nu
 export function resetCamera(camera: THREE.OrthographicCamera): void {
   camera.position.set(0, 0, 100);
   camera.lookAt(0, 0, 0);
+}
+
+export function zoomIn(camera: THREE.OrthographicCamera, containerWidth: number, containerHeight: number): void {
+  const z = Math.min(getZoom() + ZOOM_STEP, ZOOM_MAX);
+  setZoom(z);
+  applyZoom(camera, containerWidth, containerHeight, z);
+}
+
+export function zoomOut(camera: THREE.OrthographicCamera, containerWidth: number, containerHeight: number): void {
+  const z = Math.max(getZoom() - ZOOM_STEP, ZOOM_MIN);
+  setZoom(z);
+  applyZoom(camera, containerWidth, containerHeight, z);
+}
+
+export function resetZoom(camera: THREE.OrthographicCamera, containerWidth: number, containerHeight: number): void {
+  setZoom(1.0);
+  applyZoom(camera, containerWidth, containerHeight, 1.0);
 }
