@@ -124,6 +124,7 @@ export const useBuildStore = create<BuildStore>((set, get) => ({
   },
 
   advanceSimulation: (simDelta) => {
+    // simDelta 为真实物理模拟秒数（由 engine advanceSimulation 返回）
     set(state => ({
       simulatedTime: state.simulatedTime + simDelta,
     }));
