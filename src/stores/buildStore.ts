@@ -23,7 +23,7 @@ interface BuildStore extends BuildState {
   pauseBuild: () => void;
   resumeBuild: () => void;
   completeBuild: () => { score: number; planetScores: Record<string, unknown> } | null;
-  placeBody: (templateId: string, position: [number, number, number], velocity: [number, number, number], mass: number) => void;
+  placeBody: (templateId: string, position: [number, number, number], velocity: [number, number, number], mass: number, rotationSpeed?: number) => void;
   removeBody: (instanceId: string) => void;
   modifyMass: (instanceId: string, mass: number) => void;
   modifyRotationSpeed: (instanceId: string, speed: number) => void;
@@ -75,7 +75,7 @@ export const useBuildStore = create<BuildStore>((set, get) => ({
     return { score: result.totalScore, planetScores: result.planetScores };
   },
 
-  placeBody: (templateId, position, velocity, mass) => {
+  placeBody: (templateId, position, velocity, mass, rotationSpeed?: number) => {
     const body: CelestialBody = {
       id: generateBodyId(templateId),
       templateId,
@@ -83,7 +83,7 @@ export const useBuildStore = create<BuildStore>((set, get) => ({
       velocity: [...velocity] as [number, number, number],
       mass,
       placedAt: Date.now(),
-      rotationSpeed: 0,
+      rotationSpeed: rotationSpeed ?? 0,
     };
 
     set(state => ({ bodies: [...state.bodies, body] }));

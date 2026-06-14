@@ -292,7 +292,7 @@ type CelestialBodyType = 'star' | 'planet' | 'moon';
 - 位置：画布区域右上角悬浮
 - 样式：半透明深色背景
 - 布局：十字方向键 + 中心重置按钮 + 底部缩放按钮
-- 支持 +/- 按钮缩放（0.1x ~ 3.0x），不支持画布拖拽
+- 支持 +/- 按钮缩放（0.1x ~ 3.0x），默认 0.5x，面板左上角显示当前比例
 
 ---
 
@@ -348,6 +348,14 @@ type CelestialBodyType = 'star' | 'planet' | 'moon';
 
 重置按钮：将相机恢复至初始位置 (0, 0, 100)，缩放恢复至 1.0x
 ```
+
+### 5.2.1 相机追踪
+
+相机支持将任意天体设为观测目标，跟踪期间该天体始终保持画面中央。默认追踪太阳（原点）。
+
+- 选中天体后，在控制面板点击「设为观测目标」
+- 相机控制面板的旋转和复位操作围绕当前观测目标执行
+- 天体被碰撞销毁后自动取消追踪
 
 ### 5.3 天体选择
 
@@ -408,9 +416,11 @@ redo() [Ctrl+Shift+Z / Cmd+Shift+Z / Ctrl+Y]：
   └── 根据 HINT_ORDER[hintIndex] 获取提示目标
 
 渲染层响应 showHint 状态变化：
-  ├── 查找太阳位置（作为轨道中心）
+  ├── 查找轨道中心：
+  │     ├── 行星：使用太阳位置作为轨道中心
+  │     └── 卫星：使用其母体行星位置作为轨道中心（若母体未放置则回退到太阳）
   ├── 绘制相应天体的轨道虚线环（橙色 #ffaa00）
-  │     半径 = displayOrbitRadius(semiMajorAxis)（幂律压缩后的显示距离）
+  │     半径 = displayOrbitRadius(semiMajorAxis)（对数压缩后的显示距离）
   ├── 绘制引导箭头（半透明橙色）：从建议位置指向建议速度方向
   │     方向 = 与径矢垂直的切线方向（近似圆形轨道）
   └── 天体放置成功后将提示的目标天体匹配当前操作：
@@ -595,8 +605,8 @@ raycaster.ray.intersectPlane(new Plane(Vector3(0, 0, 1), 0), target)
 computeAccelerations(bodies, softening):
   ├── 对所有 i < j 计算:
   │     r = pos[i] - pos[j]
-  │     distSoft = sqrt(dist² + softening²)  // 软化因子 10
-  │     factor = G / distSoft³                // G = 500
+  │     distSoft = sqrt(dist² + softening²)  // 软化因子 1e6
+  │     factor = G / distSoft³                // G = 6.674e-11
   │     acc[i] -= factor × mass[j] × r
   │     acc[j] += factor × mass[i] × r
   └── 返回加速度数组
@@ -629,14 +639,14 @@ rk4Step(bodies, dt):
 
 ```
 advanceSimulation(bodies, realDelta):
-  ├── simDelta = realDelta × 1                // 时间缩放 1:1
-  ├── steps = clamp(floor(simDelta / 0.016), 1, 1)  // 每帧 1 步
+  ├── simDelta = realDelta × 1e5             // 时间加速 100,000x
+  ├── steps = clamp(floor(simDelta / 0.016), 1, 200)  // 每帧最多 200 子步
   ├── subDt = simDelta / steps
   └── 循环 steps 次调用 rk4Step
 ```
 
 **碰撞检测**：
-- 距离阈值：`1e7`
+- 距离阈值：`5e6`（5000 km，小于火卫一轨道 9.376e6 m，避免误判卫星碰撞）
 - 合并公式：质量守恒、质心位置（加权平均）、动量守恒（加权平均速度）
 
 ### 6.6 数据持久化（persistence/）
@@ -742,15 +752,16 @@ playSound(name):
 | phobos | 火卫一 | moon | 1.0659e16 | 1.1266e4 | 9.376e6 | 2138 |
 | deimos | 火卫二 | moon | 1.4762e15 | 6.2e3 | 2.3463e7 | 1351 |
 
-### 7.2 物理模拟参数（SIM_CONFIG）
+### 7.2 物理模拟参数（PHYSICAL_CONSTANTS / SIM_CONFIG）
 
 | 参数 | 值 | 说明 |
 |------|-----|------|
-| `G` | `500` | 引力常数（显示尺度） |
-| `timeStep` | `0.016` | 单步积分时间（s） |
-| `timeScale` | `1` | 时间缩放（1:1） |
-| `softeningFactor` | `10` | 软化因子，防止近距离数值发散 |
-| `maxSubsteps` | `1` | 每帧最大子步数 |
+| `G` | `6.674e-11` | 真实引力常数（m³/kg·s²） |
+| `timeStep` | `0.016` | 子步时间上限（s） |
+| `timeScale` | `1e5` | 时间缩放（100,000x 加速） |
+| `softeningFactor` | `1e6` | 软化因子（m），防止奇点，不影响卫星-行星尺度引力 |
+| `collisionThreshold` | `5e6` | 碰撞距离阈值（m） |
+| `maxSubsteps` | `200` | 每帧最大子步数（确保卫星轨道精度） |
 
 ### 7.3 显示参数（DISPLAY_CONFIG）
 

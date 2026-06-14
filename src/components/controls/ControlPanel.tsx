@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { REAL_DATA } from '../../engine/constants';
 import { renderToPhysical } from '../../engine/coordinateTransform';
 import { calculateErrors } from '../../engine/scoring';
+import { AUTO_BUILD_PLAN } from '../../engine/autoBuild';
+import { useAutoBuild } from '../../hooks/useAutoBuild';
 import type { CelestialBody } from '../../types';
 import './ControlPanel.css';
 
@@ -12,6 +14,7 @@ export default function ControlPanel() {
   const buildStore = useBuildStore();
   const uiStore = useUIStore();
   const historyStore = useHistoryStore();
+  const { isAutoBuilding, autoBuildProgress, startAutoBuild } = useAutoBuild();
 
   const [editingMass, setEditingMass] = useState<string>('');
 
@@ -118,6 +121,18 @@ export default function ControlPanel() {
         </div>
       </div>
 
+      <div className="panel-section button-row">
+        <button
+          className="ctrl-btn auto-build"
+          onClick={startAutoBuild}
+          disabled={isAutoBuilding}
+        >
+          {isAutoBuilding
+            ? `正在搭建... ${autoBuildProgress}/${AUTO_BUILD_PLAN.length}`
+            : '自动搭建'}
+        </button>
+      </div>
+
       {uiStore.selectedToolId && (() => {
         const toolData = REAL_DATA[uiStore.selectedToolId];
         if (!toolData) return null;
@@ -184,10 +199,10 @@ export default function ControlPanel() {
           <div className="hint-text">请先在画布上放置太阳</div>
         ) : (
           <>
-            <button className="ctrl-btn primary" onClick={buildStore.isRunning ? buildStore.pauseBuild : buildStore.resumeBuild}>
+            <button className="ctrl-btn primary" onClick={buildStore.isRunning ? buildStore.pauseBuild : buildStore.resumeBuild} disabled={isAutoBuilding}>
               {buildStore.isRunning ? '⏸ 暂停' : '▶ 开始'}
             </button>
-            <button className="ctrl-btn success" onClick={handleComplete}>
+            <button className="ctrl-btn success" onClick={handleComplete} disabled={isAutoBuilding}>
               ✓ 完成
             </button>
           </>
@@ -198,14 +213,14 @@ export default function ControlPanel() {
         <button
           className={`ctrl-btn ${uiStore.supervisionMode ? 'active' : ''}`}
           onClick={uiStore.toggleSupervision}
-          disabled={!buildStore.startedAt}
+          disabled={!buildStore.startedAt || isAutoBuilding}
         >
           👁 监督
         </button>
         <button
           className="ctrl-btn"
           onClick={handleHint}
-          disabled={!buildStore.startedAt}
+          disabled={!buildStore.startedAt || isAutoBuilding}
         >
           💡 提示
         </button>
@@ -215,18 +230,18 @@ export default function ControlPanel() {
         <button
           className="ctrl-btn small"
           onClick={buildStore.undo}
-          disabled={buildStore.undoStack.length === 0}
+          disabled={buildStore.undoStack.length === 0 || isAutoBuilding}
         >
           ↩ 撤销
         </button>
         <button
           className="ctrl-btn small"
           onClick={buildStore.redo}
-          disabled={buildStore.redoStack.length === 0}
+          disabled={buildStore.redoStack.length === 0 || isAutoBuilding}
         >
           ↪ 重做
         </button>
-        <button className="ctrl-btn small danger" onClick={handleNewBuild}>
+        <button className="ctrl-btn small danger" onClick={handleNewBuild} disabled={isAutoBuilding}>
           ⊗ 新建
         </button>
       </div>
@@ -262,7 +277,20 @@ export default function ControlPanel() {
               onChange={e => buildStore.modifyRotationSpeed(selectedBody.id, parseFloat(e.target.value))}
             />
           </div>
-          <button className="ctrl-btn danger" onClick={handleDeleteBody}>删除天体</button>
+          <button
+            className="ctrl-btn"
+            onClick={() => {
+              if (uiStore.observationTargetId === selectedBody.id) {
+                uiStore.setObservationTargetId(null);
+              } else {
+                uiStore.setObservationTargetId(selectedBody.id);
+              }
+            }}
+            disabled={isAutoBuilding}
+          >
+            {uiStore.observationTargetId === selectedBody.id ? '取消观测目标' : '设为观测目标'}
+          </button>
+          <button className="ctrl-btn danger" onClick={handleDeleteBody} disabled={isAutoBuilding}>删除天体</button>
         </div>
       )}
 

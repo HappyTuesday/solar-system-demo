@@ -5,6 +5,7 @@ interface UIStore extends UIState {
   setSelectedTool: (id: string | null) => void;
   setSelectedBodyIds: (ids: string[]) => void;
   toggleSupervision: () => void;
+  setObservationTargetId: (id: string | null) => void;
   setHint: (show: boolean) => void;
   setIsPlacing: (placing: boolean) => void;
   advanceHint: () => void;
@@ -19,6 +20,7 @@ export const useUIStore = create<UIStore>((set) => ({
   selectedToolId: null,
   selectedBodyIds: [],
   supervisionMode: false,
+  observationTargetId: null,
   showHint: false,
   isPlacing: false,
   hintIndex: 0,
@@ -32,6 +34,7 @@ export const useUIStore = create<UIStore>((set) => ({
   setSelectedTool: (id) => set({ selectedToolId: id, previewPosition: null, previewSpeed: 0 }),
   setSelectedBodyIds: (ids) => set({ selectedBodyIds: ids }),
   toggleSupervision: () => set(s => ({ supervisionMode: !s.supervisionMode })),
+  setObservationTargetId: (id) => set({ observationTargetId: id }),
   setHint: (show) => set({ showHint: show }),
   setIsPlacing: (placing) => set({ isPlacing: placing }),
   advanceHint: () => set(s => ({ hintIndex: s.hintIndex + 1 })),
@@ -43,6 +46,7 @@ export const useUIStore = create<UIStore>((set) => ({
     selectedToolId: null,
     selectedBodyIds: [],
     supervisionMode: false,
+    observationTargetId: null,
     showHint: false,
     isPlacing: false,
     hintIndex: 0,

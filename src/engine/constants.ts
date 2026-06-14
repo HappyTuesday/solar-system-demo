@@ -55,22 +55,22 @@ export const PHYSICAL_CONSTANTS = {
   sunMass: 1.989e30,
   sunRadius: 6.9634e8,
   timeScale: 1e5,
-  softeningFactor: 1e9,
-  collisionThreshold: 1e9,
+  softeningFactor: 1e6,
+  collisionThreshold: 5e6,
 };
 
 export const SIM_CONFIG = {
   timeStep: 0.016,
-  maxSubsteps: 1,
+  maxSubsteps: 200,
 };
 
 export const SPATIAL_TRANSFORM = {
-  orbitCompressionPower: 0.3,
-  orbitScaleFactor: 100,
+  orbitLogA: 300,
+  orbitLogB: 0.0115,
   sunRenderRadius: 50,
   planetLogBase: 1e6,
-  planetScaleFactor: 8,
-  minRenderRadius: 3,
+  planetScaleFactor: 12,
+  minRenderRadius: 5,
   referencePlaneColor: 0x334466,
   referencePlaneOpacity: 0.3,
   maxOrbitRadius: 2000,

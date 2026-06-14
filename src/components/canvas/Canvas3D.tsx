@@ -1,15 +1,15 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { initScene, handleResize } from '../../rendering/setup';
 import { createBodyMesh, updateBodyMeshes, removeBodyMesh, bodyMeshMap } from '../../rendering/bodies';
 import { createReferencePlane, addOrbitRing, clearOrbitRings } from '../../rendering/grid';
-import { getPlacementPoint, selectBodiesInRect, setBodyHighlight, createPreviewSphere, removePreviewSphere, updateVelocityArrow, updateGuideArrow, removeGuideArrow, cleanupGizmos, createFloatingPreview, removeFloatingPreview } from '../../rendering/interaction';
+import { getPlacementPoint, setBodyHighlight, createPreviewSphere, removePreviewSphere, updateVelocityArrow, updateGuideArrow, removeGuideArrow, cleanupGizmos, createFloatingPreview, removeFloatingPreview } from '../../rendering/interaction';
 import { advanceSimulation, detectCollisions, vec3Length } from '../../engine/physics';
 import { REAL_DATA, DRAG_CONFIG, HINT_ORDER } from '../../engine/constants';
-import { physicalRadiusToRender, physicalDistanceToRender, renderToPhysical, renderVelocityToPhysical, physicalVelocityToRender } from '../../engine/coordinateTransform';
-import { setSharedCamera, setSharedCanvas } from '../../rendering/cameraRef';
+import { physicalRadiusToRender, physicalDistanceToRender, renderToPhysical, renderVelocityToPhysical, physicalVelocityToRender, physicalToRender } from '../../engine/coordinateTransform';
+import { setSharedCamera, setSharedCanvas, setObservationTargetId, setCurrentLookAt, getCurrentLookAt } from '../../rendering/cameraRef';
 import type { SceneSetup } from '../../rendering/setup';
 import * as THREE from 'three';
 import './Canvas3D.css';
@@ -20,8 +20,9 @@ export default function Canvas3D() {
   const animFrameRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const lastTimerUpdateRef = useRef<number>(0);
-  const selectionRef = useRef<{ start: [number, number]; end: [number, number] } | null>(null);
   const dragStartRef = useRef<THREE.Vector3 | null>(null);
+  const trackingOffsetRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 100));
+  const prevTargetIdRef = useRef<string | null>(null);
 
   const bodies = useBuildStore(s => s.bodies);
   const isRunning = useBuildStore(s => s.isRunning);
@@ -35,7 +36,6 @@ export default function Canvas3D() {
   const selectedToolId = useUIStore(s => s.selectedToolId);
   const setSelectedTool = useUIStore(s => s.setSelectedTool);
   const selectedBodyIds = useUIStore(s => s.selectedBodyIds);
-  const setSelectedBodyIds = useUIStore(s => s.setSelectedBodyIds);
   const isPlacing = useUIStore(s => s.isPlacing);
   const setIsPlacing = useUIStore(s => s.setIsPlacing);
   const showHint = useUIStore(s => s.showHint);
@@ -46,14 +46,17 @@ export default function Canvas3D() {
   const setPreviewSpeedStore = useUIStore(s => s.setPreviewSpeed);
   const previewSpeed = useUIStore(s => s.previewSpeed);
 
-  const [selectionRect, setSelectionRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-
   // Cleanup floating preview when tool selection changes
   useEffect(() => {
     if (!selectedToolId && setupRef.current) {
       removeFloatingPreview(setupRef.current.scene);
     }
   }, [selectedToolId]);
+
+  // Sync 3D body highlight with selection
+  useEffect(() => {
+    setBodyHighlight(selectedBodyIds, true);
+  }, [selectedBodyIds]);
 
   // Sync 3D bodies with store — runs whenever bodies change
   const syncBodies = useCallback(() => {
@@ -102,6 +105,40 @@ export default function Canvas3D() {
       }
 
       updateBodyMeshes(bodies, dt);
+
+      // Camera tracking: center on observation target
+      const targetId = useUIStore.getState().observationTargetId;
+      if (targetId !== prevTargetIdRef.current) {
+        prevTargetIdRef.current = targetId;
+        const prevLookAt = getCurrentLookAt();
+        trackingOffsetRef.current.set(
+          camera.position.x - prevLookAt[0],
+          camera.position.y - prevLookAt[1],
+          camera.position.z - prevLookAt[2]
+        );
+      }
+
+      if (targetId) {
+        const targetBody = bodies.find(b => b.id === targetId);
+        if (targetBody) {
+          const rp = physicalToRender(targetBody.position);
+          camera.position.set(
+            rp[0] + trackingOffsetRef.current.x,
+            rp[1] + trackingOffsetRef.current.y,
+            rp[2] + trackingOffsetRef.current.z
+          );
+          camera.lookAt(new THREE.Vector3(rp[0], rp[1], rp[2]));
+          setCurrentLookAt(rp);
+          setObservationTargetId(targetId);
+        } else {
+          useUIStore.getState().setObservationTargetId(null);
+          setObservationTargetId(null);
+          setCurrentLookAt([0, 0, 0]);
+        }
+      } else {
+        setCurrentLookAt([0, 0, 0]);
+      }
+
       renderer.render(scene, camera);
     };
 
@@ -168,16 +205,25 @@ export default function Canvas3D() {
     const sun = bodies.find(b => b.templateId === 'sun');
     const sunPos = sun ? new THREE.Vector3(sun.position[0], sun.position[1], sun.position[2]) : new THREE.Vector3(0, 0, 0);
 
+    // 卫星的提示环应以其母体行星为圆心
+    let centerPos = sunPos;
+    if (data.type === 'moon' && data.parentId) {
+      const parent = bodies.find(b => b.templateId === data.parentId);
+      if (parent) {
+        centerPos = new THREE.Vector3(parent.position[0], parent.position[1], parent.position[2]);
+      }
+    }
+
     const displayDist = physicalDistanceToRender(data.semiMajorAxis);
     clearOrbitRings(setup.scene);
-    addOrbitRing(setup.scene, displayDist, 0xffaa00);
+    addOrbitRing(setup.scene, displayDist, 0xffaa00, centerPos);
 
-    const suggestPos = new THREE.Vector3(displayDist, 0, 0).add(sunPos);
+    const suggestPos = new THREE.Vector3(displayDist, 0, 0).add(centerPos);
     if (data.orbitalSpeed) {
-      const radialDir = new THREE.Vector3(suggestPos.x - sunPos.x, suggestPos.y - sunPos.y, 0).normalize();
+      const radialDir = new THREE.Vector3(suggestPos.x - centerPos.x, suggestPos.y - centerPos.y, 0).normalize();
       const tangentDir = new THREE.Vector3(-radialDir.y, radialDir.x, 0);
       // Convert physical orbital velocity to render speed for guide arrow length
-      const pP_suggest: [number, number, number] = renderToPhysical([suggestPos.x - sunPos.x, suggestPos.y - sunPos.y, (suggestPos.z - sunPos.z)]);
+      const pP_suggest: [number, number, number] = renderToPhysical([suggestPos.x - centerPos.x, suggestPos.y - centerPos.y, (suggestPos.z - centerPos.z)]);
       const vP_tangent: [number, number, number] = [tangentDir.x * data.orbitalSpeed, tangentDir.y * data.orbitalSpeed, 0];
       const vR_guide = physicalVelocityToRender(vP_tangent, pP_suggest);
       const dragLength = vec3Length(vR_guide) / DRAG_CONFIG.speedScale;
@@ -189,13 +235,6 @@ export default function Canvas3D() {
       removeGuideArrow(setup.scene);
     };
   }, [showHint, hintIndex, bodies]);
-
-  // Mouse handlers
-  const getCanvasPos = (e: React.MouseEvent): [number, number] => {
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return [e.clientX, e.clientY];
-    return [e.clientX - rect.left, e.clientY - rect.top];
-  };
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const setup = setupRef.current;
@@ -221,8 +260,6 @@ export default function Canvas3D() {
         const color = DEFAULT_COLORS[selectedToolId] ?? 0x4488ff;
         createPreviewSphere(setup.scene, point, physicalRadiusToRender(data.radius, selectedToolId === 'sun'), color);
       }
-    } else if (!selectedToolId) {
-      selectionRef.current = { start: getCanvasPos(e), end: getCanvasPos(e) };
     }
   }, [selectedToolId, isPlacing, setIsPlacing]);
 
@@ -273,14 +310,6 @@ export default function Canvas3D() {
       } else {
         setPreviewSpeedStore(0);
       }
-    } else if (selectionRef.current?.start) {
-      const currentPos = getCanvasPos(e);
-      selectionRef.current.end = currentPos;
-      const x = Math.min(selectionRef.current.start[0], currentPos[0]);
-      const y = Math.min(selectionRef.current.start[1], currentPos[1]);
-      const w = Math.abs(currentPos[0] - selectionRef.current.start[0]);
-      const h = Math.abs(currentPos[1] - selectionRef.current.start[1]);
-      setSelectionRect({ x, y, w, h });
     }
   }, [isPlacing, selectedToolId, setPreviewSpeedStore, setPreviewPosition]);
 
@@ -313,7 +342,7 @@ export default function Canvas3D() {
       }
       const data = REAL_DATA[selectedToolId];
       placeBody(selectedToolId, physPos, vel, data?.mass ?? 1e24);
-      // useBuildStore.getState().resumeBuild(); // 暂时禁用运动
+      useBuildStore.getState().resumeBuild();
 
       if (showHint) {
         const hintedId = HINT_ORDER[hintIndex % HINT_ORDER.length];
@@ -325,28 +354,12 @@ export default function Canvas3D() {
       setIsPlacing(false);
       dragStartRef.current = null;
       setPreviewSpeedStore(0);
-    } else if (selectionRef.current) {
-      const start = selectionRef.current.start;
-      const end = selectionRef.current.end;
-      if (Math.abs(end[0] - start[0]) > 5 || Math.abs(end[1] - start[1]) > 5) {
-        const ids = selectBodiesInRect(start, end, setup.camera, canvasRef.current!);
-        setSelectedBodyIds(ids);
-        setBodyHighlight(ids, true);
-      } else {
-        setSelectedBodyIds([]);
-        setBodyHighlight(selectedBodyIds, false);
-      }
-      selectionRef.current = null;
-      setSelectionRect(null);
     }
-  }, [isPlacing, selectedToolId, placeBody, setIsPlacing, setSelectedTool, selectedBodyIds, setSelectedBodyIds, showHint, hintIndex, setHint, setPreviewSpeedStore]);
+  }, [isPlacing, selectedToolId, placeBody, setIsPlacing, setSelectedTool, showHint, hintIndex, setHint, setPreviewSpeedStore]);
 
   return (
     <div className={`canvas-container ${selectedToolId && selectedToolId !== 'sun' ? 'crosshair' : ''}`}>
       <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} />
-      {selectionRect && (
-        <div className="selection-rect" style={{ left: selectionRect.x, top: selectionRect.y, width: selectionRect.w, height: selectionRect.h }} />
-      )}
       {isPlacing && previewSpeed > 0 && (
         <div className="speed-label">
           {previewSpeed >= 1000 ? `${(previewSpeed / 1000).toFixed(1)} km/s` : `${previewSpeed.toFixed(0)} m/s`}

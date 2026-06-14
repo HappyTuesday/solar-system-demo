@@ -14,14 +14,6 @@
   cursor: none;
 }
 
-.selection-rect {
-  position: absolute;
-  border: 1px solid #4488ff;
-  background: rgba(68, 136, 255, 0.1);
-  pointer-events: none;
-  z-index: 5;
-}
-
 .speed-label {
   position: absolute;
   bottom: 40px;

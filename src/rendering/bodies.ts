@@ -35,10 +35,32 @@ function loadTexture(url: string): THREE.Texture | null {
 
 export interface BodyMesh {
   mesh: THREE.Mesh;
+  tiltGroup: THREE.Group;
   group: THREE.Group;
 }
 
 export const bodyMeshMap = new Map<string, BodyMesh>();
+
+// 黄赤交角（自转轴相对轨道面法线的倾角，弧度）
+const AXIAL_TILTS: Record<string, number> = {
+  sun: 0.1265,       // ~7.25°
+  mercury: 0.0005,   // ~0.03°
+  venus: 2.873,      // ~177.4° (接近倒转)
+  earth: 0.408,      // ~23.4°
+  mars: 0.440,       // ~25.2°
+  jupiter: 0.054,    // ~3.1°
+  saturn: 0.466,     // ~26.7°
+  uranus: 1.707,     // ~97.8° (几乎躺倒)
+  neptune: 0.494,    // ~28.3°
+  moon: 0.1,
+  phobos: 0.02,
+  deimos: 0.02,
+  io: 0.02,
+  europa: 0.02,
+  ganymede: 0.02,
+  callisto: 0.02,
+  titan: 0.02,
+};
 
 export function createBodyMesh(
   body: CelestialBody,
@@ -52,31 +74,41 @@ export function createBodyMesh(
 
   const geometry = new THREE.SphereGeometry(renderRadius, isSun ? 64 : 32, isSun ? 64 : 32);
 
-  const color = DEFAULT_COLORS[body.templateId] ?? 0x888888;
+  let material: THREE.Material;
 
-  const material = new THREE.MeshStandardMaterial({
-    color,
-    roughness: 0.8,
-    metalness: 0.1,
-  });
+  if (isSun) {
+    material = new THREE.MeshBasicMaterial({ color: 0xff6600 });
+    const texture = loadTexture(`/textures/${body.templateId}.jpg`);
+    if (texture) {
+      (material as THREE.MeshBasicMaterial).map = texture;
+      (material as THREE.MeshBasicMaterial).color.set(0xffffff);
+    }
+  } else {
+    const color = DEFAULT_COLORS[body.templateId] ?? 0x888888;
+    material = new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.8,
+      metalness: 0.1,
+    });
 
-  if (!isSun) {
     const textureUrl = `/textures/${body.templateId}.jpg`;
     const texture = loadTexture(textureUrl);
     if (texture) {
-      material.map = texture;
-      material.color.set(0xffffff);
+      (material as THREE.MeshStandardMaterial).map = texture;
+      (material as THREE.MeshStandardMaterial).color.set(0xffffff);
     }
-  } else {
-    material.emissive = new THREE.Color(0xff6600);
-    material.emissiveIntensity = 0.6;
   }
 
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(0, 0, 0);
 
+  const tilt = AXIAL_TILTS[body.templateId] ?? 0;
+  const tiltGroup = new THREE.Group();
+  tiltGroup.rotation.x = tilt;
+  tiltGroup.add(mesh);
+
   const group = new THREE.Group();
-  group.add(mesh);
+  group.add(tiltGroup);
   scene.add(group);
 
   const renderPos = physicalToRender(body.position);
@@ -93,20 +125,23 @@ export function createBodyMesh(
     });
     const ring = new THREE.Mesh(ringGeometry, ringMaterial);
     ring.rotation.x = 0.3;
-    group.add(ring);
+    tiltGroup.add(ring);
   }
 
-  const result: BodyMesh = { mesh, group };
+  const result: BodyMesh = { mesh, tiltGroup, group };
   bodyMeshMap.set(body.id, result);
   return result;
 }
 
-export function updateBodyMeshes(bodies: CelestialBody[], _dt: number): void {
+export function updateBodyMeshes(bodies: CelestialBody[], dt: number): void {
   for (const body of bodies) {
     const bm = bodyMeshMap.get(body.id);
     if (!bm) continue;
     const renderPos = physicalToRender(body.position);
     bm.group.position.set(renderPos[0], renderPos[1], renderPos[2]);
+    if (body.rotationSpeed !== 0) {
+      bm.mesh.rotation.y += body.rotationSpeed * dt;
+    }
   }
 }
 

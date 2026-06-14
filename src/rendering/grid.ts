@@ -1,10 +1,9 @@
 import * as THREE from 'three';
 import { SPATIAL_TRANSFORM } from '../engine/constants';
 
-export function createReferencePlane(scene: THREE.Scene, width: number, height: number): THREE.Mesh {
-  const w = width * 3;
-  const h = height * 3;
-  const geometry = new THREE.PlaneGeometry(w, h);
+export function createReferencePlane(scene: THREE.Scene, _width: number, _height: number): THREE.Mesh {
+  const size = SPATIAL_TRANSFORM.maxOrbitRadius * 3;
+  const geometry = new THREE.PlaneGeometry(size, size);
   const material = new THREE.MeshBasicMaterial({
     color: SPATIAL_TRANSFORM.referencePlaneColor,
     transparent: true,
@@ -17,9 +16,8 @@ export function createReferencePlane(scene: THREE.Scene, width: number, height: 
   plane.renderOrder = 1;
   scene.add(plane);
 
-  // Grid lines
-  const gridSize = 200;
-  const gridStep = 50;
+  const gridSize = Math.ceil(SPATIAL_TRANSFORM.maxOrbitRadius * 1.25);
+  const gridStep = 100;
   const gridColor = 0x446688;
   const gridMat = new THREE.LineBasicMaterial({ color: gridColor, transparent: true, opacity: 0.15, depthWrite: false });
 
@@ -80,8 +78,11 @@ export function clearOrbitRings(scene: THREE.Scene): void {
   orbitRings.length = 0;
 }
 
-export function addOrbitRing(scene: THREE.Scene, radius: number, color?: number): THREE.Line {
+export function addOrbitRing(scene: THREE.Scene, radius: number, color?: number, center?: THREE.Vector3): THREE.Line {
   const ring = createOrbitRing(scene, radius, color);
+  if (center) {
+    ring.position.copy(center);
+  }
   orbitRings.push(ring);
   return ring;
 }

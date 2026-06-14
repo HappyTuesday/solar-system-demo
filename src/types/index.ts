@@ -39,6 +39,8 @@ export interface BuildState {
   simulatedTime: number;
   buildElapsedMs: number;
   hintIndex: number;
+  isAutoBuilding: boolean;
+  autoBuildProgress: number;
 }
 
 // --- Build Record (persistence) ---
@@ -85,6 +87,7 @@ export interface UIState {
   selectedToolId: CelestialBodyId | null;
   selectedBodyIds: string[];
   supervisionMode: boolean;
+  observationTargetId: string | null;
   showHint: boolean;
   isPlacing: boolean;
   hintIndex: number;

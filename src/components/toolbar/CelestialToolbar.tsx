@@ -17,9 +17,10 @@ interface ToolbarItemProps {
   template: CelestialBodyTemplate;
   isMoon: boolean;
   disabled: boolean;
+  disabledReason?: string;
 }
 
-const ToolbarItem = memo(function ToolbarItem({ template, isMoon, disabled }: ToolbarItemProps) {
+const ToolbarItem = memo(function ToolbarItem({ template, isMoon, disabled, disabledReason }: ToolbarItemProps) {
   const selectedToolId = useUIStore(s => s.selectedToolId);
   const setSelectedTool = useUIStore(s => s.setSelectedTool);
   const selected = selectedToolId === template.id;
@@ -37,7 +38,7 @@ const ToolbarItem = memo(function ToolbarItem({ template, isMoon, disabled }: To
     <div
       className={`toolbar-item ${isMoon ? 'moon' : ''} ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
       onClick={handleClick}
-      title={disabled ? '请先放置太阳' : template.name}
+      title={disabled ? (disabledReason ?? '已禁用') : template.name}
     >
       <span className="color-dot" style={{ background: DEFAULT_DOT_COLORS[template.id] ?? '#888' }} />
       <span className="item-name">{template.name}</span>
@@ -72,6 +73,7 @@ function groupTemplates(): { title: string; items: CelestialBodyTemplate[] }[] {
 
 export default function CelestialToolbar() {
   const hasSun = useBuildStore(s => s.bodies.some(b => b.templateId === 'sun'));
+  const isAutoBuilding = useBuildStore(s => s.isAutoBuilding);
   const groups = groupTemplates();
 
   return (
@@ -85,7 +87,8 @@ export default function CelestialToolbar() {
               key={item.id}
               template={item}
               isMoon={item.type === 'moon'}
-              disabled={item.id !== 'sun' && !hasSun}
+              disabled={(item.id !== 'sun' && !hasSun) || isAutoBuilding}
+              disabledReason={isAutoBuilding ? '自动搭建中...' : '请先放置太阳'}
             />
           ))}
         </div>

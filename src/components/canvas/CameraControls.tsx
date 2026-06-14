@@ -1,4 +1,5 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
+import * as THREE from 'three';
 import {
   rotateCameraHorizontal,
   rotateCameraVertical,
@@ -8,11 +9,12 @@ import {
   zoomOut,
   resetZoom,
 } from '../../rendering/setup';
-import { getSharedCamera, getSharedCanvas } from '../../rendering/cameraRef';
+import { getSharedCamera, getSharedCanvas, getCurrentLookAt, getZoom } from '../../rendering/cameraRef';
 import './CameraControls.css';
 
 export default function CameraControls() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [zoomDisplay, setZoomDisplay] = useState(() => getZoom());
 
   const startRotate = (direction: 'up' | 'down' | 'left' | 'right') => {
     if (intervalRef.current) return;
@@ -20,11 +22,13 @@ export default function CameraControls() {
       const camera = getSharedCamera();
       if (!camera) return;
       const step = CAMERA_ROTATE_STEP * 0.5;
+      const lookAt = getCurrentLookAt();
+      const target = new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2]);
       switch (direction) {
-        case 'up': rotateCameraVertical(camera, -step); break;
-        case 'down': rotateCameraVertical(camera, step); break;
-        case 'left': rotateCameraHorizontal(camera, -step); break;
-        case 'right': rotateCameraHorizontal(camera, step); break;
+        case 'up': rotateCameraVertical(camera, -step, target); break;
+        case 'down': rotateCameraVertical(camera, step, target); break;
+        case 'left': rotateCameraHorizontal(camera, -step, target); break;
+        case 'right': rotateCameraHorizontal(camera, step, target); break;
       }
     }, 50);
   };
@@ -50,6 +54,7 @@ export default function CameraControls() {
       } else {
         zoomOut(camera, w, h);
       }
+      setZoomDisplay(getZoom());
     }, 50);
   };
 
@@ -66,12 +71,16 @@ export default function CameraControls() {
     const parent = canvas.parentElement;
     const w = parent ? parent.clientWidth : canvas.clientWidth;
     const h = parent ? parent.clientHeight : canvas.clientHeight;
-    resetCamera(camera);
+    const lookAt = getCurrentLookAt();
+    const target = new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2]);
+    resetCamera(camera, target);
     resetZoom(camera, w, h);
+    setZoomDisplay(getZoom());
   };
 
   return (
     <div className="camera-controls">
+      <div className="zoom-display">{Math.round(zoomDisplay * 100)}%</div>
       <button
         className="camera-btn up"
         onMouseDown={() => startRotate('up')}

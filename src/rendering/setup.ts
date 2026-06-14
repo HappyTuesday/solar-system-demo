@@ -13,12 +13,14 @@ export function initScene(canvas: HTMLCanvasElement): SceneSetup {
   const h = parent ? parent.clientHeight : canvas.clientHeight;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x050510);
+  scene.background = new THREE.Color(0x000000);
 
-  // Orthographic camera: 1 world unit = 1 pixel on screen
+  const zoom = 0.5;
+  const fw = w / zoom;
+  const fh = h / zoom;
   const camera = new THREE.OrthographicCamera(
-    -w / 2, w / 2,
-    h / 2, -h / 2,
+    -fw / 2, fw / 2,
+    fh / 2, -fh / 2,
     1, 5000
   );
   camera.position.set(0, 0, 100);
@@ -57,7 +59,7 @@ export function handleResize(
 
 export const CAMERA_ROTATE_STEP = Math.PI / 36;
 
-export const ZOOM_STEP = 0.15;
+export const ZOOM_STEP_FACTOR = 1.10;
 export const ZOOM_MIN = 0.1;
 export const ZOOM_MAX = 3.0;
 
@@ -72,50 +74,53 @@ export function applyZoom(camera: THREE.OrthographicCamera, containerWidth: numb
 }
 
 // Rotate around Z-axis (in XY plane)
-export function rotateCameraHorizontal(camera: THREE.OrthographicCamera, angle: number): void {
-  const radius = Math.sqrt(camera.position.x ** 2 + camera.position.y ** 2);
-  const currentAngle = Math.atan2(camera.position.y, camera.position.x);
+export function rotateCameraHorizontal(camera: THREE.OrthographicCamera, angle: number, target: THREE.Vector3 = new THREE.Vector3(0, 0, 0)): void {
+  const dx = camera.position.x - target.x;
+  const dy = camera.position.y - target.y;
+  const radius = Math.sqrt(dx * dx + dy * dy);
+  const currentAngle = Math.atan2(dy, dx);
   const newAngle = currentAngle + angle;
-  camera.position.x = radius * Math.cos(newAngle);
-  camera.position.y = radius * Math.sin(newAngle);
-  camera.lookAt(0, 0, 0);
+  camera.position.x = target.x + radius * Math.cos(newAngle);
+  camera.position.y = target.y + radius * Math.sin(newAngle);
+  camera.lookAt(target);
 }
 
 // Tilt camera Z height
-export function rotateCameraVertical(camera: THREE.OrthographicCamera, angle: number): void {
-  const dist = Math.sqrt(
-    camera.position.x ** 2 + camera.position.y ** 2 + camera.position.z ** 2
-  );
-  const currentZenith = Math.acos(camera.position.z / dist);
+export function rotateCameraVertical(camera: THREE.OrthographicCamera, angle: number, target: THREE.Vector3 = new THREE.Vector3(0, 0, 0)): void {
+  const dx = camera.position.x - target.x;
+  const dy = camera.position.y - target.y;
+  const dz = camera.position.z - target.z;
+  const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  const currentZenith = Math.acos(dz / dist);
   let newZenith = currentZenith + angle;
   newZenith = Math.max(0.05, Math.min(Math.PI - 0.05, newZenith));
 
-  const azimuth = Math.atan2(camera.position.y, camera.position.x);
+  const azimuth = Math.atan2(dy, dx);
   const horizontalDist = dist * Math.sin(newZenith);
-  camera.position.z = dist * Math.cos(newZenith);
-  camera.position.x = horizontalDist * Math.cos(azimuth);
-  camera.position.y = horizontalDist * Math.sin(azimuth);
-  camera.lookAt(0, 0, 0);
+  camera.position.z = target.z + dist * Math.cos(newZenith);
+  camera.position.x = target.x + horizontalDist * Math.cos(azimuth);
+  camera.position.y = target.y + horizontalDist * Math.sin(azimuth);
+  camera.lookAt(target);
 }
 
-export function resetCamera(camera: THREE.OrthographicCamera): void {
-  camera.position.set(0, 0, 100);
-  camera.lookAt(0, 0, 0);
+export function resetCamera(camera: THREE.OrthographicCamera, target: THREE.Vector3 = new THREE.Vector3(0, 0, 0)): void {
+  camera.position.set(target.x, target.y, target.z + 100);
+  camera.lookAt(target);
 }
 
 export function zoomIn(camera: THREE.OrthographicCamera, containerWidth: number, containerHeight: number): void {
-  const z = Math.min(getZoom() + ZOOM_STEP, ZOOM_MAX);
+  const z = Math.min(getZoom() * ZOOM_STEP_FACTOR, ZOOM_MAX);
   setZoom(z);
   applyZoom(camera, containerWidth, containerHeight, z);
 }
 
 export function zoomOut(camera: THREE.OrthographicCamera, containerWidth: number, containerHeight: number): void {
-  const z = Math.max(getZoom() - ZOOM_STEP, ZOOM_MIN);
+  const z = Math.max(getZoom() / ZOOM_STEP_FACTOR, ZOOM_MIN);
   setZoom(z);
   applyZoom(camera, containerWidth, containerHeight, z);
 }
 
 export function resetZoom(camera: THREE.OrthographicCamera, containerWidth: number, containerHeight: number): void {
-  setZoom(1.0);
-  applyZoom(camera, containerWidth, containerHeight, 1.0);
+  setZoom(0.5);
+  applyZoom(camera, containerWidth, containerHeight, 0.5);
 }

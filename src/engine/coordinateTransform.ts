@@ -5,9 +5,10 @@
 // ============
 // 太阳系物理坐标（m）与渲染坐标系之间的双向转换。使用了三种不同的缩放模型：
 //
-// 1. 位置缩放 —— 幂律压缩
-//    r_render = K * (r_physical / R_SUN)^ALPHA
-//    内行星拉伸、外行星压缩，确保所有轨道在有限画布内可见。
+// 1. 位置缩放 —— 对数压缩
+//    r_render = A * ln(1 + B * r_physical / R_SUN)
+//    相比幂律压缩，对数函数在近太阳区域增长更快、远轨道压缩更平缓，
+//    使得行星在渲染空间中分布更加均匀，减少太阳周围的空白区域。
 //    速度通过该映射的导数（雅可比）进行径向/切向分量精确变换。
 //
 // 2. 尺寸缩放 —— 对数映射
@@ -25,12 +26,12 @@ const EPSILON = 1e-6;
 
 const R_SUN = 6.9634e8; // 太阳真实半径 (m)
 const M_SUN = 1.989e30; // 太阳真实质量 (kg)
-const K = 100;          // 轨道缩放因子
-const ALPHA = 0.3;      // 轨道压缩指数
-const LOG_BASE = 1e6;   // 对数缩放基准 (m)
-const LOG_FACTOR = 8;   // 对数缩放因子
-const MIN_RENDER_R = 3; // 最小渲染半径
-const SUN_RENDER_R = 50;// 太阳渲染半径
+const LOG_A = 300;       // 对数缩放振幅
+const LOG_B = 0.0115;    // 对数缩放系数（越大近距增长越快）
+const LOG_BASE = 1e6;    // 对数缩放基准 (m)
+const LOG_FACTOR = 12;   // 对数缩放因子
+const MIN_RENDER_R = 5;  // 最小渲染半径
+const SUN_RENDER_R = 50; // 太阳渲染半径
 const MASS_RENDER_SCALE = 10000 / M_SUN; // 质量显示缩放
 
 // ===== 位置转换 =====
@@ -38,7 +39,7 @@ const MASS_RENDER_SCALE = 10000 / M_SUN; // 质量显示缩放
 export function physicalToRender(pos: [number, number, number]): [number, number, number] {
   const r = Math.sqrt(pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]);
   if (r < EPSILON) return [0, 0, 0];
-  const rRender = K * Math.pow(r / R_SUN, ALPHA);
+  const rRender = LOG_A * Math.log(1 + LOG_B * r / R_SUN);
   const scale = rRender / r;
   return [pos[0] * scale, pos[1] * scale, pos[2] * scale];
 }
@@ -46,7 +47,7 @@ export function physicalToRender(pos: [number, number, number]): [number, number
 export function renderToPhysical(pos: [number, number, number]): [number, number, number] {
   const r = Math.sqrt(pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]);
   if (r < EPSILON) return [0, 0, 0];
-  const rPhys = R_SUN * Math.pow(r / K, 1 / ALPHA);
+  const rPhys = (R_SUN / LOG_B) * (Math.exp(r / LOG_A) - 1);
   const scale = rPhys / r;
   return [pos[0] * scale, pos[1] * scale, pos[2] * scale];
 }
@@ -54,14 +55,14 @@ export function renderToPhysical(pos: [number, number, number]): [number, number
 // ===== 距离标量（轨道环半径等） =====
 
 export function physicalDistanceToRender(distance: number): number {
-  return K * Math.pow(distance / R_SUN, ALPHA);
+  return LOG_A * Math.log(1 + LOG_B * distance / R_SUN);
 }
 
 export function renderDistanceToPhysical(distance: number): number {
-  return R_SUN * Math.pow(distance / K, 1 / ALPHA);
+  return (R_SUN / LOG_B) * (Math.exp(distance / LOG_A) - 1);
 }
 
-// ===== 天体尺寸 =====
+// ===== 天体尺寸（不受位置变换影响） =====
 
 export function physicalRadiusToRender(radius: number, isSun?: boolean): number {
   if (isSun) return SUN_RENDER_R;
@@ -79,6 +80,19 @@ export function renderRadiusToPhysical(rRadius: number): number {
 }
 
 // ===== 速度转换（径向/切向精确分解） =====
+//
+// 位置映射: f(r) = A * ln(1 + B * r / R_SUN)
+// 导数:     f'(r) = A * B / (R_SUN + B * r)
+// 比例:     f(r)/r = A * ln(1 + B * r / R_SUN) / r
+//
+
+function computeMappingFactors(r: number) {
+  const denom = R_SUN + LOG_B * r;
+  const f = LOG_A * Math.log(1 + LOG_B * r / R_SUN);
+  const fPrime = (LOG_A * LOG_B) / denom;
+  const fOverR = f / r;
+  return { f, fPrime, fOverR };
+}
 
 export function renderVelocityToPhysical(
   vRender: [number, number, number],
@@ -87,10 +101,7 @@ export function renderVelocityToPhysical(
   const r = Math.sqrt(posPhysical[0] * posPhysical[0] + posPhysical[1] * posPhysical[1] + posPhysical[2] * posPhysical[2]);
   if (r < EPSILON) return [0, 0, 0];
 
-  const rOverSun = r / R_SUN;
-  const f = K * Math.pow(rOverSun, ALPHA);
-  const fPrime = K * ALPHA * Math.pow(rOverSun, ALPHA - 1) / R_SUN;
-  const fOverR = f / r;
+  const { fPrime, fOverR } = computeMappingFactors(r);
 
   const ux = posPhysical[0] / r;
   const uy = posPhysical[1] / r;
@@ -130,10 +141,7 @@ export function physicalVelocityToRender(
   const r = Math.sqrt(posPhysical[0] * posPhysical[0] + posPhysical[1] * posPhysical[1] + posPhysical[2] * posPhysical[2]);
   if (r < EPSILON) return [0, 0, 0];
 
-  const rOverSun = r / R_SUN;
-  const f = K * Math.pow(rOverSun, ALPHA);
-  const fPrime = K * ALPHA * Math.pow(rOverSun, ALPHA - 1) / R_SUN;
-  const fOverR = f / r;
+  const { fPrime, fOverR } = computeMappingFactors(r);
 
   const ux = posPhysical[0] / r;
   const uy = posPhysical[1] / r;

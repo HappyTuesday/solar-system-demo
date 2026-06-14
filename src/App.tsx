@@ -2,6 +2,7 @@ import CelestialToolbar from './components/toolbar/CelestialToolbar';
 import Canvas3D from './components/canvas/Canvas3D';
 import CoordinateDisplay from './components/CoordinateDisplay';
 import CameraControls from './components/canvas/CameraControls';
+import BodyStatusPanel from './components/canvas/BodyStatusPanel';
 import ControlPanel from './components/controls/ControlPanel';
 import HistoryPanel from './components/history/HistoryPanel';
 import ScoreModal from './components/controls/ScoreModal';
@@ -24,6 +25,7 @@ function App() {
           </div>
           <CoordinateDisplay />
           <CameraControls />
+          <BodyStatusPanel />
         </div>
         <div className="app-panel-right">
           <ControlPanel />

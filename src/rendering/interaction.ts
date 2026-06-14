@@ -20,36 +20,6 @@ export function getPlacementPoint(
   return intersection;
 }
 
-export function selectBodiesInRect(
-  start: [number, number],
-  end: [number, number],
-  camera: THREE.Camera,
-  canvas: HTMLCanvasElement
-): string[] {
-  const rect = canvas.getBoundingClientRect();
-  const minX = Math.min(start[0], end[0]);
-  const maxX = Math.max(start[0], end[0]);
-  const minY = Math.min(start[1], end[1]);
-  const maxY = Math.max(start[1], end[1]);
-
-  const selected: string[] = [];
-  const tempVec = new THREE.Vector3();
-
-  for (const [id, bm] of bodyMeshMap) {
-    bm.group.getWorldPosition(tempVec);
-    const projected = tempVec.clone().project(camera);
-
-    const screenX = (projected.x + 1) / 2 * rect.width + rect.left;
-    const screenY = (-projected.y + 1) / 2 * rect.height + rect.top;
-
-    if (screenX >= minX && screenX <= maxX && screenY >= minY && screenY <= maxY) {
-      selected.push(id);
-    }
-  }
-
-  return selected;
-}
-
 export function setBodyHighlight(ids: string[], highlighted: boolean): void {
   for (const [id, bm] of bodyMeshMap) {
     const material = bm.mesh.material as THREE.MeshStandardMaterial;
