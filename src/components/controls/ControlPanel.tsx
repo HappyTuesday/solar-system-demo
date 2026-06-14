@@ -3,6 +3,7 @@ import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { REAL_DATA } from '../../engine/constants';
+import { renderToPhysical } from '../../engine/coordinateTransform';
 import { calculateErrors } from '../../engine/scoring';
 import type { CelestialBody } from '../../types';
 import './ControlPanel.css';
@@ -145,7 +146,11 @@ export default function ControlPanel() {
                 <div className="info-row">
                   <span>释放位置</span>
                   <span style={{ fontSize: 10, fontFamily: 'monospace' }}>
-                    {pos ? `${formatDistance(Math.abs(pos[0]))}, ${formatDistance(Math.abs(pos[1]))}` : '-'}
+                    {pos ? (() => {
+                      const physPos = renderToPhysical([pos[0], pos[1], pos[2]]);
+                      const dist = Math.sqrt(physPos[0] * physPos[0] + physPos[1] * physPos[1]);
+                      return formatDistance(dist);
+                    })() : '-'}
                   </span>
                 </div>
                 <div className="info-row">
@@ -159,7 +164,11 @@ export default function ControlPanel() {
               <div className="info-row">
                 <span>鼠标位置</span>
                 <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#888' }}>
-                  {pos ? `${formatDistance(Math.abs(pos[0]))}, ${formatDistance(Math.abs(pos[1]))}` : '移动鼠标选择位置...'}
+                  {pos ? (() => {
+                    const physPos = renderToPhysical([pos[0], pos[1], pos[2]]);
+                    const dist = Math.sqrt(physPos[0] * physPos[0] + physPos[1] * physPos[1]);
+                    return formatDistance(dist);
+                  })() : '移动鼠标选择位置...'}
                 </span>
               </div>
             )}

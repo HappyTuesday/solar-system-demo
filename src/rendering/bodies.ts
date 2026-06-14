@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { CelestialBody } from '../types';
-import { SPATIAL_TRANSFORM, REAL_DATA } from '../engine/constants';
+import { REAL_DATA } from '../engine/constants';
+import { physicalToRender, physicalRadiusToRender } from '../engine/coordinateTransform';
 
 const DEFAULT_COLORS: Record<string, number> = {
   sun: 0xffdd00,
@@ -21,31 +22,6 @@ const DEFAULT_COLORS: Record<string, number> = {
   phobos: 0x998877,
   deimos: 0x887766,
 };
-
-// Sun: fixed radius in world units (px)
-export const SUN_RADIUS = SPATIAL_TRANSFORM.sunRenderRadius;
-
-// Planet visual radius: log scale, scaled to be visible
-export function planetVisualRadius(realRadius: number): number {
-  const raw = Math.log10(realRadius / SPATIAL_TRANSFORM.planetLogBase + 1) * SPATIAL_TRANSFORM.planetScaleFactor;
-  return Math.max(raw, 3);
-}
-
-// Orbit display distance: power-law compression of real distances
-export function displayOrbitRadius(realSemiMajorAxis: number): number {
-  const realSunRadius = REAL_DATA.sun.radius;
-  const ratio = realSemiMajorAxis / realSunRadius;
-  const compressed = Math.pow(ratio, SPATIAL_TRANSFORM.orbitCompressionPower);
-  return compressed * SPATIAL_TRANSFORM.orbitScaleFactor;
-}
-
-// Full visual radius for any body
-export function visualRadius(templateId: string): number {
-  if (templateId === 'sun') return SUN_RADIUS;
-  const data = REAL_DATA[templateId];
-  if (!data) return 1.5;
-  return planetVisualRadius(data.radius);
-}
 
 const textureLoader = new THREE.TextureLoader();
 const textureCache = new Map<string, THREE.Texture>();
@@ -72,9 +48,9 @@ export function createBodyMesh(
   if (!data) return null;
 
   const isSun = body.templateId === 'sun';
-  const radius = visualRadius(body.templateId);
+  const renderRadius = physicalRadiusToRender(data.radius, isSun);
 
-  const geometry = new THREE.SphereGeometry(radius, isSun ? 64 : 32, isSun ? 64 : 32);
+  const geometry = new THREE.SphereGeometry(renderRadius, isSun ? 64 : 32, isSun ? 64 : 32);
 
   const color = DEFAULT_COLORS[body.templateId] ?? 0x888888;
 
@@ -97,15 +73,18 @@ export function createBodyMesh(
   }
 
   const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(body.position[0], body.position[1], body.position[2]);
+  mesh.position.set(0, 0, 0);
 
   const group = new THREE.Group();
   group.add(mesh);
   scene.add(group);
 
+  const renderPos = physicalToRender(body.position);
+  group.position.set(renderPos[0], renderPos[1], renderPos[2]);
+
   // Saturn rings
   if (body.templateId === 'saturn') {
-    const ringGeometry = new THREE.RingGeometry(radius * 1.3, radius * 2.0, 64);
+    const ringGeometry = new THREE.RingGeometry(renderRadius * 1.3, renderRadius * 2.0, 64);
     const ringMaterial = new THREE.MeshBasicMaterial({
       color: 0xccaa66,
       side: THREE.DoubleSide,
@@ -126,7 +105,8 @@ export function updateBodyMeshes(bodies: CelestialBody[], _dt: number): void {
   for (const body of bodies) {
     const bm = bodyMeshMap.get(body.id);
     if (!bm) continue;
-    bm.group.position.set(body.position[0], body.position[1], body.position[2]);
+    const renderPos = physicalToRender(body.position);
+    bm.group.position.set(renderPos[0], renderPos[1], renderPos[2]);
   }
 }
 

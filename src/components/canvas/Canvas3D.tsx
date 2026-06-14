@@ -3,11 +3,12 @@ import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { initScene, handleResize } from '../../rendering/setup';
-import { createBodyMesh, updateBodyMeshes, removeBodyMesh, bodyMeshMap, visualRadius, displayOrbitRadius } from '../../rendering/bodies';
+import { createBodyMesh, updateBodyMeshes, removeBodyMesh, bodyMeshMap } from '../../rendering/bodies';
 import { createReferencePlane, addOrbitRing, clearOrbitRings } from '../../rendering/grid';
 import { getPlacementPoint, selectBodiesInRect, setBodyHighlight, createPreviewSphere, removePreviewSphere, updateVelocityArrow, updateGuideArrow, removeGuideArrow, cleanupGizmos, createFloatingPreview, removeFloatingPreview } from '../../rendering/interaction';
-import { advanceSimulation, detectCollisions } from '../../engine/physics';
+import { advanceSimulation, detectCollisions, vec3Length } from '../../engine/physics';
 import { REAL_DATA, DRAG_CONFIG, HINT_ORDER } from '../../engine/constants';
+import { physicalRadiusToRender, physicalDistanceToRender, renderToPhysical, renderVelocityToPhysical, physicalVelocityToRender } from '../../engine/coordinateTransform';
 import { setSharedCamera } from '../../rendering/cameraRef';
 import type { SceneSetup } from '../../rendering/setup';
 import * as THREE from 'three';
@@ -85,8 +86,8 @@ export default function Canvas3D() {
       handleResize(canvasRef.current!, renderer, camera);
 
       if (isRunning && bodies.length >= 2) {
-        advanceSimulation(bodies, dt);
-        advanceSim(dt * 100);
+        const simDelta = advanceSimulation(bodies, dt);
+        advanceSim(simDelta);
         const events = detectCollisions(bodies);
         for (const event of events) {
           removeBody(event.bodyA.id);
@@ -166,7 +167,7 @@ export default function Canvas3D() {
     const sun = bodies.find(b => b.templateId === 'sun');
     const sunPos = sun ? new THREE.Vector3(sun.position[0], sun.position[1], sun.position[2]) : new THREE.Vector3(0, 0, 0);
 
-    const displayDist = displayOrbitRadius(data.semiMajorAxis);
+    const displayDist = physicalDistanceToRender(data.semiMajorAxis);
     clearOrbitRings(setup.scene);
     addOrbitRing(setup.scene, displayDist, 0xffaa00);
 
@@ -174,8 +175,12 @@ export default function Canvas3D() {
     if (data.orbitalSpeed) {
       const radialDir = new THREE.Vector3(suggestPos.x - sunPos.x, suggestPos.y - sunPos.y, 0).normalize();
       const tangentDir = new THREE.Vector3(-radialDir.y, radialDir.x, 0);
-      const speedPx = (data.orbitalSpeed / 1000) * 0.2; // scale real speed to pixel drag
-      const suggestTo = suggestPos.clone().add(tangentDir.clone().multiplyScalar(speedPx / DRAG_CONFIG.speedScale));
+      // Convert physical orbital velocity to render speed for guide arrow length
+      const pP_suggest: [number, number, number] = renderToPhysical([suggestPos.x - sunPos.x, suggestPos.y - sunPos.y, (suggestPos.z - sunPos.z)]);
+      const vP_tangent: [number, number, number] = [tangentDir.x * data.orbitalSpeed, tangentDir.y * data.orbitalSpeed, 0];
+      const vR_guide = physicalVelocityToRender(vP_tangent, pP_suggest);
+      const dragLength = vec3Length(vR_guide) / DRAG_CONFIG.speedScale;
+      const suggestTo = suggestPos.clone().add(tangentDir.clone().multiplyScalar(dragLength));
       updateGuideArrow(setup.scene, suggestPos, suggestTo, DRAG_CONFIG.guideArrowColor);
     }
     return () => {
@@ -211,7 +216,7 @@ export default function Canvas3D() {
           callisto: 0x888888, titan: 0xffcc88, phobos: 0x998877, deimos: 0x887766,
         };
         const color = DEFAULT_COLORS[selectedToolId] ?? 0x4488ff;
-        createPreviewSphere(setup.scene, point, visualRadius(selectedToolId), color);
+        createPreviewSphere(setup.scene, point, physicalRadiusToRender(data.radius, selectedToolId === 'sun'), color);
       }
     } else if (!selectedToolId) {
       selectionRef.current = { start: getCanvasPos(e), end: getCanvasPos(e) };
@@ -221,6 +226,17 @@ export default function Canvas3D() {
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const setup = setupRef.current;
     if (!setup) return;
+
+    // Update mouse coordinates for CoordinateDisplay
+    const canvasPos: [number, number] = [e.clientX, e.clientY];
+    const mousePoint = getPlacementPoint(e.nativeEvent, setup.camera, canvasRef.current!);
+    if (mousePoint) {
+      const renderPos: [number, number, number] = [mousePoint.x, mousePoint.y, mousePoint.z];
+      const physMousePos = renderToPhysical(renderPos);
+      useUIStore.getState().setMousePositions(canvasPos, renderPos, physMousePos);
+    } else {
+      useUIStore.getState().setMousePositions(canvasPos, null, null);
+    }
 
     if (selectedToolId && selectedToolId !== 'sun' && !isPlacing) {
       const point = getPlacementPoint(e.nativeEvent, setup.camera, canvasRef.current!);
@@ -235,17 +251,24 @@ export default function Canvas3D() {
             io: 0xffcc44, europa: 0xddccbb, ganymede: 0xbbbbbb,
             callisto: 0x888888, titan: 0xffcc88, phobos: 0x998877, deimos: 0x887766,
           };
-          createFloatingPreview(setup.scene, point, visualRadius(selectedToolId), DEFAULT_COLORS[selectedToolId] ?? 0x4488ff, selectedToolId);
+          createFloatingPreview(setup.scene, point, physicalRadiusToRender(data.radius, selectedToolId === 'sun'), DEFAULT_COLORS[selectedToolId] ?? 0x4488ff, selectedToolId);
         }
       }
     } else if (isPlacing && dragStartRef.current && selectedToolId && selectedToolId !== 'sun') {
       const currentPoint = getPlacementPoint(e.nativeEvent, setup.camera, canvasRef.current!);
       if (!currentPoint) return;
       const dir = new THREE.Vector3().subVectors(currentPoint, dragStartRef.current);
-      const speed = Math.min(dir.length() * DRAG_CONFIG.speedScale, DRAG_CONFIG.maxSpeed);
-      setPreviewSpeedStore(speed);
       if (dir.length() > 0.01) {
+        // Convert render drag to physical velocity for display
+        const physPos = renderToPhysical([dragStartRef.current.x, dragStartRef.current.y, dragStartRef.current.z]);
+        const vR: [number, number, number] = [dir.x * DRAG_CONFIG.speedScale, dir.y * DRAG_CONFIG.speedScale, dir.z * DRAG_CONFIG.speedScale];
+        const vP = renderVelocityToPhysical(vR, physPos);
+        const physSpeed = vec3Length(vP);
+        const cappedSpeed = Math.min(physSpeed, DRAG_CONFIG.maxSpeed);
+        setPreviewSpeedStore(cappedSpeed);
         updateVelocityArrow(setup.scene, dragStartRef.current, currentPoint, DRAG_CONFIG.arrowColor);
+      } else {
+        setPreviewSpeedStore(0);
       }
     } else if (selectionRef.current?.start) {
       const currentPos = getCanvasPos(e);
@@ -264,18 +287,29 @@ export default function Canvas3D() {
 
     if (isPlacing && dragStartRef.current && selectedToolId && selectedToolId !== 'sun') {
       const point = getPlacementPoint(e.nativeEvent, setup.camera, canvasRef.current!);
+      // Convert render position to physical position
+      const physPos: [number, number, number] = renderToPhysical([
+        dragStartRef.current.x,
+        dragStartRef.current.y,
+        dragStartRef.current.z
+      ]);
+      // Convert render velocity to physical velocity
       let vel: [number, number, number] = [0, 0, 0];
       if (point) {
         const dir = new THREE.Vector3().subVectors(point, dragStartRef.current);
-        const speed = Math.min(dir.length() * DRAG_CONFIG.speedScale, DRAG_CONFIG.maxSpeed);
         if (dir.length() > 0.01) {
-          dir.normalize().multiplyScalar(speed);
-          vel = [dir.x, dir.y, dir.z];
+          const vR: [number, number, number] = [dir.x * DRAG_CONFIG.speedScale, dir.y * DRAG_CONFIG.speedScale, dir.z * DRAG_CONFIG.speedScale];
+          let vP = renderVelocityToPhysical(vR, physPos);
+          const physSpeed = vec3Length(vP);
+          if (physSpeed > DRAG_CONFIG.maxSpeed) {
+            const cappedMag = DRAG_CONFIG.maxSpeed / physSpeed;
+            vP = [vP[0] * cappedMag, vP[1] * cappedMag, vP[2] * cappedMag];
+          }
+          vel = vP;
         }
       }
       const data = REAL_DATA[selectedToolId];
-      const pos: [number, number, number] = [dragStartRef.current.x, dragStartRef.current.y, dragStartRef.current.z];
-      placeBody(selectedToolId, pos, vel, data?.mass ?? 1e24);
+      placeBody(selectedToolId, physPos, vel, data?.mass ?? 1e24);
       // useBuildStore.getState().resumeBuild(); // 暂时禁用运动
 
       if (showHint) {
