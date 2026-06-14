@@ -11,6 +11,7 @@ interface UIStore extends UIState {
   setShowScoreModal: (show: boolean) => void;
   setPreviewPosition: (pos: [number, number, number] | null) => void;
   setPreviewSpeed: (speed: number) => void;
+  setMousePositions: (canvasPos: [number, number] | null, renderPos: [number, number, number] | null, physicalPos: [number, number, number] | null) => void;
   resetUI: () => void;
 }
 
@@ -24,6 +25,9 @@ export const useUIStore = create<UIStore>((set) => ({
   showScoreModal: false,
   previewPosition: null,
   previewSpeed: 0,
+  mouseCanvasPos: null,
+  mouseRenderPos: null,
+  mousePhysicalPos: null,
 
   setSelectedTool: (id) => set({ selectedToolId: id, previewPosition: null, previewSpeed: 0 }),
   setSelectedBodyIds: (ids) => set({ selectedBodyIds: ids }),
@@ -34,6 +38,7 @@ export const useUIStore = create<UIStore>((set) => ({
   setShowScoreModal: (show) => set({ showScoreModal: show }),
   setPreviewPosition: (pos) => set({ previewPosition: pos }),
   setPreviewSpeed: (speed) => set({ previewSpeed: speed }),
+  setMousePositions: (canvasPos, renderPos, physicalPos) => set({ mouseCanvasPos: canvasPos, mouseRenderPos: renderPos, mousePhysicalPos: physicalPos }),
   resetUI: () => set({
     selectedToolId: null,
     selectedBodyIds: [],
@@ -44,5 +49,8 @@ export const useUIStore = create<UIStore>((set) => ({
     showScoreModal: false,
     previewPosition: null,
     previewSpeed: 0,
+    mouseCanvasPos: null,
+    mouseRenderPos: null,
+    mousePhysicalPos: null,
   }),
 }));

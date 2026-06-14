@@ -91,4 +91,7 @@ export interface UIState {
   showScoreModal: boolean;
   previewPosition: [number, number, number] | null;
   previewSpeed: number;
+  mouseCanvasPos: [number, number] | null;
+  mouseRenderPos: [number, number, number] | null;
+  mousePhysicalPos: [number, number, number] | null;
 }
