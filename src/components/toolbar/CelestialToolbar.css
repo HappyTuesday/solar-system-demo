@@ -1,0 +1,66 @@
+.toolbar {
+  padding: 12px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.toolbar-header {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #aaa;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #1a1a3a;
+}
+
+.toolbar-group-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: #555;
+  margin: 10px 0 4px 4px;
+  letter-spacing: 0.5px;
+}
+
+.toolbar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 13px;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.toolbar-item:hover:not(.disabled) {
+  background: #1a1a3a;
+}
+
+.toolbar-item.selected {
+  background: #2a2a5a;
+  border: 1px solid #4488ff;
+}
+
+.toolbar-item.moon {
+  padding-left: 24px;
+  font-size: 12px;
+}
+
+.toolbar-item.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.item-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

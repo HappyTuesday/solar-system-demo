@@ -16,7 +16,27 @@ html, body, #root {
 .app {
   width: 100%;
   height: 100%;
+  display: grid;
+  grid-template-columns: 220px 1fr 280px;
+  grid-template-rows: 1fr;
+}
+
+.app-panel-left {
+  background: #0d0d2a;
+  border-right: 1px solid #1a1a3a;
+  overflow-y: auto;
+}
+
+.app-panel-center {
+  position: relative;
+  overflow: hidden;
+  background: #050510;
+}
+
+.app-panel-right {
+  background: #0d0d2a;
+  border-left: 1px solid #1a1a3a;
+  overflow-y: auto;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
 }

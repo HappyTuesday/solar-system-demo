@@ -1,0 +1,91 @@
+.history-panel {
+  padding: 12px;
+  border-top: 1px solid #1a1a3a;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: #aaa;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #1a1a3a;
+}
+
+.history-list {
+  flex: 1;
+}
+
+.history-item {
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 4px;
+  transition: background 0.15s;
+  border: 1px solid transparent;
+}
+
+.history-item:hover {
+  background: #1a1a3a;
+}
+
+.history-item.active {
+  background: #2a2a5a;
+  border-color: #4488ff;
+}
+
+.history-date {
+  font-size: 11px;
+  color: #777;
+  margin-bottom: 2px;
+}
+
+.history-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.history-status {
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.status-building {
+  color: #ffaa00;
+  background: rgba(255, 170, 0, 0.1);
+}
+
+.status-completed {
+  color: #44ff44;
+  background: rgba(68, 255, 68, 0.1);
+}
+
+.status-cancelled {
+  color: #888;
+  background: rgba(136, 136, 136, 0.1);
+}
+
+.history-score {
+  color: #ffcc00;
+  font-weight: 600;
+}
+
+.history-time {
+  color: #888;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.history-empty {
+  text-align: center;
+  color: #555;
+  font-size: 12px;
+  padding: 20px 0;
+}
