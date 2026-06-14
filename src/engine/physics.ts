@@ -154,5 +154,5 @@ export function advanceSimulation(bodies: CelestialBody[], realDelta: number): n
     rk4Step(bodies, subDt);
   }
 
-  return steps;
+  return simDelta;
 }
