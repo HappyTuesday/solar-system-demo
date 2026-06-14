@@ -1,5 +1,6 @@
 import CelestialToolbar from './components/toolbar/CelestialToolbar';
 import Canvas3D from './components/canvas/Canvas3D';
+import CoordinateDisplay from './components/CoordinateDisplay';
 import CameraControls from './components/canvas/CameraControls';
 import ControlPanel from './components/controls/ControlPanel';
 import HistoryPanel from './components/history/HistoryPanel';
@@ -18,7 +19,10 @@ function App() {
           <CelestialToolbar />
         </div>
         <div className="app-panel-center">
-          <Canvas3D />
+          <div className="canvas-wrapper">
+            <Canvas3D />
+          </div>
+          <CoordinateDisplay />
           <CameraControls />
         </div>
         <div className="app-panel-right">
