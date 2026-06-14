@@ -9,7 +9,7 @@ import { getPlacementPoint, selectBodiesInRect, setBodyHighlight, createPreviewS
 import { advanceSimulation, detectCollisions, vec3Length } from '../../engine/physics';
 import { REAL_DATA, DRAG_CONFIG, HINT_ORDER } from '../../engine/constants';
 import { physicalRadiusToRender, physicalDistanceToRender, renderToPhysical, renderVelocityToPhysical, physicalVelocityToRender } from '../../engine/coordinateTransform';
-import { setSharedCamera } from '../../rendering/cameraRef';
+import { setSharedCamera, setSharedCanvas } from '../../rendering/cameraRef';
 import type { SceneSetup } from '../../rendering/setup';
 import * as THREE from 'three';
 import './Canvas3D.css';
@@ -119,13 +119,14 @@ export default function Canvas3D() {
     const setup = initScene(canvas);
     setupRef.current = setup;
     setSharedCamera(setup.camera);
+    setSharedCanvas(canvasRef.current);
     // Ensure camera matches actual canvas dimensions (layout may not be complete at mount)
     setTimeout(() => handleResize(canvasRef.current!, setup.renderer, setup.camera), 100);
     createReferencePlane(setup.scene, canvas.clientWidth, canvas.clientHeight);
     return () => {
       cancelAnimationFrame(animFrameRef.current);
       setSharedCamera(null);
-      setup.renderer.dispose();
+      setSharedCanvas(null);
       setupRef.current = null;
     };
   }, []);
@@ -191,7 +192,9 @@ export default function Canvas3D() {
 
   // Mouse handlers
   const getCanvasPos = (e: React.MouseEvent): [number, number] => {
-    return [e.clientX, e.clientY];
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return [e.clientX, e.clientY];
+    return [e.clientX - rect.left, e.clientY - rect.top];
   };
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
