@@ -58,7 +58,7 @@ export function handleResize(
 export const CAMERA_ROTATE_STEP = Math.PI / 36;
 
 export const ZOOM_STEP = 0.15;
-export const ZOOM_MIN = 0.5;
+export const ZOOM_MIN = 0.1;
 export const ZOOM_MAX = 3.0;
 
 export function applyZoom(camera: THREE.OrthographicCamera, containerWidth: number, containerHeight: number, zoom: number): void {

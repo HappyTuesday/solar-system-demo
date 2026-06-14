@@ -1,4 +1,4 @@
-import type { Database, SqlJsStatic } from 'sql.js';
+import type { Database } from 'sql.js';
 import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 
 let db: Database | null = null;
@@ -6,7 +6,7 @@ let db: Database | null = null;
 export async function initDatabase(): Promise<Database> {
   if (db) return db;
 
-  const sqlModule: { default?: SqlJsStatic } = await import('sql.js');
+  const sqlModule = await import('sql.js');
   const initSqlJs = sqlModule.default;
 
   if (!initSqlJs) throw new Error('Failed to load sql.js module');
@@ -15,9 +15,10 @@ export async function initDatabase(): Promise<Database> {
     locateFile: () => sqlWasmUrl,
   });
 
-  db = new SQL.Database();
+  const database = new SQL.Database();
+  db = database;
 
-  db.run(`
+  database.run(`
     CREATE TABLE IF NOT EXISTS build_records (
       id TEXT PRIMARY KEY,
       created_at INTEGER NOT NULL,
@@ -29,9 +30,9 @@ export async function initDatabase(): Promise<Database> {
     )
   `);
 
-  db.run(`CREATE INDEX IF NOT EXISTS idx_created_at ON build_records(created_at DESC)`);
+  database.run(`CREATE INDEX IF NOT EXISTS idx_created_at ON build_records(created_at DESC)`);
 
-  return db;
+  return database;
 }
 
 export function getDatabase(): Database {

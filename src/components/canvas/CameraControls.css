@@ -8,7 +8,7 @@
   padding: 6px;
   display: grid;
   grid-template-columns: 30px 30px 30px;
-  grid-template-rows: 30px 30px 30px 30px;
+  grid-template-rows: 30px 30px 30px;
   gap: 3px;
   z-index: 10;
 }
@@ -60,10 +60,10 @@
 
 .camera-btn.zoom-out {
   grid-column: 1;
-  grid-row: 4;
+  grid-row: 3;
 }
 
 .camera-btn.zoom-in {
   grid-column: 3;
-  grid-row: 4;
+  grid-row: 3;
 }

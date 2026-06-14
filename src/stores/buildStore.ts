@@ -37,6 +37,8 @@ interface BuildStore extends BuildState {
   undo: () => void;
   redo: () => void;
   updateBuildElapsed: (elapsed: number) => void;
+  setAutoBuilding: (v: boolean) => void;
+  setAutoBuildProgress: (v: number) => void;
 }
 
 const initialState: BuildState = {
@@ -48,6 +50,8 @@ const initialState: BuildState = {
   simulatedTime: 0,
   buildElapsedMs: 0,
   hintIndex: 0,
+  isAutoBuilding: false,
+  autoBuildProgress: 0,
 };
 
 export const useBuildStore = create<BuildStore>((set, get) => ({
@@ -145,6 +149,8 @@ export const useBuildStore = create<BuildStore>((set, get) => ({
       simulatedTime: s.simulatedTime,
       buildElapsedMs: s.buildElapsedMs,
       hintIndex: s.hintIndex,
+      isAutoBuilding: s.isAutoBuilding,
+      autoBuildProgress: s.autoBuildProgress,
     };
   },
 
@@ -181,4 +187,8 @@ export const useBuildStore = create<BuildStore>((set, get) => ({
   },
 
   updateBuildElapsed: (elapsed) => set({ buildElapsedMs: elapsed }),
+
+  setAutoBuilding: (v) => set({ isAutoBuilding: v, autoBuildProgress: v ? 0 : 0 }),
+
+  setAutoBuildProgress: (v) => set({ autoBuildProgress: v }),
 }));
