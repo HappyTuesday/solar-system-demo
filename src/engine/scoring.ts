@@ -40,10 +40,9 @@ export function scoreBuild(bodies: CelestialBody[]): ScoringResult {
     const actualR = orbitRadius(placed, sunPos);
     let orbitRadiusScore = 0;
     if (ref.semiMajorAxis && actualR > 0) {
-      const logError = Math.abs(Math.log10(actualR) - Math.log10(ref.semiMajorAxis))
-        / Math.log10(ref.semiMajorAxis) * 100;
+      const radiusError = Math.abs(actualR - (ref.semiMajorAxis ?? 0)) / (ref.semiMajorAxis ?? 1) * 100;
       orbitRadiusScore = Math.max(0, config.orbitRadiusWeight
-        * Math.max(0, 1 - logError / config.allowedErrorPercent));
+        * Math.max(0, 1 - radiusError / config.allowedErrorPercent));
     }
 
     const massError = Math.abs(placed.mass - ref.mass) / ref.mass * 100;
@@ -106,7 +105,7 @@ export function calculateErrors(bodies: CelestialBody[]): Record<string, {
     const actualSpeed = vec3Length(body.velocity);
 
     const orbitRadiusError = data.semiMajorAxis
-      ? Math.abs(Math.log10(actualR) - Math.log10(data.semiMajorAxis)) / Math.log10(data.semiMajorAxis) * 100
+      ? Math.abs(actualR - data.semiMajorAxis) / data.semiMajorAxis * 100
       : 0;
     const massError = Math.abs(body.mass - data.mass) / data.mass * 100;
     const speedError = data.orbitalSpeed
