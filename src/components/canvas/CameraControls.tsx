@@ -4,8 +4,11 @@ import {
   rotateCameraVertical,
   resetCamera,
   CAMERA_ROTATE_STEP,
+  zoomIn,
+  zoomOut,
+  resetZoom,
 } from '../../rendering/setup';
-import { getSharedCamera } from '../../rendering/cameraRef';
+import { getSharedCamera, getSharedCanvas } from '../../rendering/cameraRef';
 import './CameraControls.css';
 
 export default function CameraControls() {
@@ -33,6 +36,23 @@ export default function CameraControls() {
     }
   };
 
+  const startZoom = (direction: 'in' | 'out') => {
+    if (intervalRef.current) return;
+    intervalRef.current = setInterval(() => {
+      const camera = getSharedCamera();
+      const canvas = getSharedCanvas();
+      if (!camera || !canvas) return;
+      const parent = canvas.parentElement;
+      const w = parent ? parent.clientWidth : canvas.clientWidth;
+      const h = parent ? parent.clientHeight : canvas.clientHeight;
+      if (direction === 'in') {
+        zoomIn(camera, w, h);
+      } else {
+        zoomOut(camera, w, h);
+      }
+    }, 50);
+  };
+
   useEffect(() => {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -41,7 +61,13 @@ export default function CameraControls() {
 
   const handleReset = () => {
     const camera = getSharedCamera();
-    if (camera) resetCamera(camera);
+    const canvas = getSharedCanvas();
+    if (!camera || !canvas) return;
+    const parent = canvas.parentElement;
+    const w = parent ? parent.clientWidth : canvas.clientWidth;
+    const h = parent ? parent.clientHeight : canvas.clientHeight;
+    resetCamera(camera);
+    resetZoom(camera, w, h);
   };
 
   return (
@@ -71,6 +97,18 @@ export default function CameraControls() {
         onMouseUp={stopRotate}
         onMouseLeave={stopRotate}
       >↓</button>
+      <button
+        className="camera-btn zoom-out"
+        onMouseDown={() => startZoom('out')}
+        onMouseUp={stopRotate}
+        onMouseLeave={stopRotate}
+      >−</button>
+      <button
+        className="camera-btn zoom-in"
+        onMouseDown={() => startZoom('in')}
+        onMouseUp={stopRotate}
+        onMouseLeave={stopRotate}
+      >+</button>
     </div>
   );
 }
