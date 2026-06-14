@@ -50,35 +50,35 @@ export const CELESTIAL_TEMPLATES: CelestialBodyTemplate[] = [
   { id: 'titan', name: '土卫六', type: 'moon', parentId: 'saturn', mass: REAL_DATA.titan.mass, radius: REAL_DATA.titan.radius, textureUrl: '/textures/titan.jpg', semiMajorAxis: REAL_DATA.titan.semiMajorAxis, orbitalSpeed: REAL_DATA.titan.orbitalSpeed },
 ];
 
-export const G = 500;
-
-// Display-scale masses for visual physics
-export const MASS_SCALE = 10000 / REAL_DATA.sun.mass; // scale real sun mass → 10000
-
-export function displayMass(realMass: number): number {
-  return realMass * MASS_SCALE;
-}
+export const PHYSICAL_CONSTANTS = {
+  G: 6.674e-11,
+  sunMass: 1.989e30,
+  sunRadius: 6.9634e8,
+  timeScale: 1e5,
+  softeningFactor: 1e9,
+  collisionThreshold: 1e9,
+};
 
 export const SIM_CONFIG = {
   timeStep: 0.016,
-  timeScale: 1,
-  softeningFactor: 10,
   maxSubsteps: 1,
 };
 
-export const DISPLAY_CONFIG = {
-  sunRadius: 50,             // px, sun visual radius (100px diameter)
-  orbitPower: 0.3,           // compression exponent for orbit distances
-  planetScaleFactor: 8,      // multiplier for log-scale planet radius
-  minDisplayRadius: 1e6,     // reference min radius for log scale
+export const SPATIAL_TRANSFORM = {
+  orbitCompressionPower: 0.3,
+  orbitScaleFactor: 100,
+  sunRenderRadius: 50,
+  planetLogBase: 1e6,
+  planetScaleFactor: 8,
+  minRenderRadius: 3,
   referencePlaneColor: 0x334466,
   referencePlaneOpacity: 0.3,
-  maxOrbitRadius: 2000,      // max display orbit radius in units
+  maxOrbitRadius: 2000,
 };
 
 export const DRAG_CONFIG = {
-  speedScale: 0.5,          // pixel drag distance → velocity units
-  maxSpeed: 200,            // max initial velocity in display units/s
+  speedScale: 2e-6,
+  maxSpeed: 200000,
   arrowColor: 0x00ff00,
   guideArrowColor: 0xffaa00,
 };

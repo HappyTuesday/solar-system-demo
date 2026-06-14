@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { DISPLAY_CONFIG } from '../engine/constants';
+import { SPATIAL_TRANSFORM } from '../engine/constants';
 
 export function createReferencePlane(scene: THREE.Scene, width: number, height: number): THREE.Mesh {
   const w = width * 3;
   const h = height * 3;
   const geometry = new THREE.PlaneGeometry(w, h);
   const material = new THREE.MeshBasicMaterial({
-    color: DISPLAY_CONFIG.referencePlaneColor,
+    color: SPATIAL_TRANSFORM.referencePlaneColor,
     transparent: true,
-    opacity: DISPLAY_CONFIG.referencePlaneOpacity,
+    opacity: SPATIAL_TRANSFORM.referencePlaneOpacity,
     side: THREE.DoubleSide,
     depthWrite: false,
   });

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { CelestialBody } from '../types';
-import { DISPLAY_CONFIG, REAL_DATA } from '../engine/constants';
+import { SPATIAL_TRANSFORM, REAL_DATA } from '../engine/constants';
 
 const DEFAULT_COLORS: Record<string, number> = {
   sun: 0xffdd00,
@@ -23,11 +23,11 @@ const DEFAULT_COLORS: Record<string, number> = {
 };
 
 // Sun: fixed radius in world units (px)
-export const SUN_RADIUS = DISPLAY_CONFIG.sunRadius;
+export const SUN_RADIUS = SPATIAL_TRANSFORM.sunRenderRadius;
 
 // Planet visual radius: log scale, scaled to be visible
 export function planetVisualRadius(realRadius: number): number {
-  const raw = Math.log10(realRadius / DISPLAY_CONFIG.minDisplayRadius + 1) * DISPLAY_CONFIG.planetScaleFactor;
+  const raw = Math.log10(realRadius / SPATIAL_TRANSFORM.planetLogBase + 1) * SPATIAL_TRANSFORM.planetScaleFactor;
   return Math.max(raw, 3);
 }
 
@@ -35,8 +35,8 @@ export function planetVisualRadius(realRadius: number): number {
 export function displayOrbitRadius(realSemiMajorAxis: number): number {
   const realSunRadius = REAL_DATA.sun.radius;
   const ratio = realSemiMajorAxis / realSunRadius;
-  const compressed = Math.pow(ratio, DISPLAY_CONFIG.orbitPower);
-  return compressed * DISPLAY_CONFIG.sunRadius * 2;
+  const compressed = Math.pow(ratio, SPATIAL_TRANSFORM.orbitCompressionPower);
+  return compressed * SPATIAL_TRANSFORM.orbitScaleFactor;
 }
 
 // Full visual radius for any body

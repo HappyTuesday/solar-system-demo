@@ -1,5 +1,5 @@
 import type { CelestialBody } from '../types';
-import { G, SIM_CONFIG } from './constants';
+import { PHYSICAL_CONSTANTS, SIM_CONFIG } from './constants';
 
 function vec3Add(a: [number, number, number], b: [number, number, number]): [number, number, number] {
   return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -25,7 +25,7 @@ function vec3Normalize(v: [number, number, number]): [number, number, number] {
 
 export function computeAccelerations(
   bodies: CelestialBody[],
-  softening: number = SIM_CONFIG.softeningFactor
+  softening: number = PHYSICAL_CONSTANTS.softeningFactor
 ): [number, number, number][] {
   const n = bodies.length;
   const acc: [number, number, number][] = Array.from({ length: n }, () => [0, 0, 0]);
@@ -35,7 +35,7 @@ export function computeAccelerations(
       const r = vec3Sub(bodies[i].position, bodies[j].position);
       const dist = vec3Length(r);
       const distSoft = Math.sqrt(dist * dist + softening * softening);
-      const factor = G / (distSoft * distSoft * distSoft);
+      const factor = PHYSICAL_CONSTANTS.G / (distSoft * distSoft * distSoft);
 
       const fi = vec3Scale(r, -factor * bodies[j].mass);
       const fj = vec3Scale(r, factor * bodies[i].mass);
@@ -103,7 +103,7 @@ export interface CollisionEvent {
 export function detectCollisions(bodies: CelestialBody[]): CollisionEvent[] {
   const events: CollisionEvent[] = [];
   const n = bodies.length;
-  const threshold = 1e7;
+  const threshold = PHYSICAL_CONSTANTS.collisionThreshold;
 
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
@@ -143,7 +143,7 @@ function mergeBodies(a: CelestialBody, b: CelestialBody): CelestialBody {
 export function advanceSimulation(bodies: CelestialBody[], realDelta: number): number {
   if (bodies.length < 2) return 0;
 
-  const simDelta = realDelta * SIM_CONFIG.timeScale;
+  const simDelta = realDelta * PHYSICAL_CONSTANTS.timeScale;
   const steps = Math.min(
     Math.max(1, Math.floor(simDelta / SIM_CONFIG.timeStep)),
     SIM_CONFIG.maxSubsteps

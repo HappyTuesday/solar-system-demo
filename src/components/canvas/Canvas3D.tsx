@@ -7,7 +7,7 @@ import { createBodyMesh, updateBodyMeshes, removeBodyMesh, bodyMeshMap, visualRa
 import { createReferencePlane, addOrbitRing, clearOrbitRings } from '../../rendering/grid';
 import { getPlacementPoint, selectBodiesInRect, setBodyHighlight, createPreviewSphere, removePreviewSphere, updateVelocityArrow, updateGuideArrow, removeGuideArrow, cleanupGizmos, createFloatingPreview, removeFloatingPreview } from '../../rendering/interaction';
 import { advanceSimulation, detectCollisions } from '../../engine/physics';
-import { REAL_DATA, DRAG_CONFIG, HINT_ORDER, displayMass } from '../../engine/constants';
+import { REAL_DATA, PHYSICAL_CONSTANTS, DRAG_CONFIG, HINT_ORDER } from '../../engine/constants';
 import { setSharedCamera } from '../../rendering/cameraRef';
 import type { SceneSetup } from '../../rendering/setup';
 import * as THREE from 'three';
@@ -133,7 +133,7 @@ export default function Canvas3D() {
   useEffect(() => {
     if (selectedToolId === 'sun' && !bodies.some(b => b.templateId === 'sun')) {
       const sunData = REAL_DATA.sun;
-      placeBody('sun', [0, 0, 0], [0, 0, 0], displayMass(sunData.mass));
+      placeBody('sun', [0, 0, 0], [0, 0, 0], REAL_DATA.sun.mass);
       startBuild();
       // 立即暂停，方便观察天体放置
       useBuildStore.getState().pauseBuild();
@@ -275,7 +275,7 @@ export default function Canvas3D() {
       }
       const data = REAL_DATA[selectedToolId];
       const pos: [number, number, number] = [dragStartRef.current.x, dragStartRef.current.y, dragStartRef.current.z];
-      placeBody(selectedToolId, pos, vel, displayMass(data?.mass ?? 1e24));
+      placeBody(selectedToolId, pos, vel, data?.mass ?? 1e24);
       // useBuildStore.getState().resumeBuild(); // 暂时禁用运动
 
       if (showHint) {
