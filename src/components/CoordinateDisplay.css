@@ -1,0 +1,45 @@
+.coordinate-display {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  background: #0d0d2a;
+  border-top: 1px solid #1a1a3a;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #8899bb;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.coordinate-row {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  gap: 0;
+}
+
+.coordinate-row .sep {
+  color: #334466;
+  margin: 0 8px;
+}
+
+.coordinate-row .label {
+  color: #667799;
+}
+
+.coordinate-row .value {
+  color: #aabbcc;
+  margin-left: 4px;
+}
+
+.coordinate-row .unit {
+  color: #667799;
+  margin-left: 2px;
+  font-size: 10px;
+}
+
+.coordinate-display .placeholder {
+  color: #334466;
+}
