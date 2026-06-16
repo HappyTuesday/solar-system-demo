@@ -16,6 +16,8 @@ export default function ControlPanel() {
   const historyStore = useHistoryStore();
   const timeScale = useBuildStore(s => s.timeScale);
   const adjustTimeScale = useBuildStore(s => s.adjustTimeScale);
+  const showTrails = useUIStore(s => s.showTrails);
+  const trailLength = useUIStore(s => s.trailLength);
   const { isAutoBuilding, autoBuildProgress, startAutoBuild } = useAutoBuild();
 
   const [editingMass, setEditingMass] = useState<string>('');
@@ -247,6 +249,33 @@ export default function ControlPanel() {
         >
           💡 提示
         </button>
+      </div>
+
+      <div className="panel-section trail-controls">
+        <label className="trail-toggle">
+          <input
+            type="checkbox"
+            checked={showTrails}
+            onChange={e => uiStore.setShowTrails(e.target.checked)}
+            disabled={isAutoBuilding}
+          />
+          <span>显示轨迹</span>
+        </label>
+        {showTrails && (
+          <div className="trail-length-row">
+            <span className="trail-length-label">轨迹长度 {trailLength.toFixed(1)}</span>
+            <input
+              type="range"
+              className="trail-length-slider"
+              min="0.1"
+              max="1.0"
+              step="0.1"
+              value={trailLength}
+              onChange={e => uiStore.setTrailLength(parseFloat(e.target.value))}
+              disabled={isAutoBuilding}
+            />
+          </div>
+        )}
       </div>
 
       <div className="panel-section button-row">
