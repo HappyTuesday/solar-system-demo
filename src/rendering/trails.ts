@@ -3,6 +3,7 @@ import type { CelestialBody } from '../types';
 import { physicalToRender } from '../engine/coordinateTransform';
 const MAX_POINTS = 500;
 const MIN_VISIBLE_POINTS = 8;
+const MAX_TRAIL_PROPORTION = 0.9;
 
 const PLANET_IDS = [
   'mercury', 'venus', 'earth', 'mars',
@@ -106,8 +107,9 @@ export class TrailManager {
 
   setLengthProportion(proportion: number): void {
     this.lengthProportion = proportion;
+    const effectiveProportion = Math.min(proportion, MAX_TRAIL_PROPORTION);
     for (const [, entry] of this.trails.entries()) {
-      const targetActive = Math.floor(MAX_POINTS * proportion);
+      const targetActive = Math.floor(MAX_POINTS * effectiveProportion);
       if (targetActive < entry.activeCount) {
         entry.activeCount = Math.max(1, targetActive);
         this.copyRingToGeometry(entry);
@@ -133,7 +135,8 @@ export class TrailManager {
 
       const r = vec3Len(body.position);
       const circumference = 2 * Math.PI * r;
-      const margin = Math.max(1, (circumference * this.lengthProportion) / MAX_POINTS);
+      const effectiveProportion = Math.min(this.lengthProportion, MAX_TRAIL_PROPORTION);
+      const margin = Math.max(1, (circumference * effectiveProportion) / MAX_POINTS);
 
       if (acc >= margin) {
         const renderPos = physicalToRender(body.position);
