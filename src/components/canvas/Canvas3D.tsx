@@ -127,7 +127,8 @@ export default function Canvas3D() {
 
       updateBodyMeshes(bodies, dt);
 
-      if (showTrails && isRunning && trailManagerRef.current) {
+      const currentShowTrails = useUIStore.getState().showTrails;
+      if (currentShowTrails && trailManagerRef.current) {
         trailManagerRef.current.updateTrails(bodies);
       }
 
