@@ -14,7 +14,7 @@ interface VelocityInputFormProps {
   onCancel: () => void;
 }
 
-const MAX_SPEED = 200000;
+const MAX_SPEED = 200;
 
 export default function VelocityInputForm({
   templateId,
@@ -46,7 +46,7 @@ export default function VelocityInputForm({
     const angleDeg = ((angleNum % 360) + 360) % 360;
     const clickPos = new THREE.Vector3(clickPosRender[0], clickPosRender[1], clickPosRender[2]);
 
-    previewVelocityArrowInPlacement(scene, clickPos, cappedSpeed, angleDeg, posPhysical, [0, 0, 0]);
+    previewVelocityArrowInPlacement(scene, clickPos, cappedSpeed * 1000, angleDeg, posPhysical, [0, 0, 0]);
 
     return () => {
       const s = getSharedScene();
@@ -58,7 +58,7 @@ export default function VelocityInputForm({
     if (!isValid) return;
     const cappedSpeed = Math.min(speedNum, MAX_SPEED);
     const angleDeg = ((angleNum % 360) + 360) % 360;
-    onConfirm(cappedSpeed, angleDeg);
+    onConfirm(cappedSpeed * 1000, angleDeg);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -86,9 +86,9 @@ export default function VelocityInputForm({
             placeholder="0"
             autoFocus
           />
-          <span className="form-unit">m/s</span>
+          <span className="form-unit">km/s</span>
         </div>
-        <div className="form-hint">上限 {MAX_SPEED.toLocaleString()} m/s</div>
+        <div className="form-hint">上限 {MAX_SPEED.toLocaleString()} km/s</div>
       </div>
 
       <div className="form-field">
@@ -110,7 +110,7 @@ export default function VelocityInputForm({
 
       {realOrbitalSpeed !== undefined && (
         <div className="form-reference">
-          真实轨道速度参考：<span>{realOrbitalSpeed.toLocaleString()} m/s</span>（0° 切线方向）
+          真实轨道速度参考：<span>{(realOrbitalSpeed / 1000).toFixed(1)} km/s</span>（0° 切线方向）
         </div>
       )}
 
