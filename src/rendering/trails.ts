@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { CelestialBody } from '../types';
 import { physicalToRender } from '../engine/coordinateTransform';
 const MAX_POINTS = 500;
+const MIN_VISIBLE_POINTS = 8;
 
 const PLANET_IDS = [
   'mercury', 'venus', 'earth', 'mars',
@@ -179,6 +180,10 @@ export class TrailManager {
     }
 
     entry.line.geometry.attributes.position.needsUpdate = true;
-    entry.line.geometry.setDrawRange(0, entry.activeCount);
+    if (entry.activeCount >= MIN_VISIBLE_POINTS) {
+      entry.line.geometry.setDrawRange(0, entry.activeCount);
+    } else {
+      entry.line.geometry.setDrawRange(0, 0);
+    }
   }
 }
