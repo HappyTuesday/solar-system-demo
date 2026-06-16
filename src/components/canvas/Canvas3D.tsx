@@ -5,12 +5,12 @@ import { useHistoryStore } from '../../stores/historyStore';
 import { initScene, handleResize } from '../../rendering/setup';
 import { createBodyMesh, updateBodyMeshes, removeBodyMesh, bodyMeshMap } from '../../rendering/bodies';
 import { createReferencePlane, addOrbitRing, clearOrbitRings } from '../../rendering/grid';
-import { getPlacementPoint, setBodyHighlight, createPreviewSphere, removePreviewSphere, updateVelocityArrow, updateGuideArrow, removeGuideArrow, cleanupGizmos, createFloatingPreview, removeFloatingPreview } from '../../rendering/interaction';
+import { getPlacementPoint, setBodyHighlight, createPreviewSphere, updateGuideArrow, removeGuideArrow, createFloatingPreview, removeFloatingPreview } from '../../rendering/interaction';
 import { TrailManager } from '../../rendering/trails';
 import { advanceSimulation, detectCollisions, vec3Length } from '../../engine/physics';
 import { REAL_DATA, DRAG_CONFIG, HINT_ORDER } from '../../engine/constants';
-import { physicalRadiusToRender, physicalDistanceToRender, renderToPhysical, renderVelocityToPhysical, physicalVelocityToRender, physicalToRender } from '../../engine/coordinateTransform';
-import { setSharedCamera, setSharedCanvas, setObservationTargetId, setCurrentLookAt, getCurrentLookAt } from '../../rendering/cameraRef';
+import { physicalRadiusToRender, physicalDistanceToRender, renderToPhysical, physicalVelocityToRender, physicalToRender } from '../../engine/coordinateTransform';
+import { setSharedCamera, setSharedCanvas, setObservationTargetId, setCurrentLookAt, getCurrentLookAt, setSharedScene } from '../../rendering/cameraRef';
 import type { SceneSetup } from '../../rendering/setup';
 import * as THREE from 'three';
 import './Canvas3D.css';
@@ -42,11 +42,8 @@ export default function Canvas3D() {
   const setIsPlacing = useUIStore(s => s.setIsPlacing);
   const showHint = useUIStore(s => s.showHint);
   const hintIndex = useUIStore(s => s.hintIndex);
-  const setHint = useUIStore(s => s.setHint);
   const supervisionMode = useUIStore(s => s.supervisionMode);
   const setPreviewPosition = useUIStore(s => s.setPreviewPosition);
-  const setPreviewSpeedStore = useUIStore(s => s.setPreviewSpeed);
-  const previewSpeed = useUIStore(s => s.previewSpeed);
   const showTrails = useUIStore(s => s.showTrails);
   const trailLength = useUIStore(s => s.trailLength);
 
@@ -183,6 +180,7 @@ export default function Canvas3D() {
     setupRef.current = setup;
     setSharedCamera(setup.camera);
     setSharedCanvas(canvasRef.current);
+    setSharedScene(setup.scene);
     // Ensure camera matches actual canvas dimensions (layout may not be complete at mount)
     setTimeout(() => handleResize(canvasRef.current!, setup.renderer, setup.camera), 100);
     createReferencePlane(setup.scene, canvas.clientWidth, canvas.clientHeight);
@@ -194,6 +192,7 @@ export default function Canvas3D() {
       cancelAnimationFrame(animFrameRef.current);
       setSharedCamera(null);
       setSharedCanvas(null);
+      setSharedScene(null);
       setupRef.current = null;
     };
   }, []);
@@ -276,6 +275,7 @@ export default function Canvas3D() {
       removeFloatingPreview(setup.scene);
       dragStartRef.current = point.clone();
       setIsPlacing(true);
+      useUIStore.getState().setClickPosRender([point.x, point.y, point.z]);
       useBuildStore.getState().pauseBuild();
 
       const data = REAL_DATA[selectedToolId];
@@ -324,77 +324,18 @@ export default function Canvas3D() {
           createFloatingPreview(setup.scene, point, physicalRadiusToRender(data.radius, selectedToolId === 'sun'), DEFAULT_COLORS[selectedToolId] ?? 0x4488ff, selectedToolId);
         }
       }
-    } else if (isPlacing && dragStartRef.current && selectedToolId && selectedToolId !== 'sun') {
-      const currentPoint = getPlacementPoint(e.nativeEvent, setup.camera, canvasRef.current!);
-      if (!currentPoint) return;
-      const dir = new THREE.Vector3().subVectors(currentPoint, dragStartRef.current);
-      if (dir.length() > 0.01) {
-        // Convert render drag to physical velocity for display
-        const physPos = renderToPhysical([dragStartRef.current.x, dragStartRef.current.y, dragStartRef.current.z]);
-        const vR: [number, number, number] = [dir.x * DRAG_CONFIG.speedScale, dir.y * DRAG_CONFIG.speedScale, dir.z * DRAG_CONFIG.speedScale];
-        const vP = renderVelocityToPhysical(vR, physPos);
-        const physSpeed = vec3Length(vP);
-        const cappedSpeed = Math.min(physSpeed, DRAG_CONFIG.maxSpeed);
-        setPreviewSpeedStore(cappedSpeed);
-        updateVelocityArrow(setup.scene, dragStartRef.current, currentPoint, DRAG_CONFIG.arrowColor);
-      } else {
-        setPreviewSpeedStore(0);
-      }
+    } else if (isPlacing) {
+      // Velocity controlled via VelocityInputForm, not mouse drag
     }
-  }, [isPlacing, selectedToolId, setPreviewSpeedStore, setPreviewPosition]);
+  }, [isPlacing, selectedToolId, setPreviewPosition]);
 
-  const handleMouseUp = useCallback((e: React.MouseEvent) => {
-    const setup = setupRef.current;
-    if (!setup) return;
-
-    if (isPlacing && dragStartRef.current && selectedToolId && selectedToolId !== 'sun') {
-      const point = getPlacementPoint(e.nativeEvent, setup.camera, canvasRef.current!);
-      // Convert render position to physical position
-      const physPos: [number, number, number] = renderToPhysical([
-        dragStartRef.current.x,
-        dragStartRef.current.y,
-        dragStartRef.current.z
-      ]);
-      // Convert render velocity to physical velocity
-      let vel: [number, number, number] = [0, 0, 0];
-      if (point) {
-        const dir = new THREE.Vector3().subVectors(point, dragStartRef.current);
-        if (dir.length() > 0.01) {
-          const vR: [number, number, number] = [dir.x * DRAG_CONFIG.speedScale, dir.y * DRAG_CONFIG.speedScale, dir.z * DRAG_CONFIG.speedScale];
-          let vP = renderVelocityToPhysical(vR, physPos);
-          const physSpeed = vec3Length(vP);
-          if (physSpeed > DRAG_CONFIG.maxSpeed) {
-            const cappedMag = DRAG_CONFIG.maxSpeed / physSpeed;
-            vP = [vP[0] * cappedMag, vP[1] * cappedMag, vP[2] * cappedMag];
-          }
-          vel = vP;
-        }
-      }
-      const data = REAL_DATA[selectedToolId];
-      placeBody(selectedToolId, physPos, vel, data?.mass ?? 1e24);
-      useBuildStore.getState().resumeBuild();
-
-      if (showHint) {
-        const hintedId = HINT_ORDER[hintIndex % HINT_ORDER.length];
-        if (selectedToolId === hintedId) setHint(false);
-      }
-
-      cleanupGizmos(setup.scene);
-      setSelectedTool(null);
-      setIsPlacing(false);
-      dragStartRef.current = null;
-      setPreviewSpeedStore(0);
-    }
-  }, [isPlacing, selectedToolId, placeBody, setIsPlacing, setSelectedTool, showHint, hintIndex, setHint, setPreviewSpeedStore]);
+  const handleMouseUp = useCallback(() => {
+    // Placement commit handled by VelocityInputForm in ControlPanel
+  }, []);
 
   return (
     <div className={`canvas-container ${selectedToolId && selectedToolId !== 'sun' ? 'crosshair' : ''}`}>
       <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} />
-      {isPlacing && previewSpeed > 0 && (
-        <div className="speed-label">
-          {previewSpeed >= 1000 ? `${(previewSpeed / 1000).toFixed(1)} km/s` : `${previewSpeed.toFixed(0)} m/s`}
-        </div>
-      )}
     </div>
   );
 }

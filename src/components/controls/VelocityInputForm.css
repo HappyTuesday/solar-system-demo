@@ -1,0 +1,114 @@
+.velocity-input-form {
+  background: rgba(255, 170, 0, 0.06);
+  border: 1px solid rgba(255, 170, 0, 0.2);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.velocity-input-form .form-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffaa00;
+  margin-bottom: 12px;
+}
+
+.velocity-input-form .form-field {
+  margin-bottom: 10px;
+}
+
+.velocity-input-form .form-label {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 4px;
+}
+
+.velocity-input-form .form-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.velocity-input-form .form-input {
+  flex: 1;
+  background: #1a1a3a;
+  border: 1px solid #2a2a4a;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.velocity-input-form .form-input:focus {
+  border-color: #ffaa00;
+}
+
+.velocity-input-form .form-unit {
+  font-size: 12px;
+  color: #666;
+  white-space: nowrap;
+  min-width: 30px;
+}
+
+.velocity-input-form .form-hint {
+  font-size: 10px;
+  color: #555;
+  margin-top: 4px;
+}
+
+.velocity-input-form .form-reference {
+  margin-top: 10px;
+  padding: 6px 8px;
+  background: rgba(255, 170, 0, 0.06);
+  border-radius: 4px;
+  font-size: 11px;
+  color: #888;
+}
+
+.velocity-input-form .form-reference span {
+  color: #ffaa00;
+}
+
+.velocity-input-form .form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.velocity-input-form .form-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+
+.velocity-input-form .form-btn.confirm {
+  background: #ffaa00;
+  color: #000;
+}
+
+.velocity-input-form .form-btn.confirm:hover:not(:disabled) {
+  background: #ffbb22;
+}
+
+.velocity-input-form .form-btn.confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.velocity-input-form .form-btn.cancel {
+  background: #2a2a3a;
+  color: #999;
+  border: 1px solid #3a3a4a;
+}
+
+.velocity-input-form .form-btn.cancel:hover {
+  background: #3a3a4a;
+  color: #ccc;
+}

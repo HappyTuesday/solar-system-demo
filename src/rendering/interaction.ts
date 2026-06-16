@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { bodyMeshMap } from './bodies';
+import { physicalVelocityToRender } from '../engine/coordinateTransform';
+import { DRAG_CONFIG } from '../engine/constants';
 
 const raycaster = new THREE.Raycaster();
 const referencePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); // XY plane
@@ -177,6 +179,65 @@ export function removeGuideArrow(scene: THREE.Scene): void {
     });
     guideArrow = null;
   }
+}
+
+export function previewVelocityArrowInPlacement(
+  scene: THREE.Scene,
+  clickPos: THREE.Vector3,
+  speed: number,
+  angleDeg: number,
+  posPhysical: [number, number, number],
+  referenceCenter: [number, number, number],
+): void {
+  if (speed <= 0) {
+    removeVelocityArrow(scene);
+    return;
+  }
+
+  const rx = posPhysical[0] - referenceCenter[0];
+  const ry = posPhysical[1] - referenceCenter[1];
+  const rz = posPhysical[2] - referenceCenter[2];
+  const dist = Math.sqrt(rx * rx + ry * ry + rz * rz);
+  if (dist < 1) {
+    removeVelocityArrow(scene);
+    return;
+  }
+
+  const radialX = rx / dist;
+  const radialY = ry / dist;
+  const radialZ = rz / dist;
+
+  const tLen = Math.sqrt(radialX * radialX + radialY * radialY);
+  let tangentX: number, tangentY: number, tangentZ: number;
+  if (tLen < 1e-10) {
+    tangentX = 0;
+    tangentY = 1;
+    tangentZ = 0;
+  } else {
+    tangentX = -radialY / tLen;
+    tangentY = radialX / tLen;
+    tangentZ = 0;
+  }
+
+  const angleRad = (angleDeg * Math.PI) / 180;
+  const cosA = Math.cos(angleRad);
+  const sinA = Math.sin(angleRad);
+
+  const vPhys: [number, number, number] = [
+    speed * (cosA * tangentX + sinA * radialX),
+    speed * (cosA * tangentY + sinA * radialY),
+    speed * (cosA * tangentZ + sinA * radialZ),
+  ];
+
+  const vRender = physicalVelocityToRender(vPhys, posPhysical);
+  const scale = 1.0 / DRAG_CONFIG.speedScale;
+  const arrowEnd = new THREE.Vector3(
+    clickPos.x + vRender[0] * scale,
+    clickPos.y + vRender[1] * scale,
+    clickPos.z + vRender[2] * scale,
+  );
+
+  updateVelocityArrow(scene, clickPos, arrowEnd, DRAG_CONFIG.arrowColor);
 }
 
 export function cleanupGizmos(scene: THREE.Scene): void {

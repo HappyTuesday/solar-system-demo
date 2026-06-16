@@ -2,11 +2,14 @@ import { useState } from 'react';
 import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useHistoryStore } from '../../stores/historyStore';
-import { REAL_DATA } from '../../engine/constants';
+import { REAL_DATA, HINT_ORDER } from '../../engine/constants';
 import { renderToPhysical } from '../../engine/coordinateTransform';
 import { calculateErrors } from '../../engine/scoring';
 import { AUTO_BUILD_PLAN } from '../../engine/autoBuild';
 import { useAutoBuild } from '../../hooks/useAutoBuild';
+import { getSharedScene } from '../../rendering/cameraRef';
+import { cleanupGizmos, removePreviewSphere } from '../../rendering/interaction';
+import VelocityInputForm from './VelocityInputForm';
 import type { CelestialBody } from '../../types';
 import './ControlPanel.css';
 
@@ -34,11 +37,6 @@ export default function ControlPanel() {
     if (m >= 1e9) return `${(m / 1e9).toFixed(2)} 亿 km`;
     if (m >= 1e6) return `${(m / 1e6).toFixed(0)} km`;
     return `${m.toFixed(0)} m`;
-  };
-
-  const formatSpeed = (ms: number): string => {
-    if (ms >= 1000) return `${(ms / 1000).toFixed(1)} km/s`;
-    return `${ms.toFixed(0)} m/s`;
   };
 
   const formatTime = (ms: number): string => {
@@ -137,16 +135,15 @@ export default function ControlPanel() {
         </button>
       </div>
 
-      {uiStore.selectedToolId && (() => {
+      {uiStore.selectedToolId && !uiStore.isPlacing && (() => {
         const toolData = REAL_DATA[uiStore.selectedToolId];
         if (!toolData) return null;
         const pos = uiStore.previewPosition;
-        const isDragging = uiStore.isPlacing;
 
         return (
           <div className="panel-section placement-info">
             <div className="info-header" style={{ color: '#ffaa00' }}>
-              {isDragging ? '正在设定初速度' : '释放模式'}
+              释放模式
             </div>
             <div className="info-row">
               <span>天体</span>
@@ -160,41 +157,88 @@ export default function ControlPanel() {
               <span>真实半径</span>
               <span>{formatDistance(toolData.radius)}</span>
             </div>
-            {isDragging ? (
-              <>
-                <div className="info-row">
-                  <span>释放位置</span>
-                  <span style={{ fontSize: 10, fontFamily: 'monospace' }}>
-                    {pos ? (() => {
-                      const physPos = renderToPhysical([pos[0], pos[1], pos[2]]);
-                      const dist = Math.sqrt(physPos[0] * physPos[0] + physPos[1] * physPos[1]);
-                      return formatDistance(dist);
-                    })() : '-'}
-                  </span>
-                </div>
-                <div className="info-row">
-                  <span>初速度</span>
-                  <span style={{ color: '#00ff88', fontFamily: 'monospace', fontSize: 13 }}>
-                    {formatSpeed(uiStore.previewSpeed)}
-                  </span>
-                </div>
-              </>
-            ) : (
-              <div className="info-row">
-                <span>鼠标位置</span>
-                <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#888' }}>
-                  {pos ? (() => {
-                    const physPos = renderToPhysical([pos[0], pos[1], pos[2]]);
-                    const dist = Math.sqrt(physPos[0] * physPos[0] + physPos[1] * physPos[1]);
-                    return formatDistance(dist);
-                  })() : '移动鼠标选择位置...'}
-                </span>
-              </div>
-            )}
+            <div className="info-row">
+              <span>鼠标位置</span>
+              <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#888' }}>
+                {pos ? (() => {
+                  const physPos = renderToPhysical([pos[0], pos[1], pos[2]]);
+                  const dist = Math.sqrt(physPos[0] * physPos[0] + physPos[1] * physPos[1]);
+                  return formatDistance(dist);
+                })() : '移动鼠标选择位置...'}
+              </span>
+            </div>
             <div className="placement-hint">
-              {isDragging ? '拖动鼠标设定初速度' : '在画布上点击放置天体'}
+              在画布上点击放置天体
             </div>
           </div>
+        );
+      })()}
+
+      {uiStore.isPlacing && uiStore.selectedToolId && uiStore.clickPosRender && (() => {
+        const handleConfirm = (speed: number, angleDeg: number) => {
+          const toolId = uiStore.selectedToolId!;
+          const clickPos = uiStore.clickPosRender!;
+          const physPos = renderToPhysical(clickPos);
+          const angleRad = (angleDeg * Math.PI) / 180;
+
+          let vel: [number, number, number] = [0, 0, 0];
+          if (speed > 0) {
+            const rx = physPos[0];
+            const ry = physPos[1];
+            const rz = physPos[2];
+            const dist = Math.sqrt(rx * rx + ry * ry + rz * rz);
+            if (dist >= 1) {
+              const radialX = rx / dist;
+              const radialY = ry / dist;
+              const radialZ = rz / dist;
+              const tLen = Math.sqrt(radialX * radialX + radialY * radialY);
+              const tangentX = tLen < 1e-10 ? 0 : -radialY / tLen;
+              const tangentY = tLen < 1e-10 ? 1 : radialX / tLen;
+              const tangentZ = 0;
+              const cosA = Math.cos(angleRad);
+              const sinA = Math.sin(angleRad);
+              vel = [
+                speed * (cosA * tangentX + sinA * radialX),
+                speed * (cosA * tangentY + sinA * radialY),
+                speed * (cosA * tangentZ + sinA * radialZ),
+              ];
+            }
+          }
+
+          const data = REAL_DATA[toolId];
+          buildStore.placeBody(toolId, physPos, vel, data?.mass ?? 1e24);
+          buildStore.resumeBuild();
+
+          if (uiStore.showHint) {
+            const hintedId = HINT_ORDER[uiStore.hintIndex % HINT_ORDER.length];
+            if (toolId === hintedId) uiStore.setHint(false);
+          }
+
+          const scene = getSharedScene();
+          if (scene) {
+            cleanupGizmos(scene);
+          }
+          uiStore.setSelectedTool(null);
+          uiStore.setIsPlacing(false);
+          uiStore.setClickPosRender(null);
+        };
+
+        const handleCancel = () => {
+          const scene = getSharedScene();
+          if (scene) {
+            removePreviewSphere(scene);
+          }
+          uiStore.setIsPlacing(false);
+          uiStore.setClickPosRender(null);
+        };
+
+        return (
+          <VelocityInputForm
+            templateId={uiStore.selectedToolId!}
+            clickPosRender={uiStore.clickPosRender!}
+            onConfirm={handleConfirm}
+            onCancel={handleCancel}
+          />
         );
       })()}
 

@@ -4,6 +4,7 @@ let _camera: THREE.OrthographicCamera | null = null;
 let _zoom = 0.5;
 let _observationTargetId: string | null = null;
 let _canvas: HTMLCanvasElement | null = null;
+let _scene: THREE.Scene | null = null;
 
 export function setSharedCamera(camera: THREE.OrthographicCamera | null): void {
   _camera = camera;
@@ -45,4 +46,12 @@ export function getCurrentLookAt(): [number, number, number] {
 
 export function setCurrentLookAt(pos: [number, number, number]): void {
   _currentLookAt = pos;
+}
+
+export function setSharedScene(scene: THREE.Scene | null): void {
+  _scene = scene;
+}
+
+export function getSharedScene(): THREE.Scene | null {
+  return _scene;
 }
