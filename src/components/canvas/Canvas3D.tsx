@@ -6,6 +6,7 @@ import { initScene, handleResize } from '../../rendering/setup';
 import { createBodyMesh, updateBodyMeshes, removeBodyMesh, bodyMeshMap } from '../../rendering/bodies';
 import { createReferencePlane, addOrbitRing, clearOrbitRings } from '../../rendering/grid';
 import { getPlacementPoint, setBodyHighlight, createPreviewSphere, removePreviewSphere, updateVelocityArrow, updateGuideArrow, removeGuideArrow, cleanupGizmos, createFloatingPreview, removeFloatingPreview } from '../../rendering/interaction';
+import { TrailManager } from '../../rendering/trails';
 import { advanceSimulation, detectCollisions, vec3Length } from '../../engine/physics';
 import { REAL_DATA, DRAG_CONFIG, HINT_ORDER } from '../../engine/constants';
 import { physicalRadiusToRender, physicalDistanceToRender, renderToPhysical, renderVelocityToPhysical, physicalVelocityToRender, physicalToRender } from '../../engine/coordinateTransform';
@@ -23,6 +24,7 @@ export default function Canvas3D() {
   const dragStartRef = useRef<THREE.Vector3 | null>(null);
   const trackingOffsetRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 100));
   const prevTargetIdRef = useRef<string | null>(null);
+  const trailManagerRef = useRef<TrailManager | null>(null);
 
   const bodies = useBuildStore(s => s.bodies);
   const isRunning = useBuildStore(s => s.isRunning);
@@ -45,6 +47,8 @@ export default function Canvas3D() {
   const setPreviewPosition = useUIStore(s => s.setPreviewPosition);
   const setPreviewSpeedStore = useUIStore(s => s.setPreviewSpeed);
   const previewSpeed = useUIStore(s => s.previewSpeed);
+  const showTrails = useUIStore(s => s.showTrails);
+  const trailLength = useUIStore(s => s.trailLength);
 
   // Cleanup floating preview when tool selection changes
   useEffect(() => {
@@ -62,9 +66,13 @@ export default function Canvas3D() {
   const syncBodies = useCallback(() => {
     if (!setupRef.current) return;
     const scene = setupRef.current.scene;
+    const tm = trailManagerRef.current;
     const storeIds = new Set(bodies.map(b => b.id));
     for (const [id] of bodyMeshMap) {
-      if (!storeIds.has(id)) removeBodyMesh(id, scene);
+      if (!storeIds.has(id)) {
+        removeBodyMesh(id, scene);
+        if (tm) tm.removeTrail(id);
+      }
     }
     for (const body of bodies) {
       if (!bodyMeshMap.has(body.id)) createBodyMesh(body, scene);
@@ -75,6 +83,18 @@ export default function Canvas3D() {
   useEffect(() => {
     syncBodies();
   }, [syncBodies]);
+
+  useEffect(() => {
+    if (trailManagerRef.current) {
+      trailManagerRef.current.setVisible(showTrails);
+    }
+  }, [showTrails]);
+
+  useEffect(() => {
+    if (trailManagerRef.current) {
+      trailManagerRef.current.setLengthProportion(trailLength);
+    }
+  }, [trailLength]);
 
   // Animation loop
   useEffect(() => {
@@ -106,6 +126,10 @@ export default function Canvas3D() {
       }
 
       updateBodyMeshes(bodies, dt);
+
+      if (showTrails && isRunning && trailManagerRef.current) {
+        trailManagerRef.current.updateTrails(bodies);
+      }
 
       // Camera tracking: center on observation target
       const targetId = useUIStore.getState().observationTargetId;
@@ -161,7 +185,11 @@ export default function Canvas3D() {
     // Ensure camera matches actual canvas dimensions (layout may not be complete at mount)
     setTimeout(() => handleResize(canvasRef.current!, setup.renderer, setup.camera), 100);
     createReferencePlane(setup.scene, canvas.clientWidth, canvas.clientHeight);
+    const trailManager = new TrailManager(setup.scene);
+    trailManagerRef.current = trailManager;
     return () => {
+      trailManager.dispose();
+      trailManagerRef.current = null;
       cancelAnimationFrame(animFrameRef.current);
       setSharedCamera(null);
       setSharedCanvas(null);
