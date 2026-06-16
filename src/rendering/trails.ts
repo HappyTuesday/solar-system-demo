@@ -105,7 +105,7 @@ export class TrailManager {
 
   setLengthProportion(proportion: number): void {
     this.lengthProportion = proportion;
-    for (const [id, entry] of this.trails.entries()) {
+    for (const [, entry] of this.trails.entries()) {
       const targetActive = Math.floor(MAX_POINTS * proportion);
       if (targetActive < entry.activeCount) {
         entry.activeCount = Math.max(1, targetActive);
@@ -128,7 +128,7 @@ export class TrailManager {
 
       const prevPos = this.lastPhysPositions.get(body.id) || body.position;
       const dist = vec3Dist(prevPos, body.position);
-      let acc = (this.accumulatedDistances.get(body.id) || 0) + dist;
+      const acc = (this.accumulatedDistances.get(body.id) || 0) + dist;
 
       const r = vec3Len(body.position);
       const circumference = 2 * Math.PI * r;
