@@ -201,3 +201,31 @@
 .error-value.green { color: #44ff44; }
 .error-value.yellow { color: #ffcc00; }
 .error-value.red { color: #ff4444; }
+
+.time-scale-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.time-scale-label {
+  font-size: 11px;
+  color: #888;
+  white-space: nowrap;
+}
+
+.time-scale-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.time-scale-value {
+  font-size: 14px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-weight: 600;
+  min-width: 50px;
+  text-align: center;
+  color: #fff;
+}

@@ -140,10 +140,10 @@ function mergeBodies(a: CelestialBody, b: CelestialBody): CelestialBody {
   };
 }
 
-export function advanceSimulation(bodies: CelestialBody[], realDelta: number): number {
+export function advanceSimulation(bodies: CelestialBody[], realDelta: number, timeScale: number): number {
   if (bodies.length < 2) return 0;
 
-  const simDelta = realDelta * PHYSICAL_CONSTANTS.timeScale;
+  const simDelta = realDelta * timeScale;
   const steps = Math.min(
     Math.max(1, Math.floor(simDelta / SIM_CONFIG.timeStep)),
     SIM_CONFIG.maxSubsteps

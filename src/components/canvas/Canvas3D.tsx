@@ -89,7 +89,8 @@ export default function Canvas3D() {
       handleResize(canvasRef.current!, renderer, camera);
 
       if (isRunning && bodies.length >= 2) {
-        const simDelta = advanceSimulation(bodies, dt);
+        const timeScale = useBuildStore.getState().timeScale;
+        const simDelta = advanceSimulation(bodies, dt, timeScale);
         advanceSim(simDelta);
         const events = detectCollisions(bodies);
         for (const event of events) {

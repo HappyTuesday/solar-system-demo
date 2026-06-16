@@ -1,14 +1,23 @@
 import * as THREE from 'three';
 import type { CelestialBody } from '../types';
 import { physicalToRender } from '../engine/coordinateTransform';
-import { bodyMeshMap } from './bodies';
-
 const MAX_POINTS = 500;
 
 const PLANET_IDS = [
   'mercury', 'venus', 'earth', 'mars',
   'jupiter', 'saturn', 'uranus', 'neptune',
 ];
+
+const TRAIL_COLORS: Record<string, number> = {
+  mercury: 0xcccccc,
+  venus: 0xffcc88,
+  earth: 0x4488ff,
+  mars: 0xff6644,
+  jupiter: 0xffcc88,
+  saturn: 0xffeecc,
+  uranus: 0x88ccff,
+  neptune: 0x4488ff,
+};
 
 interface TrailEntry {
   line: THREE.Line;
@@ -97,16 +106,10 @@ export class TrailManager {
   setLengthProportion(proportion: number): void {
     this.lengthProportion = proportion;
     for (const [id, entry] of this.trails.entries()) {
-      const pos = this.lastPhysPositions.get(id);
-      if (pos) {
-        const r = vec3Len(pos);
-        const circumference = 2 * Math.PI * r;
-        const margin = Math.max(1, (circumference * this.lengthProportion) / MAX_POINTS);
-        const trailPhysLen = circumference * this.lengthProportion;
-        const maxActive = Math.min(MAX_POINTS, Math.floor(trailPhysLen / margin));
-        if (maxActive < entry.activeCount) {
-          entry.activeCount = maxActive;
-        }
+      const targetActive = Math.floor(MAX_POINTS * proportion);
+      if (targetActive < entry.activeCount) {
+        entry.activeCount = Math.max(1, targetActive);
+        this.copyRingToGeometry(entry);
       }
     }
   }
@@ -117,12 +120,7 @@ export class TrailManager {
 
       let entry = this.trails.get(body.id);
       if (!entry) {
-        const bm = bodyMeshMap.get(body.id);
-        const mat = bm?.mesh.material;
-        let color = 0x888888;
-        if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshBasicMaterial) {
-          color = mat.color.getHex();
-        }
+        const color = TRAIL_COLORS[body.templateId] ?? 0x888888;
         this.addTrail(body.id, color);
         entry = this.trails.get(body.id);
         if (!entry) continue;

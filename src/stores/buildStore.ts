@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { BuildState, CelestialBody } from '../types';
 import { scoreBuild } from '../engine/scoring';
+import { PHYSICAL_CONSTANTS } from '../engine/constants';
 
 let instanceCounter = 0;
 
@@ -19,6 +20,9 @@ interface Command {
 }
 
 interface BuildStore extends BuildState {
+  timeScale: number;
+  setTimeScale: (scale: number) => void;
+  adjustTimeScale: (delta: number) => void;
   startBuild: () => void;
   pauseBuild: () => void;
   resumeBuild: () => void;
@@ -56,6 +60,14 @@ const initialState: BuildState = {
 
 export const useBuildStore = create<BuildStore>((set, get) => ({
   ...initialState,
+  timeScale: PHYSICAL_CONSTANTS.timeScale,
+
+  setTimeScale: (scale) => set({ timeScale: Math.max(1e4, Math.min(1e6, scale)) }),
+
+  adjustTimeScale: (delta) => {
+    const next = get().timeScale + delta;
+    set({ timeScale: Math.max(1e4, Math.min(1e6, next)) });
+  },
 
   startBuild: () => set({ startedAt: Date.now(), isRunning: true }),
 
@@ -134,7 +146,7 @@ export const useBuildStore = create<BuildStore>((set, get) => ({
     }));
   },
 
-  resetBuild: () => set({ ...initialState, id: generateId() }),
+  resetBuild: () => set({ ...initialState, id: generateId(), timeScale: PHYSICAL_CONSTANTS.timeScale }),
 
   loadSnapshot: (state) => set({ ...state }),
 

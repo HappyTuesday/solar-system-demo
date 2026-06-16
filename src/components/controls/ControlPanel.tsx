@@ -14,6 +14,8 @@ export default function ControlPanel() {
   const buildStore = useBuildStore();
   const uiStore = useUIStore();
   const historyStore = useHistoryStore();
+  const timeScale = useBuildStore(s => s.timeScale);
+  const adjustTimeScale = useBuildStore(s => s.adjustTimeScale);
   const { isAutoBuilding, autoBuildProgress, startAutoBuild } = useAutoBuild();
 
   const [editingMass, setEditingMass] = useState<string>('');
@@ -207,6 +209,27 @@ export default function ControlPanel() {
             </button>
           </>
         )}
+      </div>
+
+      <div className="panel-section time-scale-row">
+        <span className="time-scale-label">速度倍率</span>
+        <div className="time-scale-controls">
+          <button
+            className="ctrl-btn small"
+            onClick={() => adjustTimeScale(-1e5)}
+            disabled={!buildStore.startedAt || isAutoBuilding || timeScale <= 1e4}
+          >
+            −
+          </button>
+          <span className="time-scale-value">{Math.round(timeScale / 1e4)}万×</span>
+          <button
+            className="ctrl-btn small"
+            onClick={() => adjustTimeScale(1e5)}
+            disabled={!buildStore.startedAt || isAutoBuilding || timeScale >= 1e6}
+          >
+            +
+          </button>
+        </div>
       </div>
 
       <div className="panel-section button-row">
