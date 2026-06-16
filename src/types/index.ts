@@ -97,4 +97,6 @@ export interface UIState {
   mouseCanvasPos: [number, number] | null;
   mouseRenderPos: [number, number, number] | null;
   mousePhysicalPos: [number, number, number] | null;
+  showTrails: boolean;
+  trailLength: number;
 }

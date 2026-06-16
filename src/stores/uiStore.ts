@@ -13,6 +13,8 @@ interface UIStore extends UIState {
   setPreviewPosition: (pos: [number, number, number] | null) => void;
   setPreviewSpeed: (speed: number) => void;
   setMousePositions: (canvasPos: [number, number] | null, renderPos: [number, number, number] | null, physicalPos: [number, number, number] | null) => void;
+  setShowTrails: (show: boolean) => void;
+  setTrailLength: (len: number) => void;
   resetUI: () => void;
 }
 
@@ -27,6 +29,8 @@ export const useUIStore = create<UIStore>((set) => ({
   showScoreModal: false,
   previewPosition: null,
   previewSpeed: 0,
+  showTrails: true,
+  trailLength: 0.5,
   mouseCanvasPos: null,
   mouseRenderPos: null,
   mousePhysicalPos: null,
@@ -41,6 +45,8 @@ export const useUIStore = create<UIStore>((set) => ({
   setShowScoreModal: (show) => set({ showScoreModal: show }),
   setPreviewPosition: (pos) => set({ previewPosition: pos }),
   setPreviewSpeed: (speed) => set({ previewSpeed: speed }),
+  setShowTrails: (show) => set({ showTrails: show }),
+  setTrailLength: (len) => set({ trailLength: len }),
   setMousePositions: (canvasPos, renderPos, physicalPos) => set({ mouseCanvasPos: canvasPos, mouseRenderPos: renderPos, mousePhysicalPos: physicalPos }),
   resetUI: () => set({
     selectedToolId: null,
