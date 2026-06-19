@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getZoom, setZoom } from './cameraRef';
+import { getZoom, setZoom, getSharedCamera, getSharedCanvas, getCurrentLookAt, setCurrentLookAt } from './cameraRef';
 
 export interface SceneSetup {
   scene: THREE.Scene;
@@ -123,4 +123,39 @@ export function zoomOut(camera: THREE.OrthographicCamera, containerWidth: number
 export function resetZoom(camera: THREE.OrthographicCamera, containerWidth: number, containerHeight: number): void {
   setZoom(0.5);
   applyZoom(camera, containerWidth, containerHeight, 0.5);
+}
+
+export function setZoomDirect(newZoom: number): void {
+  const zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+  setZoom(zoom);
+  const camera = getSharedCamera();
+  const canvas = getSharedCanvas();
+  if (!camera || !canvas) return;
+  const parent = canvas.parentElement;
+  if (!parent) return;
+  applyZoom(camera, parent.clientWidth, parent.clientHeight, zoom);
+}
+
+export function panCamera(dx: number, dy: number): void {
+  const camera = getSharedCamera();
+  if (!camera) return;
+  const z = getZoom();
+
+  camera.updateMatrixWorld();
+  const m = camera.matrixWorld.elements;
+  const rx = m[0], ry = m[1], rz = m[2];
+  const ux = m[4], uy = m[5], uz = m[6];
+
+  const scale = 1 / z;
+  const moveX = (rx * dx + ux * dy) * scale;
+  const moveY = (ry * dx + uy * dy) * scale;
+  const moveZ = (rz * dx + uz * dy) * scale;
+
+  camera.position.x -= moveX;
+  camera.position.y -= moveY;
+  camera.position.z -= moveZ;
+
+  const [lx, ly, lz] = getCurrentLookAt();
+  setCurrentLookAt([lx - moveX, ly - moveY, lz - moveZ]);
+  camera.lookAt(lx - moveX, ly - moveY, lz - moveZ);
 }
