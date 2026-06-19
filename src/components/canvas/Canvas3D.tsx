@@ -7,7 +7,7 @@ import { createBodyMesh, updateBodyMeshes, removeBodyMesh, bodyMeshMap } from '.
 import { createReferencePlane, addOrbitRing, clearOrbitRings } from '../../rendering/grid';
 import { getPlacementPoint, setBodyHighlight, createPreviewSphere, updateGuideArrow, removeGuideArrow, createFloatingPreview, removeFloatingPreview } from '../../rendering/interaction';
 import { TrailManager } from '../../rendering/trails';
-import { advanceSimulation, vec3Length } from '../../engine/physics';
+import { advanceSimulation, detectCollisions, vec3Length } from '../../engine/physics';
 import { REAL_DATA, DRAG_CONFIG, HINT_ORDER } from '../../engine/constants';
 import { physicalRadiusToRender, physicalDistanceToRender, renderToPhysical, physicalVelocityToRender, physicalToRender } from '../../engine/coordinateTransform';
 import { setSharedCamera, setSharedCanvas, setObservationTargetId, setCurrentLookAt, getCurrentLookAt, setSharedScene } from '../../rendering/cameraRef';
@@ -108,9 +108,10 @@ export default function Canvas3D() {
 
       if (isRunning && bodies.length >= 2) {
         const timeScale = useBuildStore.getState().timeScale;
-        const { simDelta, collisionEvents } = advanceSimulation(bodies, dt, timeScale);
+        const simDelta = advanceSimulation(bodies, dt, timeScale);
         advanceSim(simDelta);
-        for (const event of collisionEvents) {
+        const events = detectCollisions(bodies);
+        for (const event of events) {
           removeBody(event.bodyA.id);
           removeBody(event.bodyB.id);
           placeBody(event.mergedBody.templateId, event.mergedBody.position, event.mergedBody.velocity, event.mergedBody.mass);
