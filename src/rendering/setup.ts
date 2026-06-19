@@ -30,13 +30,11 @@ export function initScene(canvas: HTMLCanvasElement): SceneSetup {
   renderer.setSize(w, h);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-  // Ambient light — minimal visibility for shadow sides
   const ambientLight = new THREE.AmbientLight(0x444466, 2.5);
   scene.add(ambientLight);
 
-  // Point light at sun position — illuminates planets, sun-facing bright, opposite dark
   const sunLight = new THREE.PointLight(0xffeedd, 4, 0);
-  sunLight.decay = 0; // no distance falloff, uniform illumination from sun direction
+  sunLight.decay = 0;
   sunLight.position.set(0, 0, 0);
   scene.add(sunLight);
 
@@ -73,7 +71,6 @@ export function applyZoom(camera: THREE.OrthographicCamera, containerWidth: numb
   camera.updateProjectionMatrix();
 }
 
-// Rotate around Z-axis (in XY plane)
 export function rotateCameraHorizontal(camera: THREE.OrthographicCamera, angle: number, target: THREE.Vector3 = new THREE.Vector3(0, 0, 0)): void {
   const dx = camera.position.x - target.x;
   const dy = camera.position.y - target.y;
@@ -85,7 +82,6 @@ export function rotateCameraHorizontal(camera: THREE.OrthographicCamera, angle: 
   camera.lookAt(target);
 }
 
-// Tilt camera Z height
 export function rotateCameraVertical(camera: THREE.OrthographicCamera, angle: number, target: THREE.Vector3 = new THREE.Vector3(0, 0, 0)): void {
   const dx = camera.position.x - target.x;
   const dy = camera.position.y - target.y;
@@ -125,28 +121,21 @@ export function resetZoom(camera: THREE.OrthographicCamera, containerWidth: numb
   applyZoom(camera, containerWidth, containerHeight, 0.5);
 }
 
-const TAG = '[Setup]';
-
 export function setZoomDirect(newZoom: number): void {
   const zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
   setZoom(zoom);
   const camera = getSharedCamera();
   const canvas = getSharedCanvas();
-  console.log(TAG, 'setZoomDirect', 'raw:', newZoom.toFixed(3), 'clamped:', zoom.toFixed(3), 'camera:', !!camera, 'canvas:', !!canvas);
   if (!camera || !canvas) return;
   const parent = canvas.parentElement;
   const w = parent ? parent.clientWidth : canvas.clientWidth;
   const h = parent ? parent.clientHeight : canvas.clientHeight;
   applyZoom(camera, w, h, zoom);
-  console.log(TAG, 'zoom applied, w:', w, 'h:', h);
 }
 
 export function panCamera(dx: number, dy: number): void {
   const camera = getSharedCamera();
-  if (!camera) {
-    console.log(TAG, 'panCamera skipped, camera is null');
-    return;
-  }
+  if (!camera) return;
   const z = getZoom();
 
   camera.updateMatrixWorld();
@@ -159,11 +148,9 @@ export function panCamera(dx: number, dy: number): void {
   const moveY = (ry * dx + uy * dy) * scale;
   const moveZ = (rz * dx + uz * dy) * scale;
 
-  console.log(TAG, 'panCamera dx:', dx.toFixed(1), 'dy:', dy.toFixed(1), 'zoom:', z.toFixed(3), '→ moveX:', moveX.toFixed(1), 'moveY:', moveY.toFixed(1), 'camPos:', camera.position.x.toFixed(1), camera.position.y.toFixed(1));
-
-  camera.position.x -= moveX;
-  camera.position.y += moveY;
-  camera.position.z -= moveZ;
+  camera.position.x += moveX;
+  camera.position.y -= moveY;
+  camera.position.z += moveZ;
 
   const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
   const t = Math.abs(dir.z) < 1e-10 ? 0 : -camera.position.z / dir.z;

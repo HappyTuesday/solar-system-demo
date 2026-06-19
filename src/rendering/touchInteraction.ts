@@ -12,12 +12,12 @@ interface GestureEvent extends UIEvent {
   rotation: number;
 }
 
-const TAG = '[Touch]';
-
 const ROTATE_SENSITIVITY = 0.004;
-const ZOOM_SENSITIVITY = 0.005;
-const WHEEL_ZOOM_SENSITIVITY = 0.002;
+const ZOOM_SENSITIVITY = 0.008;
+const WHEEL_ZOOM_SENSITIVITY = 0.005;
 const WHEEL_PAN_SENSITIVITY = 0.5;
+const INERTIA_FRICTION = 0.92;
+const INERTIA_STOP_THRESHOLD = 0.0003;
 
 let _canvas: HTMLCanvasElement | null = null;
 
@@ -33,11 +33,47 @@ const activeTouches: Map<number, { x: number; y: number }> = new Map();
 
 // --- Gesture (Safari pinch) state ---
 let gestureStartZoom = 0;
+let gestureLastScale = 1;
 
-// ===== Touch event handlers (real touchscreen) =====
+// --- Zoom inertia ---
+let zoomVelocity = 0;
+let inertiaAnimId = 0;
+let wheelInertiaTimer: ReturnType<typeof setTimeout> | null = null;
+
+function trackZoomVelocity(instantFactor: number): void {
+  zoomVelocity = zoomVelocity * 0.6 + instantFactor * 0.4;
+}
+
+function startZoomInertia(): void {
+  if (inertiaAnimId) cancelAnimationFrame(inertiaAnimId);
+  if (Math.abs(zoomVelocity) < INERTIA_STOP_THRESHOLD) return;
+
+  function step(): void {
+    zoomVelocity *= INERTIA_FRICTION;
+    if (Math.abs(zoomVelocity) < INERTIA_STOP_THRESHOLD) {
+      zoomVelocity = 0;
+      inertiaAnimId = 0;
+      return;
+    }
+    const newZ = getZoom() * (1 + zoomVelocity);
+    setZoomDirect(newZ);
+    inertiaAnimId = requestAnimationFrame(step);
+  }
+  inertiaAnimId = requestAnimationFrame(step);
+}
+
+function stopInertia(): void {
+  if (inertiaAnimId) {
+    cancelAnimationFrame(inertiaAnimId);
+    inertiaAnimId = 0;
+  }
+  zoomVelocity = 0;
+}
+
+// ===== Touch event handlers =====
 
 function handleTouchStart(e: TouchEvent): void {
-  console.log(TAG, 'touchstart', 'touches:', e.touches.length);
+  stopInertia();
 
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
@@ -46,15 +82,11 @@ function handleTouchStart(e: TouchEvent): void {
 
   if (e.touches.length === 1) {
     const selectedTool = useUIStore.getState().selectedToolId;
-    console.log(TAG, '1-finger, selectedTool:', selectedTool);
     if (!selectedTool) {
       e.preventDefault();
       lastRotationX = e.touches[0].clientX;
       lastRotationY = e.touches[0].clientY;
       rotationActive = true;
-      console.log(TAG, '→ rotation started');
-    } else {
-      console.log(TAG, '→ tool selected, passing to mouse');
     }
   } else if (e.touches.length === 2) {
     e.preventDefault();
@@ -65,7 +97,6 @@ function handleTouchStart(e: TouchEvent): void {
     lastPinchDistance = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
     lastMidX = (t0.clientX + t1.clientX) / 2;
     lastMidY = (t0.clientY + t1.clientY) / 2;
-    console.log(TAG, '→ pinch started, dist:', lastPinchDistance.toFixed(1));
   } else if (e.touches.length >= 3) {
     e.preventDefault();
   }
@@ -85,7 +116,6 @@ function handleTouchMove(e: TouchEvent): void {
     lastRotationX = t.clientX;
     lastRotationY = t.clientY;
 
-    console.log(TAG, 'rotate dx:', dx.toFixed(1), 'dy:', dy.toFixed(1));
     const camera = getSharedCamera();
     if (camera) {
       const [lx, ly, lz] = getCurrentLookAt();
@@ -105,11 +135,10 @@ function handleTouchMove(e: TouchEvent): void {
     const panDx = midX - lastMidX;
     const panDy = midY - lastMidY;
 
-    console.log(TAG, 'pinch distDelta:', distDelta.toFixed(1), 'pan:', panDx.toFixed(1), panDy.toFixed(1));
-
     if (lastPinchDistance > 0) {
-      const newZ = getZoom() * (1 + distDelta * ZOOM_SENSITIVITY);
-      console.log(TAG, 'zoom:', getZoom().toFixed(3), '→', newZ.toFixed(3));
+      const instantFactor = distDelta * ZOOM_SENSITIVITY;
+      const newZ = getZoom() * (1 + instantFactor);
+      trackZoomVelocity(instantFactor);
       setZoomDirect(newZ);
     }
 
@@ -122,32 +151,38 @@ function handleTouchMove(e: TouchEvent): void {
 }
 
 function handleTouchEnd(e: TouchEvent): void {
-  console.log(TAG, 'touchend, remaining:', e.touches.length);
   for (let i = 0; i < e.changedTouches.length; i++) {
     activeTouches.delete(e.changedTouches[i].identifier);
   }
-  if (e.touches.length < 2) {
+  if (e.touches.length < 2 && pinchActive) {
     pinchActive = false;
+    startZoomInertia();
   }
   if (e.touches.length === 0) {
     rotationActive = false;
   }
 }
 
-// ===== Wheel event handler (trackpad pan + pinch zoom) =====
+// ===== Wheel event handler =====
 
 function handleWheel(e: WheelEvent): void {
   e.preventDefault();
+  stopInertia();
 
   if (e.ctrlKey || e.metaKey) {
-    const newZ = getZoom() * (1 - e.deltaY * WHEEL_ZOOM_SENSITIVITY);
-    console.log(TAG, 'wheel zoom', 'deltaY:', e.deltaY.toFixed(1), 'zoom:', getZoom().toFixed(3), '→', newZ.toFixed(3));
+    const instantFactor = -e.deltaY * WHEEL_ZOOM_SENSITIVITY;
+    const newZ = getZoom() * (1 + instantFactor);
+    trackZoomVelocity(instantFactor);
     setZoomDirect(newZ);
+
+    if (wheelInertiaTimer) clearTimeout(wheelInertiaTimer);
+    wheelInertiaTimer = setTimeout(() => {
+      startZoomInertia();
+    }, 80);
   } else {
     const dx = e.deltaX * WHEEL_PAN_SENSITIVITY;
     const dy = e.deltaY * WHEEL_PAN_SENSITIVITY;
     if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
-      console.log(TAG, 'wheel pan dx:', dx.toFixed(1), 'dy:', dy.toFixed(1));
       panCamera(dx, dy);
     }
   }
@@ -157,24 +192,27 @@ function handleWheel(e: WheelEvent): void {
 
 function handleGestureStart(e: Event): void {
   e.preventDefault();
+  stopInertia();
   gestureStartZoom = getZoom();
-  console.log(TAG, 'gesturestart, base zoom:', gestureStartZoom.toFixed(3));
+  gestureLastScale = 1;
 }
 
 function handleGestureChange(e: Event): void {
   e.preventDefault();
   const scale = (e as GestureEvent).scale;
-  const newZ = gestureStartZoom * scale;
-  console.log(TAG, 'gesturechange scale:', scale.toFixed(3), 'zoom:', gestureStartZoom.toFixed(3), '→', newZ.toFixed(3));
+  const instantFactor = scale / gestureLastScale - 1;
+  const newZ = getZoom() * (1 + instantFactor);
+  trackZoomVelocity(instantFactor);
   setZoomDirect(newZ);
+  gestureLastScale = scale;
 }
 
 function handleGestureEnd(e: Event): void {
   e.preventDefault();
-  console.log(TAG, 'gestureend');
+  startZoomInertia();
 }
 
-// ===== Mouse drag rotation (trackpad single-finger or mouse drag) =====
+// ===== Mouse drag rotation =====
 
 let mouseRotating = false;
 let mouseRotateStartX = 0;
@@ -185,7 +223,6 @@ function handleMouseDownForRotation(e: MouseEvent): void {
   mouseRotating = true;
   mouseRotateStartX = e.clientX;
   mouseRotateStartY = e.clientY;
-  console.log(TAG, 'mouse rotation started at', e.clientX, e.clientY);
 }
 
 function handleMouseMoveForRotation(e: MouseEvent): void {
@@ -206,16 +243,13 @@ function handleMouseMoveForRotation(e: MouseEvent): void {
 
 function handleMouseUpForRotation(): void {
   mouseRotating = false;
-  console.log(TAG, 'mouse rotation ended');
 }
 
 // ===== Init / Destroy =====
 
 export function initTouchInteraction(canvas: HTMLCanvasElement): void {
-  console.log(TAG, 'init on canvas', canvas.clientWidth + 'x' + canvas.clientHeight);
   _canvas = canvas;
   canvas.style.touchAction = 'none';
-  console.log(TAG, 'touch-action:', canvas.style.touchAction);
 
   canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
   canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
@@ -231,13 +265,12 @@ export function initTouchInteraction(canvas: HTMLCanvasElement): void {
   canvas.addEventListener('mousedown', handleMouseDownForRotation);
   window.addEventListener('mousemove', handleMouseMoveForRotation);
   window.addEventListener('mouseup', handleMouseUpForRotation);
-
-  console.log(TAG, 'all listeners registered (touch + wheel + gesture + mouse)');
 }
 
 export function destroyTouchInteraction(): void {
-  console.log(TAG, 'destroy');
   if (!_canvas) return;
+  stopInertia();
+  if (wheelInertiaTimer) clearTimeout(wheelInertiaTimer);
   _canvas.removeEventListener('touchstart', handleTouchStart);
   _canvas.removeEventListener('touchmove', handleTouchMove);
   _canvas.removeEventListener('touchend', handleTouchEnd);
