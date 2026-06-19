@@ -125,21 +125,28 @@ export function resetZoom(camera: THREE.OrthographicCamera, containerWidth: numb
   applyZoom(camera, containerWidth, containerHeight, 0.5);
 }
 
+const TAG = '[Setup]';
+
 export function setZoomDirect(newZoom: number): void {
   const zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
   setZoom(zoom);
   const camera = getSharedCamera();
   const canvas = getSharedCanvas();
+  console.log(TAG, 'setZoomDirect', 'raw:', newZoom.toFixed(3), 'clamped:', zoom.toFixed(3), 'camera:', !!camera, 'canvas:', !!canvas);
   if (!camera || !canvas) return;
   const parent = canvas.parentElement;
   const w = parent ? parent.clientWidth : canvas.clientWidth;
   const h = parent ? parent.clientHeight : canvas.clientHeight;
   applyZoom(camera, w, h, zoom);
+  console.log(TAG, 'zoom applied, w:', w, 'h:', h);
 }
 
 export function panCamera(dx: number, dy: number): void {
   const camera = getSharedCamera();
-  if (!camera) return;
+  if (!camera) {
+    console.log(TAG, 'panCamera skipped, camera is null');
+    return;
+  }
   const z = getZoom();
 
   camera.updateMatrixWorld();
@@ -151,6 +158,8 @@ export function panCamera(dx: number, dy: number): void {
   const moveX = (rx * dx + ux * dy) * scale;
   const moveY = (ry * dx + uy * dy) * scale;
   const moveZ = (rz * dx + uz * dy) * scale;
+
+  console.log(TAG, 'panCamera dx:', dx.toFixed(1), 'dy:', dy.toFixed(1), 'zoom:', z.toFixed(3), '→ moveX:', moveX.toFixed(1), 'moveY:', moveY.toFixed(1), 'camPos:', camera.position.x.toFixed(1), camera.position.y.toFixed(1));
 
   camera.position.x -= moveX;
   camera.position.y += moveY;
