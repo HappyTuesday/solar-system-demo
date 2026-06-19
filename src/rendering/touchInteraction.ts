@@ -68,8 +68,6 @@ function handleTouchMove(e: TouchEvent): void {
       const target = new THREE.Vector3(lx, ly, lz);
       rotateCameraHorizontal(camera, -dx * ROTATE_SENSITIVITY, target);
       rotateCameraVertical(camera, -dy * ROTATE_SENSITIVITY, target);
-      const newLookAt = getCurrentLookAt();
-      setCurrentLookAt([newLookAt[0], newLookAt[1], newLookAt[2]]);
     }
   } else if (pinchActive && e.touches.length === 2) {
     e.preventDefault();
