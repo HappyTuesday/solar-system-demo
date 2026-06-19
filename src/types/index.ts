@@ -26,6 +26,7 @@ export interface CelestialBody {
   mass: number;
   placedAt: number;
   rotationSpeed: number;
+  rotationPhase: number;
 }
 
 // --- Build State ---
@@ -82,6 +83,15 @@ export interface ScoringConfig {
 }
 
 // --- UI State ---
+
+export interface TrailDebugInfo {
+  bodyId: string;
+  templateId: string;
+  writeIndex: number;
+  activeCount: number;
+  sourceRange: string;
+  destRange: string;
+}
 
 export interface UIState {
   selectedToolId: CelestialBodyId | null;

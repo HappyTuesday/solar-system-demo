@@ -6,6 +6,7 @@ export interface AutoBuildStep {
   velocity: [number, number, number];
   mass: number;
   rotationSpeed: number;
+  rotationPhase: number;
 }
 
 const ROTATION_SPEEDS: Record<string, number> = {
