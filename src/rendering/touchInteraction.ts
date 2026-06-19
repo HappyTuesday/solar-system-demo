@@ -13,7 +13,7 @@ interface GestureEvent extends UIEvent {
 }
 
 const ROTATE_SENSITIVITY = 0.004;
-const ZOOM_SENSITIVITY = 0.008;
+const ZOOM_SENSITIVITY = 0.012;
 const WHEEL_ZOOM_SENSITIVITY = 0.005;
 const WHEEL_PAN_SENSITIVITY = 0.5;
 const INERTIA_FRICTION = 0.92;
