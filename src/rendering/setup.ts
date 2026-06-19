@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getZoom, setZoom, getSharedCamera, getSharedCanvas, getCurrentLookAt, setCurrentLookAt } from './cameraRef';
+import { getZoom, setZoom, getSharedCamera, getSharedCanvas, setCurrentLookAt } from './cameraRef';
 
 export interface SceneSetup {
   scene: THREE.Scene;
@@ -132,8 +132,9 @@ export function setZoomDirect(newZoom: number): void {
   const canvas = getSharedCanvas();
   if (!camera || !canvas) return;
   const parent = canvas.parentElement;
-  if (!parent) return;
-  applyZoom(camera, parent.clientWidth, parent.clientHeight, zoom);
+  const w = parent ? parent.clientWidth : canvas.clientWidth;
+  const h = parent ? parent.clientHeight : canvas.clientHeight;
+  applyZoom(camera, w, h, zoom);
 }
 
 export function panCamera(dx: number, dy: number): void {
@@ -152,10 +153,13 @@ export function panCamera(dx: number, dy: number): void {
   const moveZ = (rz * dx + uz * dy) * scale;
 
   camera.position.x -= moveX;
-  camera.position.y -= moveY;
+  camera.position.y += moveY;
   camera.position.z -= moveZ;
 
-  const [lx, ly, lz] = getCurrentLookAt();
-  setCurrentLookAt([lx - moveX, ly - moveY, lz - moveZ]);
-  camera.lookAt(lx - moveX, ly - moveY, lz - moveZ);
+  const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+  const t = Math.abs(dir.z) < 1e-10 ? 0 : -camera.position.z / dir.z;
+  const newLx = camera.position.x + dir.x * t;
+  const newLy = camera.position.y + dir.y * t;
+  setCurrentLookAt([newLx, newLy, 0]);
+  camera.lookAt(newLx, newLy, 0);
 }

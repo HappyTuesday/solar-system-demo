@@ -8,7 +8,7 @@ import {
 import { useUIStore } from '../stores/uiStore';
 
 const ROTATE_SENSITIVITY = 0.004;
-const ZOOM_SENSITIVITY = 0.001;
+const ZOOM_SENSITIVITY = 0.005;
 
 let _canvas: HTMLCanvasElement | null = null;
 let rotationActive = false;
