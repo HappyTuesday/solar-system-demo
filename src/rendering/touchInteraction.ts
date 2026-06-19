@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {
-  getSharedCamera, getZoom, getCurrentLookAt, setCurrentLookAt,
+  getSharedCamera, getZoom, getCurrentLookAt,
 } from './cameraRef';
 import {
   setZoomDirect, panCamera, rotateCameraHorizontal, rotateCameraVertical,
