@@ -135,11 +135,20 @@ export function initTouchInteraction(canvas: HTMLCanvasElement): void {
   _canvas = canvas;
   canvas.style.touchAction = 'none';
   console.log(TAG, 'touch-action set to:', canvas.style.touchAction);
+
   canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
   canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
   canvas.addEventListener('touchend', handleTouchEnd);
   canvas.addEventListener('touchcancel', handleTouchEnd);
-  console.log(TAG, 'touch listeners registered');
+
+  canvas.addEventListener('pointerdown', (e) => console.log(TAG, '⭐ pointerdown', 'type:', e.pointerType, 'id:', e.pointerId));
+  canvas.addEventListener('pointermove', (e) => console.log(TAG, '⭐ pointermove', 'type:', e.pointerType));
+  canvas.addEventListener('pointerup', (e) => console.log(TAG, '⭐ pointerup', 'type:', e.pointerType));
+  canvas.addEventListener('mousedown', () => console.log(TAG, '⭐ mousedown'));
+  canvas.addEventListener('touchstart', () => console.log(TAG, '⭐ extra touchstart'), { passive: true });
+  canvas.addEventListener('wheel', (e) => console.log(TAG, '⭐ wheel', 'delta:', e.deltaX, e.deltaY));
+
+  console.log(TAG, 'all listeners registered (touch + pointer + mouse + wheel for diagnosis)');
 }
 
 export function destroyTouchInteraction(): void {
