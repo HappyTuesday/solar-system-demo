@@ -1,5 +1,5 @@
 import type { CelestialBody } from '../types';
-import { PHYSICAL_CONSTANTS, SIM_CONFIG } from './constants';
+import { PHYSICAL_CONSTANTS, SIM_CONFIG, REAL_DATA } from './constants';
 
 function vec3Add(a: [number, number, number], b: [number, number, number]): [number, number, number] {
   return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -15,6 +15,11 @@ function vec3Scale(v: [number, number, number], s: number): [number, number, num
 
 export function vec3Length(v: [number, number, number]): number {
   return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+}
+
+export function getBodyRadius(templateId: string): number {
+  const data = REAL_DATA[templateId];
+  return data?.radius ?? 0;
 }
 
 function vec3Normalize(v: [number, number, number]): [number, number, number] {
