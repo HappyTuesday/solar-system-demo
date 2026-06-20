@@ -8,11 +8,33 @@ import OffScreenIndicator from './OffScreenIndicator';
 
 const SCALE = 1 / 1.496e11;
 const ORBIT_LINE_POINTS = 256;
+const INITIAL_FRUSTUM = 35;
 
 const DISPLAY_RADII: Record<string, number> = {
   sun: 0.25, jupiter: 0.65, saturn: 0.55, uranus: 0.45,
   neptune: 0.4, earth: 0.18, venus: 0.18, mars: 0.15, mercury: 0.12,
 };
+
+function makeOrthoCamera(w: number, h: number, halfSize: number) {
+  const aspect = Math.max(w, 1) / Math.max(h, 1);
+  const halfH = halfSize;
+  const halfW = halfH * aspect;
+  const camera = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.01, 500);
+  camera.position.set(0, 5, 0);
+  camera.up.set(0, 0, 1);
+  camera.lookAt(0, 0, 0);
+  return camera;
+}
+
+function updateOrthoZoom(camera: THREE.OrthographicCamera, aspect: number, halfSize: number) {
+  const halfH = halfSize;
+  const halfW = halfH * aspect;
+  camera.left = -halfW;
+  camera.right = halfW;
+  camera.top = halfH;
+  camera.bottom = -halfH;
+  camera.updateProjectionMatrix();
+}
 
 function computeBodyPosition(templateId: string, jd: number): [number, number, number] | null {
   const data = REAL_DATA[templateId];
@@ -54,7 +76,8 @@ function createOrbitLine(
 function ExploreCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
+  const zoomRef = useRef<number>(INITIAL_FRUSTUM);
   const bodyRefsRef = useRef<{ id: string; name: string; mesh: THREE.Mesh }[]>([]);
   const [offScreenEntries, setOffScreenEntries] = useState<OffScreenEntry[]>([]);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
@@ -83,10 +106,7 @@ function ExploreCanvas() {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x050510);
 
-    const camera = new THREE.PerspectiveCamera(60, Math.max(w, 1) / Math.max(h, 1), 0.1, 200);
-    camera.position.set(0, 55, 0);
-    camera.up.set(0, 0, 1);
-    camera.lookAt(0, 0, 0);
+    const camera = makeOrthoCamera(w, h, INITIAL_FRUSTUM);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -103,7 +123,6 @@ function ExploreCanvas() {
     const allIds = ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
     const loader = new THREE.TextureLoader();
 
-    // Orbit colors
     const orbitColors: Record<string, number> = {
       mercury: 0x888888, venus: 0xccaa88, earth: 0x4488ff, mars: 0xcc6644,
       jupiter: 0xd4b896, saturn: 0xe8d5a3, uranus: 0x88ccdd, neptune: 0x4466ff,
@@ -113,7 +132,6 @@ function ExploreCanvas() {
       const data = REAL_DATA[id];
       if (!data) continue;
 
-      // Body
       const r = DISPLAY_RADII[id] || 0.25;
       const geom = new THREE.SphereGeometry(r, 48, 48);
       const mat = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.1 });
@@ -132,7 +150,6 @@ function ExploreCanvas() {
       const texPath = `/textures/${id}.jpg`;
       loader.load(texPath, (tex) => { mat.map = tex; mat.color = new THREE.Color(0xffffff); mat.needsUpdate = true; }, undefined, () => {});
 
-      // Orbit line (not for sun)
       if (data.semiMajorAxis && data.orbital && id !== 'sun') {
         const orbitLine = createOrbitLine(id, orbitColors[id] || 0x556688);
         scene.add(orbitLine);
@@ -181,9 +198,10 @@ function ExploreCanvas() {
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const factor = e.deltaY > 0 ? 1.1 : 0.9;
-      const dir = camera.position.clone().normalize();
-      const dist = camera.position.length();
-      camera.position.copy(dir.multiplyScalar(Math.max(2, Math.min(180, dist * factor))));
+      const newHalf = Math.max(0.5, Math.min(120, zoomRef.current * factor));
+      zoomRef.current = newHalf;
+      const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
+      updateOrthoZoom(camera, aspect, newHalf);
     };
 
     // --- Touch & Trackpad support ---
@@ -217,9 +235,10 @@ function ExploreCanvas() {
         const newDist = Math.hypot(t1.x - t0.x, t1.y - t0.y);
         if (touchDist0 > 0) {
           const factor = newDist / touchDist0;
-          const dir = camera.position.clone().normalize();
-          const dist = camera.position.length();
-          camera.position.copy(dir.multiplyScalar(Math.max(15, Math.min(180, dist / factor))));
+          const newHalf = Math.max(0.5, Math.min(120, zoomRef.current / factor));
+          zoomRef.current = newHalf;
+          const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
+          updateOrthoZoom(camera, aspect, newHalf);
         }
         touches0 = t0;
         touches1 = t1;
@@ -240,9 +259,10 @@ function ExploreCanvas() {
     const onGestureChange = (e: Event) => {
       const scale = (e as any).scale || 1;
       const factor = scale / gestureZoomStart;
-      const dir = camera.position.clone().normalize();
-      const dist = camera.position.length();
-      camera.position.copy(dir.multiplyScalar(Math.max(15, Math.min(180, dist / factor))));
+      const newHalf = Math.max(0.5, Math.min(120, zoomRef.current / factor));
+      zoomRef.current = newHalf;
+      const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
+      updateOrthoZoom(camera, aspect, newHalf);
       gestureZoomStart = scale;
     };
 
@@ -260,8 +280,8 @@ function ExploreCanvas() {
       const rw = container.clientWidth;
       const rh = container.clientHeight;
       setContainerSize({ w: rw, h: rh });
-      camera.aspect = rw / Math.max(rh, 1);
-      camera.updateProjectionMatrix();
+      const aspect = rw / Math.max(rh, 1);
+      updateOrthoZoom(camera, aspect, zoomRef.current);
       renderer.setSize(rw, rh);
     };
     window.addEventListener('resize', onResize);
