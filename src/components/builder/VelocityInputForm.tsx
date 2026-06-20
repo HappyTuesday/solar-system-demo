@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import * as THREE from 'three';
 import { REAL_DATA } from '../../engine/constants';
-import { getSharedScene } from '../../rendering/cameraRef';
-import { previewVelocityArrowInPlacement, removeVelocityArrow } from '../../rendering/interaction';
+import { getSharedScene } from '../../rendering/threejs/cameraRef';
+import { previewVelocityArrowInPlacement, removeVelocityArrow } from '../../rendering/threejs/interaction';
 import { renderToPhysical } from '../../engine/coordinateTransform';
 import type { CelestialBodyId } from '../../types';
 import './VelocityInputForm.css';

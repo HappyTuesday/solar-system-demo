@@ -1,7 +1,15 @@
 import * as THREE from 'three';
-import { SPATIAL_TRANSFORM } from '../engine/constants';
+import { SPATIAL_TRANSFORM } from '../../engine/constants';
 
-export function createReferencePlane(scene: THREE.Scene, _width: number, _height: number): THREE.Mesh {
+let _refGroup: THREE.Group | null = null;
+
+export function getRefGroup(): THREE.Group | null {
+  return _refGroup;
+}
+
+export function createReferencePlane(scene: THREE.Scene, _width: number, _height: number): THREE.Group {
+  const group = new THREE.Group();
+
   const size = SPATIAL_TRANSFORM.maxOrbitRadius * 3;
   const geometry = new THREE.PlaneGeometry(size, size);
   const material = new THREE.MeshBasicMaterial({
@@ -12,9 +20,8 @@ export function createReferencePlane(scene: THREE.Scene, _width: number, _height
     depthWrite: false,
   });
   const plane = new THREE.Mesh(geometry, material);
-  plane.position.z = -1;
   plane.renderOrder = 1;
-  scene.add(plane);
+  group.add(plane);
 
   const gridSize = Math.ceil(SPATIAL_TRANSFORM.maxOrbitRadius * 1.25);
   const gridStep = 100;
@@ -23,21 +30,38 @@ export function createReferencePlane(scene: THREE.Scene, _width: number, _height
 
   for (let i = -gridSize; i <= gridSize; i += gridStep) {
     const pointsH: THREE.Vector3[] = [
-      new THREE.Vector3(-gridSize, i, -0.5),
-      new THREE.Vector3(gridSize, i, -0.5),
+      new THREE.Vector3(-gridSize, i, 0),
+      new THREE.Vector3(gridSize, i, 0),
     ];
     const geoH = new THREE.BufferGeometry().setFromPoints(pointsH);
-    scene.add(new THREE.Line(geoH, gridMat));
+    group.add(new THREE.Line(geoH, gridMat));
 
     const pointsV: THREE.Vector3[] = [
-      new THREE.Vector3(i, -gridSize, -0.5),
-      new THREE.Vector3(i, gridSize, -0.5),
+      new THREE.Vector3(i, -gridSize, 0),
+      new THREE.Vector3(i, gridSize, 0),
     ];
     const geoV = new THREE.BufferGeometry().setFromPoints(pointsV);
-    scene.add(new THREE.Line(geoV, gridMat));
+    group.add(new THREE.Line(geoV, gridMat));
   }
 
-  return plane;
+  group.position.set(0, 0, -1);
+  _refGroup = group;
+  scene.add(group);
+  return group;
+}
+
+export function updateRefPlaneOrientation(camera: THREE.Camera, lookAt: THREE.Vector3): void {
+  if (!_refGroup) return;
+  _refGroup.position.set(lookAt.x, lookAt.y, -1);
+  _refGroup.quaternion.copy(camera.quaternion);
+}
+
+export function resizeRefPlane(linearScale: number): void {
+  if (!_refGroup) return;
+  const basePlaneRadius = SPATIAL_TRANSFORM.maxOrbitRadius * 1.5;
+  const furthestRender = 4.5e12 * linearScale;
+  const s = Math.max(1, furthestRender * 1.2 / basePlaneRadius);
+  _refGroup.scale.setScalar(s);
 }
 
 export function createOrbitRing(scene: THREE.Scene, radius: number, color: number = 0xffaa00): THREE.Line {

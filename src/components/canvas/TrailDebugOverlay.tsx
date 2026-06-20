@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { TrailManager } from '../../rendering/trails';
+import { TrailManager } from '../../rendering/threejs/trails';
 import type { TrailDebugInfo } from '../../types';
 import { useBuildStore } from '../../stores/buildStore';
 import './TrailDebugOverlay.css';

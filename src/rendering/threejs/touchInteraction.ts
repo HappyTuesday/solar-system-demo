@@ -6,10 +6,10 @@ import {
   setZoomDirect, panCamera, rotateCameraHorizontal, rotateCameraVertical,
 } from './setup';
 import { bodyMeshMap } from './bodies';
-import { useUIStore } from '../stores/uiStore';
-import { useBuildStore } from '../stores/buildStore';
-import { REAL_DATA } from '../engine/constants';
-import { setLinearScale, setSizeMultiplier } from '../engine/coordinateTransform';
+import { useUIStore } from '../../stores/uiStore';
+import { useBuildStore } from '../../stores/buildStore';
+import { REAL_DATA } from '../../engine/constants';
+import { setLinearScale, setSizeMultiplier } from '../../engine/coordinateTransform';
 
 interface GestureEvent extends UIEvent {
   scale: number;

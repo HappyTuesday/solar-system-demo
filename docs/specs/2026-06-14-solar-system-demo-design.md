@@ -35,7 +35,7 @@
 | 3D 渲染引擎 | Three.js | 0.184 | 三维天体渲染与场景管理 |
 | 构建工具 | Vite | 8.0 | 开发服务器与生产构建 |
 | 状态管理 | Zustand | 5.0 | 轻量级全局状态 |
-| 数据持久化 | sql.js | 1.14 | 浏览器端 SQLite，搭建历史存储 |
+| 数据持久化 | localStorage | - | 浏览器本地存储，搭建历史存储 |
 | 代码检查 | ESLint | 10.3 | 代码规范检查 |
 
 ### 1.3 目标用户
@@ -75,13 +75,14 @@ solar-system-demo/
     ├── vite-env.d.ts             # Vite 类型声明
     │
     ├── types/
-    │   ├── index.ts              # 全局 TypeScript 类型定义
-    │   └── sql.js.d.ts           # sql.js 模块声明
+    │   └── index.ts              # 全局 TypeScript 类型定义
     │
     ├── engine/                   # 【纯逻辑层】无 React、无 Three.js 依赖
     │   ├── constants.ts          # 真实天体数据、模拟/显示/拖拽/评分配置
     │   ├── physics.ts            # N 体引力物理引擎（RK4 积分器 + 碰撞检测）
-    │   └── scoring.ts            # 评分算法 & 实时误差计算
+    │   ├── scoring.ts            # 评分算法 & 实时误差计算
+    │   ├── orbital.ts            # 开普勒轨道计算（解开普勒方程、轨道根数→笛卡尔坐标）
+    │   └── autoBuild.ts          # 基于轨道根数的自动搭建计算
     │
     ├── rendering/                # 【Three.js 封装层】可引用 engine，不可引用 React
     │   ├── setup.ts              # 场景初始化、相机/渲染器/灯光/星空
@@ -90,8 +91,7 @@ solar-system-demo/
     │   ├── interaction.ts        # 射线检测、框选、速度箭头、预览球体
     │   └── cameraRef.ts          # 相机引用共享（跨组件访问）
     │
-    ├── persistence/              # 【数据持久层】sql.js 封装
-    │   ├── db.ts                 # 数据库初始化、建表、WASM 加载
+    ├── persistence/              # 【数据持久层】localStorage 封装
     │   └── repository.ts         # CRUD 操作（保存/加载/列出/删除/最佳成绩）
     │
     ├── stores/                   # 【Zustand 状态管理】
@@ -132,7 +132,7 @@ components/ ──→ hooks/ ──→ stores/ ──→ persistence/ | renderin
 
 - **engine/**：纯逻辑，不可 import React 或 Three.js
 - **rendering/**：Three.js 封装，不可 import React（可 import engine）
-- **persistence/**：sql.js 封装（可 import types）
+- **persistence/**：localStorage 封装（可 import types）
 - **stores/**：Zustand 状态管理（可 import engine / persistence / types）
 - **hooks/**：React hooks（可 import stores / types）
 - **components/**：React UI（可 import 所有下层模块）
@@ -179,6 +179,7 @@ type CelestialBodyType = 'star' | 'planet' | 'moon';
 | `mass` | `number` | 显示质量 |
 | `placedAt` | `number` | 放置时间戳（ms） |
 | `rotationSpeed` | `number` | 自转速度（滑块控制，0~5） |
+| `rotationPhase` | `number` | 初始自转相位角（rad） |
 
 ### 3.4 BuildState（搭建状态）
 
@@ -497,6 +498,22 @@ redo() [Ctrl+Shift+Z / Cmd+Shift+Z / Ctrl+Y]：
   └──> 保存历史记录，显示评分弹窗
 ```
 
+### 5.8.1 自动搭建（基于真实轨道根数）
+
+自动搭建功能在用户点击「自动搭建」时，调用 `computeAutoBuildPlan()` 基于开普勒轨道根数计算当前时刻所有 17 个天体的真实 3D 位置和速度。计算流程：
+
+1. 获取当前时间戳，转换为 Julian Date
+2. 对每个天体从 `REAL_DATA` 读取轨道根数（a, e, i, Ω, ω, M₀）
+3. 计算当前时刻的真近点角 ν：
+   - M = M₀ + 2π·(t - epoch) / T
+   - 解开普勒方程求 E
+   - ν = 2·atan(√((1+e)/(1-e))·tan(E/2))
+4. 通过 `stateVectors()` 将轨道根数转换为笛卡尔位置和速度
+5. 卫星的位置和速度叠加到其母行星上
+6. 同时计算真实自转相位和黄赤交角
+
+放置完成后，模拟按 N 体物理（RK4）自由演进，不持续绑定真实数据。
+
 ### 5.9 历史记录切换
 
 ```
@@ -651,32 +668,27 @@ advanceSimulation(bodies, realDelta):
 
 ### 6.6 数据持久化（persistence/）
 
-**数据库初始化**（db.ts）：
-```
-initDatabase():
-  ├── 动态 import('sql.js')
-  ├── 指定 WASM 路径（通过 Vite ?url 导入）
-  ├── 创建内存数据库
-  └── 建表: build_records (
-        id TEXT PRIMARY KEY,
-        created_at INTEGER NOT NULL,
-        completed_at INTEGER,
-        status TEXT NOT NULL DEFAULT 'building',
-        score REAL,
-        build_time_ms INTEGER,
-        snapshot TEXT
-      )
-  └── 创建索引: idx_created_at (created_at DESC)
-```
+**存储结构**：
+- 使用 `localStorage` 存储搭建历史记录
+- 单一 key `solar_build_records`，值为 `BuildRecord[]` JSON 数组
+- 最多保留 20 条记录（`MAX_RECORDS = 20`），超出自动删除最旧记录
+- 数组按 `createdAt` 降序排列
 
 **CRUD 操作**（repository.ts）：
 | 操作 | 方法 | 说明 |
 |------|------|------|
-| 保存 | `saveRecord(record)` | INSERT OR REPLACE |
-| 加载 | `loadRecord(id)` | SELECT by id |
-| 列表 | `listRecords()` | SELECT ... ORDER BY created_at DESC |
-| 删除 | `deleteRecord(id)` | DELETE by id |
-| 排行 | `getBestScores(limit)` | SELECT completed ... ORDER BY score DESC, build_time_ms ASC |
+| 保存 | `saveRecord(record)` | 查找同 ID → 替换或 unshift，截断至 20 条 |
+| 加载 | `loadRecord(id)` | 遍历查找匹配 ID |
+| 列表 | `listRecords()` | 返回全部记录数组 |
+| 删除 | `deleteRecord(id)` | 过滤删除 |
+| 排行 | `getBestScores(limit)` | 过滤 completed，按 score DESC, buildTimeMs ASC 排序 |
+
+**错误处理**：
+| 场景 | 处理方式 |
+|------|----------|
+| localStorage 不可用 | 静默降级，读返回 `null`/`[]`，写无操作 |
+| JSON 解析失败 | 覆盖恢复为空数组 |
+| 存储空间超限 | 静默忽略，历史记录不保存但不影响核心功能 |
 
 ### 6.7 状态管理（stores/）
 
@@ -823,7 +835,7 @@ playSound(name):
 ### 8.4 错误处理
 
 - **纹理加载失败**：回退到默认纯色（DEFAULT_COLORS），不中断渲染
-- **WASM 加载失败**：`initDatabase()` throws Error，应用无历史功能但仍可正常搭建
+- **localStorage 不可用**：历史功能静默降级，读返回空，写无操作
 - **DB 操作**：所有 repository 方法使用 prepared statement，防止 SQL 注入
 - **JSON 解析**：历史快照解析失败时静默忽略，不崩溃
 - **音频播放**：`play().catch(() => {})` 静默处理 autoplay 限制
@@ -862,9 +874,8 @@ playSound(name):
 ### 9.4 运行环境
 
 - 纯前端 SPA，单用户
-- 需要支持 WebGL 的现代浏览器
-- sql.js 通过 WASM 运行，需要浏览器支持 WebAssembly
-- 数据库为内存存储，页面刷新后数据仍持久化于 IndexedDB 快照中（需手动保存）
+- 需要支持 WebGL 和 localStorage 的现代浏览器
+- 搭建历史通过 localStorage 持久化，最多保留 20 条记录
 
 ### 9.5 无后端依赖
 

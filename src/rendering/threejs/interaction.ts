@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { bodyMeshMap } from './bodies';
-import { physicalVelocityToRender } from '../engine/coordinateTransform';
-import { DRAG_CONFIG } from '../engine/constants';
+import { physicalVelocityToRender } from '../../engine/coordinateTransform';
+import { DRAG_CONFIG } from '../../engine/constants';
 
 const raycaster = new THREE.Raycaster();
 const referencePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); // XY plane

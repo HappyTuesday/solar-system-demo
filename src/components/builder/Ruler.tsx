@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
-import { getSharedCamera, getSharedCanvas } from '../../rendering/cameraRef';
+import { getSharedCamera, getSharedCanvas } from '../../rendering/threejs/cameraRef';
 import { renderToPhysical } from '../../engine/coordinateTransform';
 import './Ruler.css';
 

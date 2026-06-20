@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import type { CelestialBody } from '../types';
-import { REAL_DATA } from '../engine/constants';
-import { physicalToRender, physicalRadiusToRender } from '../engine/coordinateTransform';
+import type { CelestialBody } from '../../types';
+import { REAL_DATA } from '../../engine/constants';
+import { physicalToRender, physicalRadiusToRender } from '../../engine/coordinateTransform';
 
 const DEFAULT_COLORS: Record<string, number> = {
   sun: 0xffdd00,
@@ -28,39 +28,53 @@ const textureCache = new Map<string, THREE.Texture>();
 
 function loadTexture(url: string): THREE.Texture | null {
   if (textureCache.has(url)) return textureCache.get(url)!;
-  const texture = textureLoader.load(url, undefined, undefined, () => {});
+  const texture = textureLoader.load(url, (tex) => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.generateMipmaps = true;
+    tex.anisotropy = 16;
+  }, undefined, () => {});
   textureCache.set(url, texture);
   return texture;
 }
 
 export interface BodyMesh {
   mesh: THREE.Mesh;
+  outline: THREE.Sprite;
   tiltGroup: THREE.Group;
   group: THREE.Group;
 }
 
 export const bodyMeshMap = new Map<string, BodyMesh>();
 
-// 黄赤交角（自转轴相对轨道面法线的倾角，弧度）
-const AXIAL_TILTS: Record<string, number> = {
-  sun: 0.1265,       // ~7.25°
-  mercury: 0.0005,   // ~0.03°
-  venus: 2.873,      // ~177.4° (接近倒转)
-  earth: 0.408,      // ~23.4°
-  mars: 0.440,       // ~25.2°
-  jupiter: 0.054,    // ~3.1°
-  saturn: 0.466,     // ~26.7°
-  uranus: 1.707,     // ~97.8° (几乎躺倒)
-  neptune: 0.494,    // ~28.3°
-  moon: 0.1,
-  phobos: 0.02,
-  deimos: 0.02,
-  io: 0.02,
-  europa: 0.02,
-  ganymede: 0.02,
-  callisto: 0.02,
-  titan: 0.02,
-};
+let _glowTexture: THREE.Texture | null = null;
+
+function getGlowTexture(): THREE.Texture {
+  if (_glowTexture) return _glowTexture;
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const cx = size / 2;
+  const gradient = ctx.createRadialGradient(cx, cx, cx * 0.18, cx, cx, cx);
+  gradient.addColorStop(0, 'rgba(68, 170, 255, 0)');
+  gradient.addColorStop(0.4, 'rgba(68, 170, 255, 0.08)');
+  gradient.addColorStop(0.65, 'rgba(68, 170, 255, 0.5)');
+  gradient.addColorStop(0.9, 'rgba(68, 170, 255, 0.04)');
+  gradient.addColorStop(1, 'rgba(68, 170, 255, 0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  _glowTexture = new THREE.CanvasTexture(canvas);
+  _glowTexture.needsUpdate = true;
+  return _glowTexture;
+}
+
+export function setBodyOutline(bodyId: string, visible: boolean): void {
+  const bm = bodyMeshMap.get(bodyId);
+  if (bm) bm.outline.visible = visible;
+}
 
 export function createBodyMesh(
   body: CelestialBody,
@@ -70,7 +84,7 @@ export function createBodyMesh(
   if (!data) return null;
 
   const isSun = body.templateId === 'sun';
-  const renderRadius = physicalRadiusToRender(data.radius, isSun);
+  const renderRadius = physicalRadiusToRender(data.radius);
 
   const geometry = new THREE.SphereGeometry(renderRadius, isSun ? 64 : 32, isSun ? 64 : 32);
 
@@ -101,11 +115,29 @@ export function createBodyMesh(
 
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(0, 0, 0);
+  mesh.rotation.y = body.rotationPhase ?? 0;
 
-  const tilt = AXIAL_TILTS[body.templateId] ?? 0;
+  const glowRadius = Math.max(renderRadius * 2, 3);
+  const outlineMat = new THREE.SpriteMaterial({
+    map: getGlowTexture(),
+    color: 0x44aaff,
+    blending: THREE.NormalBlending,
+    transparent: true,
+    opacity: 0.5,
+    depthTest: true,
+    depthWrite: false,
+  });
+  const outline = new THREE.Sprite(outlineMat);
+  outline.scale.set(glowRadius * 2.8, glowRadius * 2.8, 1);
+  outline.position.z = 0.5;
+  outline.renderOrder = 5;
+  outline.visible = false;
+
+  const tilt = REAL_DATA[body.templateId]?.orbital?.axialTilt ?? 0;
   const tiltGroup = new THREE.Group();
   tiltGroup.rotation.x = tilt;
   tiltGroup.add(mesh);
+  tiltGroup.add(outline);
 
   const group = new THREE.Group();
   group.add(tiltGroup);
@@ -128,7 +160,7 @@ export function createBodyMesh(
     tiltGroup.add(ring);
   }
 
-  const result: BodyMesh = { mesh, tiltGroup, group };
+  const result: BodyMesh = { mesh, outline, tiltGroup, group };
   bodyMeshMap.set(body.id, result);
   return result;
 }

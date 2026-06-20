@@ -8,8 +8,8 @@ import {
   zoomIn,
   zoomOut,
   resetZoom,
-} from '../../rendering/setup';
-import { getSharedCamera, getSharedCanvas, getCurrentLookAt, getZoom } from '../../rendering/cameraRef';
+} from '../../rendering/threejs/setup';
+import { getSharedCamera, getSharedCanvas, getCurrentLookAt, getZoom } from '../../rendering/threejs/cameraRef';
 import './CameraControls.css';
 
 export default function CameraControls() {

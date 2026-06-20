@@ -1,66 +1,59 @@
 import type { BuildRecord } from '../types';
-import { getDatabase } from './db';
 
-function rowToRecord(row: Record<string, unknown>): BuildRecord {
-  return {
-    id: row.id as string,
-    createdAt: row.created_at as number,
-    completedAt: row.completed_at as number | null,
-    status: row.status as BuildRecord['status'],
-    score: row.score as number | null,
-    buildTimeMs: row.build_time_ms as number | null,
-    snapshot: row.snapshot as string,
-  };
+const STORAGE_KEY = 'solar_build_records';
+const MAX_RECORDS = 20;
+
+function readRecords(): BuildRecord[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as BuildRecord[];
+  } catch {
+    return [];
+  }
+}
+
+function writeRecords(records: BuildRecord[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  } catch {
+    // QuotaExceededError or localStorage unavailable — silently ignore
+  }
 }
 
 export function saveRecord(record: BuildRecord): void {
-  const database = getDatabase();
-  database.run(
-    `INSERT OR REPLACE INTO build_records (id, created_at, completed_at, status, score, build_time_ms, snapshot)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [record.id, record.createdAt, record.completedAt, record.status, record.score, record.buildTimeMs, record.snapshot]
-  );
+  const records = readRecords();
+  const idx = records.findIndex(r => r.id === record.id);
+  if (idx !== -1) {
+    records[idx] = record;
+  } else {
+    records.unshift(record);
+  }
+  writeRecords(records.slice(0, MAX_RECORDS));
 }
 
 export function loadRecord(id: string): BuildRecord | null {
-  const database = getDatabase();
-  const stmt = database.prepare('SELECT * FROM build_records WHERE id = ?');
-  stmt.bind([id]);
-  if (stmt.step()) {
-    const row = stmt.getAsObject();
-    stmt.free();
-    return rowToRecord(row);
-  }
-  stmt.free();
-  return null;
+  const records = readRecords();
+  return records.find(r => r.id === id) ?? null;
 }
 
 export function listRecords(): BuildRecord[] {
-  const database = getDatabase();
-  const stmt = database.prepare('SELECT * FROM build_records ORDER BY created_at DESC');
-  const results: BuildRecord[] = [];
-  while (stmt.step()) {
-    results.push(rowToRecord(stmt.getAsObject()));
-  }
-  stmt.free();
-  return results;
+  return readRecords();
 }
 
 export function deleteRecord(id: string): void {
-  const database = getDatabase();
-  database.run('DELETE FROM build_records WHERE id = ?', [id]);
+  const records = readRecords().filter(r => r.id !== id);
+  writeRecords(records);
 }
 
 export function getBestScores(limit: number = 10): BuildRecord[] {
-  const database = getDatabase();
-  const stmt = database.prepare(
-    'SELECT * FROM build_records WHERE status = ? ORDER BY score DESC, build_time_ms ASC LIMIT ?'
-  );
-  stmt.bind(['completed', limit]);
-  const results: BuildRecord[] = [];
-  while (stmt.step()) {
-    results.push(rowToRecord(stmt.getAsObject()));
-  }
-  stmt.free();
-  return results;
+  return readRecords()
+    .filter(r => r.status === 'completed')
+    .sort((a, b) => {
+      if (a.score === null) return 1;
+      if (b.score === null) return -1;
+      if (b.score !== a.score) return b.score - a.score;
+      return (a.buildTimeMs ?? 0) - (b.buildTimeMs ?? 0);
+    })
+    .slice(0, limit);
 }

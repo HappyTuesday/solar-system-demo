@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { getZoom, setZoom, getSharedCamera, getSharedCanvas, setCurrentLookAt } from './cameraRef';
+import { getLinearScale } from '../../engine/coordinateTransform';
+import { useUIStore } from '../../stores/uiStore';
 
 export interface SceneSetup {
   scene: THREE.Scene;
@@ -21,7 +23,7 @@ export function initScene(canvas: HTMLCanvasElement): SceneSetup {
   const camera = new THREE.OrthographicCamera(
     -fw / 2, fw / 2,
     fh / 2, -fh / 2,
-    1, 5000
+    0.1, 5000
   );
   camera.position.set(0, 0, 100);
   camera.lookAt(0, 0, 0);
@@ -121,8 +123,27 @@ export function resetZoom(camera: THREE.OrthographicCamera, containerWidth: numb
   applyZoom(camera, containerWidth, containerHeight, 0.5);
 }
 
-export function setZoomDirect(newZoom: number): void {
-  const zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+export function setZoomDirect(newZoom: number, skipScaleSync = false): void {
+  const currentZoom = getZoom();
+  const ZOOM_TRIGGER_UP = 2.5;
+  const ZOOM_TRIGGER_DOWN = 0.2;
+  const ZOOM_RESET = 1.0;
+
+  let effectiveZoom = newZoom;
+
+  if (!skipScaleSync) {
+    if (effectiveZoom > ZOOM_TRIGGER_UP && currentZoom <= ZOOM_TRIGGER_UP) {
+      const factor = effectiveZoom / ZOOM_RESET;
+      useUIStore.getState().setLinearScaleValue(getLinearScale() * factor);
+      effectiveZoom = ZOOM_RESET;
+    } else if (effectiveZoom < ZOOM_TRIGGER_DOWN && currentZoom >= ZOOM_TRIGGER_DOWN) {
+      const factor = ZOOM_RESET / Math.max(effectiveZoom, 0.01);
+      useUIStore.getState().setLinearScaleValue(getLinearScale() / factor);
+      effectiveZoom = ZOOM_RESET;
+    }
+  }
+
+  const zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, effectiveZoom));
   setZoom(zoom);
   const camera = getSharedCamera();
   const canvas = getSharedCanvas();
