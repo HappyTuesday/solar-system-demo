@@ -30,70 +30,72 @@ function vec3Normalize(v: [number, number, number]): [number, number, number] {
 
 export function computeAccelerations(
   bodies: CelestialBody[],
-  softening: number = PHYSICAL_CONSTANTS.softeningFactor
+  softening: number = PHYSICAL_CONSTANTS.softeningFactor,
+  dimension: 2 | 3 = 3,
 ): [number, number, number][] {
   const n = bodies.length;
   const acc: [number, number, number][] = Array.from({ length: n }, () => [0, 0, 0]);
 
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
-      const r = vec3Sub(bodies[i].position, bodies[j].position);
-      const dist = vec3Length(r);
+      const dx = bodies[i].position[0] - bodies[j].position[0];
+      const dy = bodies[i].position[1] - bodies[j].position[1];
+      const dz = dimension === 2 ? 0 : bodies[i].position[2] - bodies[j].position[2];
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
       const distSoft = Math.sqrt(dist * dist + softening * softening);
       const factor = PHYSICAL_CONSTANTS.G / (distSoft * distSoft * distSoft);
 
-      const fi = vec3Scale(r, -factor * bodies[j].mass);
-      const fj = vec3Scale(r, factor * bodies[i].mass);
+      const fx = -factor * bodies[j].mass * dx;
+      const fy = -factor * bodies[j].mass * dy;
+      const fz = dimension === 2 ? 0 : -factor * bodies[j].mass * dz;
 
-      acc[i] = vec3Add(acc[i], fi);
-      acc[j] = vec3Add(acc[j], fj);
+      acc[i] = [acc[i][0] + fx, acc[i][1] + fy, acc[i][2] + fz];
+      acc[j] = [acc[j][0] - fx, acc[j][1] - fy, acc[j][2] - fz];
     }
   }
 
   return acc;
 }
 
-export function rk4Step(bodies: CelestialBody[], dt: number): void {
+export function rk4Step(bodies: CelestialBody[], dt: number, dimension: 2 | 3 = 3): void {
   const n = bodies.length;
 
-  const r0 = bodies.map(b => b.position);
-  const v0 = bodies.map(b => b.velocity);
+  const r0 = bodies.map(b => [b.position[0], b.position[1], b.position[2]] as [number, number, number]);
+  const v0 = bodies.map(b => [b.velocity[0], b.velocity[1], b.velocity[2]] as [number, number, number]);
 
-  const k1v = computeAccelerations(bodies);
+  const k1v = computeAccelerations(bodies, PHYSICAL_CONSTANTS.softeningFactor, dimension);
   const k1r = v0;
 
   for (let i = 0; i < n; i++) {
-    bodies[i].position = vec3Add(r0[i], vec3Scale(k1r[i], dt / 2));
-    bodies[i].velocity = vec3Add(v0[i], vec3Scale(k1v[i], dt / 2));
+    bodies[i].position = [r0[i][0] + k1r[i][0] * dt / 2, r0[i][1] + k1r[i][1] * dt / 2, dimension === 2 ? 0 : r0[i][2] + k1r[i][2] * dt / 2];
+    bodies[i].velocity = [v0[i][0] + k1v[i][0] * dt / 2, v0[i][1] + k1v[i][1] * dt / 2, dimension === 2 ? 0 : v0[i][2] + k1v[i][2] * dt / 2];
   }
-  const k2v = computeAccelerations(bodies);
-  const k2r = bodies.map(b => b.velocity);
+  const k2v = computeAccelerations(bodies, PHYSICAL_CONSTANTS.softeningFactor, dimension);
+  const k2r = bodies.map(b => [b.velocity[0], b.velocity[1], b.velocity[2]] as [number, number, number]);
 
   for (let i = 0; i < n; i++) {
-    bodies[i].position = vec3Add(r0[i], vec3Scale(k2r[i], dt / 2));
-    bodies[i].velocity = vec3Add(v0[i], vec3Scale(k2v[i], dt / 2));
+    bodies[i].position = [r0[i][0] + k2r[i][0] * dt / 2, r0[i][1] + k2r[i][1] * dt / 2, dimension === 2 ? 0 : r0[i][2] + k2r[i][2] * dt / 2];
+    bodies[i].velocity = [v0[i][0] + k2v[i][0] * dt / 2, v0[i][1] + k2v[i][1] * dt / 2, dimension === 2 ? 0 : v0[i][2] + k2v[i][2] * dt / 2];
   }
-  const k3v = computeAccelerations(bodies);
-  const k3r = bodies.map(b => b.velocity);
+  const k3v = computeAccelerations(bodies, PHYSICAL_CONSTANTS.softeningFactor, dimension);
+  const k3r = bodies.map(b => [b.velocity[0], b.velocity[1], b.velocity[2]] as [number, number, number]);
 
   for (let i = 0; i < n; i++) {
-    bodies[i].position = vec3Add(r0[i], vec3Scale(k3r[i], dt));
-    bodies[i].velocity = vec3Add(v0[i], vec3Scale(k3v[i], dt));
+    bodies[i].position = [r0[i][0] + k3r[i][0] * dt, r0[i][1] + k3r[i][1] * dt, dimension === 2 ? 0 : r0[i][2] + k3r[i][2] * dt];
+    bodies[i].velocity = [v0[i][0] + k3v[i][0] * dt, v0[i][1] + k3v[i][1] * dt, dimension === 2 ? 0 : v0[i][2] + k3v[i][2] * dt];
   }
-  const k4v = computeAccelerations(bodies);
-  const k4r = bodies.map(b => b.velocity);
+  const k4v = computeAccelerations(bodies, PHYSICAL_CONSTANTS.softeningFactor, dimension);
+  const k4r = bodies.map(b => [b.velocity[0], b.velocity[1], b.velocity[2]] as [number, number, number]);
 
   for (let i = 0; i < n; i++) {
-    const dv = vec3Scale(
-      vec3Add(k1v[i], vec3Add(vec3Scale(k2v[i], 2), vec3Add(vec3Scale(k3v[i], 2), k4v[i]))),
-      dt / 6
-    );
-    const dr = vec3Scale(
-      vec3Add(k1r[i], vec3Add(vec3Scale(k2r[i], 2), vec3Add(vec3Scale(k3r[i], 2), k4r[i]))),
-      dt / 6
-    );
-    bodies[i].position = vec3Add(r0[i], dr);
-    bodies[i].velocity = vec3Add(v0[i], dv);
+    const dvx = (k1v[i][0] + 2 * k2v[i][0] + 2 * k3v[i][0] + k4v[i][0]) * dt / 6;
+    const dvy = (k1v[i][1] + 2 * k2v[i][1] + 2 * k3v[i][1] + k4v[i][1]) * dt / 6;
+    const dvz = dimension === 2 ? 0 : (k1v[i][2] + 2 * k2v[i][2] + 2 * k3v[i][2] + k4v[i][2]) * dt / 6;
+    const drx = (k1r[i][0] + 2 * k2r[i][0] + 2 * k3r[i][0] + k4r[i][0]) * dt / 6;
+    const dry = (k1r[i][1] + 2 * k2r[i][1] + 2 * k3r[i][1] + k4r[i][1]) * dt / 6;
+    const drz = dimension === 2 ? 0 : (k1r[i][2] + 2 * k2r[i][2] + 2 * k3r[i][2] + k4r[i][2]) * dt / 6;
+    bodies[i].position = [r0[i][0] + drx, r0[i][1] + dry, dimension === 2 ? 0 : r0[i][2] + drz];
+    bodies[i].velocity = [v0[i][0] + dvx, v0[i][1] + dvy, dimension === 2 ? 0 : v0[i][2] + dvz];
   }
 }
 
@@ -105,16 +107,20 @@ export interface CollisionEvent {
   mergedBody: CelestialBody;
 }
 
-export function detectCollisions(bodies: CelestialBody[]): CollisionEvent[] {
+export function detectCollisions(bodies: CelestialBody[], dimension: 2 | 3 = 3): CollisionEvent[] {
   const events: CollisionEvent[] = [];
   const n = bodies.length;
-  const threshold = PHYSICAL_CONSTANTS.collisionThreshold;
 
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
-      const dist = vec3Length(vec3Sub(bodies[i].position, bodies[j].position));
-      if (dist < threshold) {
-        const merged = mergeBodies(bodies[i], bodies[j]);
+      const dx = bodies[i].position[0] - bodies[j].position[0];
+      const dy = bodies[i].position[1] - bodies[j].position[1];
+      const dz = dimension === 2 ? 0 : bodies[i].position[2] - bodies[j].position[2];
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const rA = getBodyRadius(bodies[i].templateId);
+      const rB = getBodyRadius(bodies[j].templateId);
+      if (dist <= rA + rB) {
+        const merged = mergeBodies(bodies[i], bodies[j], dimension);
         events.push({ bodyA: bodies[i], bodyB: bodies[j], mergedBody: merged });
       }
     }
@@ -123,29 +129,28 @@ export function detectCollisions(bodies: CelestialBody[]): CollisionEvent[] {
   return events;
 }
 
-function mergeBodies(a: CelestialBody, b: CelestialBody): CelestialBody {
+function mergeBodies(a: CelestialBody, b: CelestialBody, dimension: 2 | 3 = 3): CelestialBody {
   const totalMass = a.mass + b.mass;
-  const pos: [number, number, number] = vec3Scale(
-    vec3Add(vec3Scale(a.position, a.mass), vec3Scale(b.position, b.mass)),
-    1 / totalMass
-  );
-  const vel: [number, number, number] = vec3Scale(
-    vec3Add(vec3Scale(a.velocity, a.mass), vec3Scale(b.velocity, b.mass)),
-    1 / totalMass
-  );
+  const px = (a.position[0] * a.mass + b.position[0] * b.mass) / totalMass;
+  const py = (a.position[1] * a.mass + b.position[1] * b.mass) / totalMass;
+  const pz = dimension === 2 ? 0 : (a.position[2] * a.mass + b.position[2] * b.mass) / totalMass;
+  const vx = (a.velocity[0] * a.mass + b.velocity[0] * b.mass) / totalMass;
+  const vy = (a.velocity[1] * a.mass + b.velocity[1] * b.mass) / totalMass;
+  const vz = dimension === 2 ? 0 : (a.velocity[2] * a.mass + b.velocity[2] * b.mass) / totalMass;
 
   return {
     id: `merged-${Date.now()}`,
     templateId: a.templateId,
-    position: pos,
-    velocity: vel,
+    position: [px, py, pz],
+    velocity: [vx, vy, vz],
     mass: totalMass,
     placedAt: Date.now(),
     rotationSpeed: 0,
+    rotationPhase: 0,
   };
 }
 
-export function advanceSimulation(bodies: CelestialBody[], realDelta: number, timeScale: number): number {
+export function advanceSimulation(bodies: CelestialBody[], realDelta: number, timeScale: number, dimension: 2 | 3 = 3): number {
   if (bodies.length < 2) return 0;
 
   const simDelta = realDelta * timeScale;
@@ -156,7 +161,7 @@ export function advanceSimulation(bodies: CelestialBody[], realDelta: number, ti
   const subDt = simDelta / steps;
 
   for (let s = 0; s < steps; s++) {
-    rk4Step(bodies, subDt);
+    rk4Step(bodies, subDt, dimension);
   }
 
   return simDelta;
