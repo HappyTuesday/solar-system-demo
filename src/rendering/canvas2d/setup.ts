@@ -15,6 +15,9 @@ export function createViewport(): Viewport {
 
 export function initCanvas2D(container: HTMLElement): Canvas2DSetup {
   const canvas = document.createElement('canvas');
+  canvas.style.position = 'absolute';
+  canvas.style.top = '0';
+  canvas.style.left = '0';
   canvas.style.width = '100%';
   canvas.style.height = '100%';
   canvas.style.display = 'block';

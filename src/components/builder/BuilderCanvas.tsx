@@ -70,6 +70,18 @@ function BuilderCanvas() {
 
     drawGrid(setup.ctx, vp, cssW, cssH);
 
+    // DEBUG: crosshair at render origin (should be canvas center)
+    setup.ctx.strokeStyle = '#ff0000';
+    setup.ctx.lineWidth = 1;
+    setup.ctx.beginPath();
+    setup.ctx.moveTo(-50, 0);
+    setup.ctx.lineTo(50, 0);
+    setup.ctx.stroke();
+    setup.ctx.beginPath();
+    setup.ctx.moveTo(0, -50);
+    setup.ctx.lineTo(0, 50);
+    setup.ctx.stroke();
+
     for (const body of bodies) {
       const isSelected = selectedBodyIds.includes(body.id);
       drawBody(setup.ctx, body, isSelected);
