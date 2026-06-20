@@ -41,18 +41,30 @@ function BuilderCanvas() {
 
     const canvas = setup.canvas;
     const dpr = window.devicePixelRatio || 1;
+
+    // Defensive: sync canvas dimensions with container
+    const rect = container.getBoundingClientRect();
+    const expectedW = Math.round(rect.width * dpr);
+    const expectedH = Math.round(rect.height * dpr);
+    if (canvas.width !== expectedW || canvas.height !== expectedH) {
+      canvas.width = expectedW;
+      canvas.height = expectedH;
+    }
+
     const physW = canvas.width;
     const physH = canvas.height;
+    if (physW === 0 || physH === 0) return;
+
     const cssW = physW / dpr;
     const cssH = physH / dpr;
 
-    // Clear full canvas
+    // Clear full canvas in physical pixel space
     setup.ctx.setTransform(1, 0, 0, 1, 0, 0);
     setup.ctx.clearRect(0, 0, physW, physH);
     setup.ctx.fillStyle = '#050510';
     setup.ctx.fillRect(0, 0, physW, physH);
 
-    // Viewport: render —→ canvas
+    // Apply viewport (Render → Canvas, includes DPR + Y flip)
     const vp = vpRef.current;
     applyViewport(setup.ctx, vp);
 
