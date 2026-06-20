@@ -1,13 +1,34 @@
 .builder-page {
   height: calc(100vh - var(--nav-height));
-  display: flex;
+  display: grid;
+  grid-template-columns: 220px 1fr 280px;
+  grid-template-rows: 1fr;
 }
 
-.builder-placeholder {
-  flex: 1;
+.builder-panel-left {
+  background: #0d0d2a;
+  border-right: 1px solid #1a1a3a;
+  overflow-y: auto;
+}
+
+.builder-panel-center {
+  position: relative;
+  overflow: hidden;
+  background: #050510;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  font-size: 1.1rem;
+  flex-direction: column;
+}
+
+.builder-canvas-wrapper {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.builder-panel-right {
+  background: #0d0d2a;
+  border-left: 1px solid #1a1a3a;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
