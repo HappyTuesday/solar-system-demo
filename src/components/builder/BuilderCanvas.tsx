@@ -41,6 +41,15 @@ function BuilderCanvas() {
 
     const canvas = setup.canvas;
     const dpr = window.devicePixelRatio || 1;
+
+    // Ensure backing store matches container CSS size
+    const rect = container.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const needW = Math.round(rect.width * dpr);
+    const needH = Math.round(rect.height * dpr);
+    if (canvas.width !== needW) canvas.width = needW;
+    if (canvas.height !== needH) canvas.height = needH;
+
     const physW = canvas.width;
     const physH = canvas.height;
     if (physW === 0 || physH === 0) return;
@@ -58,18 +67,6 @@ function BuilderCanvas() {
     applyViewport(setup.ctx, vp);
 
     drawGrid(setup.ctx, vp, cssW, cssH);
-
-    // DEBUG: crosshair at render origin (should be canvas center)
-    setup.ctx.strokeStyle = '#ff0000';
-    setup.ctx.lineWidth = 1;
-    setup.ctx.beginPath();
-    setup.ctx.moveTo(-50, 0);
-    setup.ctx.lineTo(50, 0);
-    setup.ctx.stroke();
-    setup.ctx.beginPath();
-    setup.ctx.moveTo(0, -50);
-    setup.ctx.lineTo(0, 50);
-    setup.ctx.stroke();
 
     for (const body of bodies) {
       const isSelected = selectedBodyIds.includes(body.id);
