@@ -73,7 +73,6 @@ function groupTemplates(): { title: string; items: CelestialBodyTemplate[] }[] {
 
 export default function CelestialToolbar() {
   const hasSun = useBuildStore(s => s.bodies.some(b => b.templateId === 'sun'));
-  const isRestoring = useBuildStore(s => s.isAutoBuilding);
   const groups = groupTemplates();
 
   return (
@@ -87,8 +86,7 @@ export default function CelestialToolbar() {
               key={item.id}
               template={item}
               isMoon={item.type === 'moon'}
-              disabled={(item.id !== 'sun' && !hasSun) || isRestoring}
-              disabledReason={isRestoring ? '还原中...' : '请先放置太阳'}
+              disabled={item.id !== 'sun' && !hasSun}
             />
           ))}
         </div>
