@@ -6,7 +6,13 @@ import { REAL_DATA, MU_SUN } from '../../engine/constants';
 import { computeOffScreenBodies, type OffScreenEntry } from './OffScreenIndicator';
 import OffScreenIndicator from './OffScreenIndicator';
 
-const SCALE = 1 / 1.496e10;
+const SCALE = 1 / 1.496e11;
+const ORBIT_LINE_POINTS = 256;
+
+const DISPLAY_RADII: Record<string, number> = {
+  sun: 1.2, jupiter: 0.65, saturn: 0.55, uranus: 0.45,
+  neptune: 0.4, earth: 0.3, venus: 0.3, mars: 0.25, mercury: 0.2,
+};
 
 function computeBodyPosition(templateId: string, jd: number): [number, number, number] | null {
   const data = REAL_DATA[templateId];
@@ -19,6 +25,30 @@ function computeBodyPosition(templateId: string, jd: number): [number, number, n
   const nu = trueAnomaly(E, o.eccentricity);
   const sv = stateVectors(data.semiMajorAxis, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN);
   return [sv.position[0] * SCALE, sv.position[2] * SCALE, -sv.position[1] * SCALE];
+}
+
+function createOrbitLine(
+  templateId: string,
+  color: number,
+): THREE.Line {
+  const data = REAL_DATA[templateId];
+  const points: THREE.Vector3[] = [];
+  for (let i = 0; i <= ORBIT_LINE_POINTS; i++) {
+    const nu = (i / ORBIT_LINE_POINTS) * Math.PI * 2;
+    const sv = stateVectors(
+      data.semiMajorAxis!, data.orbital!.eccentricity, data.orbital!.inclination,
+      data.orbital!.longitudeAscendingNode, data.orbital!.argumentOfPeriapsis,
+      nu, MU_SUN,
+    );
+    points.push(new THREE.Vector3(
+      sv.position[0] * SCALE,
+      sv.position[2] * SCALE,
+      -sv.position[1] * SCALE,
+    ));
+  }
+  const geom = new THREE.BufferGeometry().setFromPoints(points);
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55, linewidth: 1 });
+  return new THREE.Line(geom, mat);
 }
 
 function ExploreCanvas() {
@@ -51,10 +81,10 @@ function ExploreCanvas() {
     setContainerSize({ w, h });
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x000005);
+    scene.background = new THREE.Color(0x050510);
 
-    const camera = new THREE.PerspectiveCamera(45, Math.max(w, 1) / Math.max(h, 1), 0.01, 100);
-    camera.position.set(0, 15, 0);
+    const camera = new THREE.PerspectiveCamera(60, Math.max(w, 1) / Math.max(h, 1), 0.1, 200);
+    camera.position.set(0, 55, 0);
     camera.up.set(0, 0, 1);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
@@ -64,7 +94,7 @@ function ExploreCanvas() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
-    const ambientLight = new THREE.AmbientLight(0x333355, 0.5);
+    const ambientLight = new THREE.AmbientLight(0x444466, 1.0);
     scene.add(ambientLight);
     const sunLight = new THREE.PointLight(0xffeedd, 2, 0, 0);
     scene.add(sunLight);
@@ -73,11 +103,19 @@ function ExploreCanvas() {
     const allIds = ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
     const loader = new THREE.TextureLoader();
 
+    // Orbit colors
+    const orbitColors: Record<string, number> = {
+      mercury: 0x888888, venus: 0xccaa88, earth: 0x4488ff, mars: 0xcc6644,
+      jupiter: 0xd4b896, saturn: 0xe8d5a3, uranus: 0x88ccdd, neptune: 0x4466ff,
+    };
+
     for (const id of allIds) {
       const data = REAL_DATA[id];
       if (!data) continue;
-      const size = Math.log10(data.radius / 2.4397e6 + 1) * 0.8;
-      const geom = new THREE.SphereGeometry(size, 48, 48);
+
+      // Body
+      const r = DISPLAY_RADII[id] || 0.25;
+      const geom = new THREE.SphereGeometry(r, 48, 48);
       const mat = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.1 });
       if (id === 'sun') {
         mat.color = new THREE.Color(0xffcc00);
@@ -94,30 +132,12 @@ function ExploreCanvas() {
       const texPath = `/textures/${id}.jpg`;
       loader.load(texPath, (tex) => { mat.map = tex; mat.color = new THREE.Color(0xffffff); mat.needsUpdate = true; }, undefined, () => {});
 
-      if (data.semiMajorAxis && data.orbital) {
-        const orbitR = data.semiMajorAxis * SCALE;
-        const orbitGeom = new THREE.TorusGeometry(orbitR, 0.005, 8, 256);
-        const orbitMat = new THREE.MeshBasicMaterial({ color: 0x333355, transparent: true, opacity: 0.25 });
-        const orbit = new THREE.Mesh(orbitGeom, orbitMat);
-        orbit.rotation.x = Math.PI / 2;
-        scene.add(orbit);
+      // Orbit line (not for sun)
+      if (data.semiMajorAxis && data.orbital && id !== 'sun') {
+        const orbitLine = createOrbitLine(id, orbitColors[id] || 0x556688);
+        scene.add(orbitLine);
       }
     }
-
-    const gridHelper = new THREE.PolarGridHelper(6, 64, 48, 256, 0x222244, 0x222244);
-    scene.add(gridHelper);
-
-    const starsGeom = new THREE.BufferGeometry();
-    const count = 2000;
-    const positions = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 30;
-      positions[i * 3 + 1] = (Math.random() - 0.5) * 30;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 30;
-    }
-    starsGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.03 });
-    scene.add(new THREE.Points(starsGeom, starsMat));
 
     // --- Mouse interaction ---
     let isDragging = false;
@@ -163,7 +183,7 @@ function ExploreCanvas() {
       const factor = e.deltaY > 0 ? 1.1 : 0.9;
       const dir = camera.position.clone().normalize();
       const dist = camera.position.length();
-      camera.position.copy(dir.multiplyScalar(Math.max(0.5, Math.min(20, dist * factor))));
+      camera.position.copy(dir.multiplyScalar(Math.max(15, Math.min(180, dist * factor))));
     };
 
     // --- Touch & Trackpad support ---
@@ -199,7 +219,7 @@ function ExploreCanvas() {
           const factor = newDist / touchDist0;
           const dir = camera.position.clone().normalize();
           const dist = camera.position.length();
-          camera.position.copy(dir.multiplyScalar(Math.max(0.5, Math.min(20, dist / factor))));
+          camera.position.copy(dir.multiplyScalar(Math.max(15, Math.min(180, dist / factor))));
         }
         touches0 = t0;
         touches1 = t1;
@@ -222,7 +242,7 @@ function ExploreCanvas() {
       const factor = scale / gestureZoomStart;
       const dir = camera.position.clone().normalize();
       const dist = camera.position.length();
-      camera.position.copy(dir.multiplyScalar(Math.max(0.5, Math.min(20, dist / factor))));
+      camera.position.copy(dir.multiplyScalar(Math.max(15, Math.min(180, dist / factor))));
       gestureZoomStart = scale;
     };
 
@@ -270,7 +290,6 @@ function ExploreCanvas() {
         }
       }
 
-      // Update off-screen indicators every 10 frames
       if (frameCount % 10 === 0) {
         updateOffScreen();
       }
