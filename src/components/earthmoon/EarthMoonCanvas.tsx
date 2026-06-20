@@ -16,21 +16,37 @@ const MOON_LAN = 2.183;
 const MOON_AOP = 5.552;
 const MOON_EPOCH_JD = 2451545.0;
 const SCALE = 1 / 40000000;
+const INITIAL_FRUSTUM = 14;
+
+function makeOrthoCamera(w: number, h: number, halfSize: number) {
+  const aspect = Math.max(w, 1) / Math.max(h, 1);
+  const halfH = halfSize;
+  const halfW = halfH * aspect;
+  const camera = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.001, 500);
+  camera.position.set(0, 6, 10);
+  camera.lookAt(0, 0, 0);
+  return camera;
+}
+
+function updateOrthoZoom(camera: THREE.OrthographicCamera, aspect: number, halfSize: number) {
+  const halfH = halfSize;
+  const halfW = halfH * aspect;
+  camera.left = -halfW;
+  camera.right = halfW;
+  camera.top = halfH;
+  camera.bottom = -halfH;
+  camera.updateProjectionMatrix();
+}
 
 function projectSunToScreen(
-  camera: THREE.PerspectiveCamera,
+  camera: THREE.OrthographicCamera,
   sunWorldDir: THREE.Vector3,
-  w: number,
-  h: number,
 ): { x: number; y: number; isBehind: boolean } {
   const pos = sunWorldDir.clone().normalize().multiplyScalar(80);
   const screenPos = pos.clone().project(camera);
 
   const sx = (screenPos.x * 0.5 + 0.5);
   const sy = (-screenPos.y * 0.5 + 0.5);
-  const behind = screenPos.z > 1;
-
-  if (behind) return { x: 0.5, y: 0.97, isBehind: true };
 
   const dx = sx - 0.5;
   const dy = sy - 0.5;
@@ -54,11 +70,12 @@ function projectSunToScreen(
 function EarthMoonCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
+  const zoomRef = useRef<number>(INITIAL_FRUSTUM);
   const bodyRefsRef = useRef<{ id: string; name: string; mesh: THREE.Mesh }[]>([]);
   const sceneRef = useRef<{
     scene: THREE.Scene;
-    camera: THREE.PerspectiveCamera;
+    camera: THREE.OrthographicCamera;
     renderer: THREE.WebGLRenderer;
     earth: THREE.Mesh;
     moon: THREE.Mesh;
@@ -93,9 +110,7 @@ function EarthMoonCanvas() {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x000008);
 
-    const camera = new THREE.PerspectiveCamera(50, Math.max(w, 1) / Math.max(h, 1), 0.001, 500);
-    camera.position.set(0, 6, 10);
-    camera.lookAt(0, 0, 0);
+    const camera = makeOrthoCamera(w, h, INITIAL_FRUSTUM);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -104,7 +119,6 @@ function EarthMoonCanvas() {
     renderer.shadowMap.enabled = true;
     container.appendChild(renderer.domElement);
 
-    // Brighter ambient so dark side is visible
     const ambientLight = new THREE.AmbientLight(0x334466, 0.9);
     scene.add(ambientLight);
 
@@ -196,10 +210,11 @@ function EarthMoonCanvas() {
     };
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const factor = e.deltaY > 0 ? 1.08 : 0.92;
-      const dir = camera.position.clone().normalize();
-      const dist = camera.position.length();
-      camera.position.copy(dir.multiplyScalar(Math.max(1, Math.min(60, dist * factor))));
+      const factor = e.deltaY > 0 ? 1.1 : 0.9;
+      const newHalf = Math.max(1, Math.min(60, zoomRef.current * factor));
+      zoomRef.current = newHalf;
+      const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
+      updateOrthoZoom(camera, aspect, newHalf);
     };
 
     // --- Touch & Trackpad support ---
@@ -233,9 +248,10 @@ function EarthMoonCanvas() {
         const newDist = Math.hypot(t1.x - t0.x, t1.y - t0.y);
         if (touchDist0 > 0) {
           const factor = newDist / touchDist0;
-          const dir = camera.position.clone().normalize();
-          const dist = camera.position.length();
-          camera.position.copy(dir.multiplyScalar(Math.max(1, Math.min(60, dist / factor))));
+          const newHalf = Math.max(1, Math.min(60, zoomRef.current / factor));
+          zoomRef.current = newHalf;
+          const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
+          updateOrthoZoom(camera, aspect, newHalf);
         }
         touches0 = t0;
         touches1 = t1;
@@ -256,9 +272,10 @@ function EarthMoonCanvas() {
     const onGestureChange = (e: Event) => {
       const scale = (e as any).scale || 1;
       const factor = scale / gestureZoomStart;
-      const dir = camera.position.clone().normalize();
-      const dist = camera.position.length();
-      camera.position.copy(dir.multiplyScalar(Math.max(1, Math.min(60, dist / factor))));
+      const newHalf = Math.max(1, Math.min(60, zoomRef.current / factor));
+      zoomRef.current = newHalf;
+      const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
+      updateOrthoZoom(camera, aspect, newHalf);
       gestureZoomStart = scale;
     };
 
@@ -276,8 +293,8 @@ function EarthMoonCanvas() {
       const rw = container.clientWidth;
       const rh = container.clientHeight;
       setContainerSize({ w: rw, h: rh });
-      camera.aspect = rw / Math.max(rh, 1);
-      camera.updateProjectionMatrix();
+      const aspect = rw / Math.max(rh, 1);
+      updateOrthoZoom(camera, aspect, zoomRef.current);
       renderer.setSize(rw, rh);
     };
     window.addEventListener('resize', onResize);
@@ -339,9 +356,8 @@ function EarthMoonCanvas() {
         (moon.material as THREE.MeshStandardMaterial).emissiveIntensity = 0;
       }
 
-      // Update sun edge glow every 10 frames
       if (frameCount % 10 === 0) {
-        const ss = projectSunToScreen(camera, sunDirRef.current, container.clientWidth, container.clientHeight);
+        const ss = projectSunToScreen(camera, sunDirRef.current);
         setSunScreen({ x: ss.x, y: ss.y });
         updateOffScreen();
       }
@@ -379,7 +395,6 @@ function EarthMoonCanvas() {
     <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
       <OffScreenIndicator entries={offScreenEntries} containerWidth={containerSize.w} containerHeight={containerSize.h} />
 
-      {/* Sun edge glow */}
       <div
         style={{
           position: 'absolute',

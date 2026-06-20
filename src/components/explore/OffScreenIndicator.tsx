@@ -16,7 +16,7 @@ export interface OffScreenEntry {
 }
 
 export function computeOffScreenBodies(
-  camera: THREE.PerspectiveCamera,
+  camera: THREE.Camera,
   bodies: BodyInfo[],
   margin: number,
 ): OffScreenEntry[] {

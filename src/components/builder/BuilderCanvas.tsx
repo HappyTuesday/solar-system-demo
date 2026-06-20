@@ -39,21 +39,22 @@ function BuilderCanvas() {
     const container = containerRef.current;
     if (!setup || !container) return;
 
-    const rect = container.getBoundingClientRect();
-    const cssW = rect.width;
-    const cssH = rect.height;
-    const physW = setup.canvas.width;
-    const physH = setup.canvas.height;
+    const canvas = setup.canvas;
+    const dpr = window.devicePixelRatio || 1;
+    const physW = canvas.width;
+    const physH = canvas.height;
+    const cssW = physW / dpr;
+    const cssH = physH / dpr;
 
-    // Clear full canvas in physical pixel space (no transform)
+    // Clear full canvas
     setup.ctx.setTransform(1, 0, 0, 1, 0, 0);
     setup.ctx.clearRect(0, 0, physW, physH);
     setup.ctx.fillStyle = '#050510';
     setup.ctx.fillRect(0, 0, physW, physH);
 
-    // Apply viewport (Render → Canvas, includes DPR)
+    // Viewport: render —→ canvas
     const vp = vpRef.current;
-    applyViewport(setup.ctx, vp, cssW, cssH);
+    applyViewport(setup.ctx, vp);
 
     drawGrid(setup.ctx, vp, cssW, cssH);
 
@@ -109,13 +110,18 @@ function BuilderCanvas() {
 
   const getRenderPos = useCallback((e: React.MouseEvent): [number, number] | null => {
     if (!containerRef.current) return null;
+    const setup = setupRef.current;
+    if (!setup) return null;
+    const dpr = window.devicePixelRatio || 1;
     const rect = containerRef.current.getBoundingClientRect();
+    const cssW = setup.canvas.width / dpr;
+    const cssH = setup.canvas.height / dpr;
     return screenToRender(
       e.clientX - rect.left,
       e.clientY - rect.top,
       vpRef.current,
-      rect.width,
-      rect.height,
+      cssW,
+      cssH,
     );
   }, []);
 
@@ -126,10 +132,8 @@ function BuilderCanvas() {
       onMouseMove={(e) => {
         const rPos = getRenderPos(e);
         if (!rPos) return;
-
         const [px, py] = renderToPhysical([rPos[0], rPos[1], 0]);
         setMousePositions([px, py]);
-
         if (selectedToolId && !isPlacing) {
           setPreviewPosition([rPos[0], rPos[1]]);
         }
@@ -138,27 +142,25 @@ function BuilderCanvas() {
         if (e.button !== 0) return;
         const rPos = getRenderPos(e);
         if (!rPos) return;
-
         if (isPlacing) return;
-
         if (selectedToolId) {
           const [physX, physY] = renderToPhysical([rPos[0], rPos[1], 0]);
           setClickPosPhysical([physX, physY]);
           setIsPlacing(true);
           return;
         }
-
         const hitId = hitTestBody(rPos[0], rPos[1], useBuildStore.getState().bodies);
-        if (hitId) {
-          setSelectedBodyIds([hitId]);
-        } else {
-          setSelectedBodyIds([]);
-        }
+        if (hitId) setSelectedBodyIds([hitId]);
+        else setSelectedBodyIds([]);
       }}
       onWheel={(e) => {
         if (!containerRef.current) return;
-        const rect = containerRef.current.getBoundingClientRect();
-        vpRef.current = handleWheel(e as unknown as WheelEvent, vpRef.current, rect.width, rect.height);
+        const setup = setupRef.current;
+        if (!setup) return;
+        const dpr = window.devicePixelRatio || 1;
+        const cssW = setup.canvas.width / dpr;
+        const cssH = setup.canvas.height / dpr;
+        vpRef.current = handleWheel(e as unknown as WheelEvent, vpRef.current, cssW, cssH);
       }}
       onContextMenu={e => e.preventDefault()}
     />
