@@ -10,8 +10,8 @@ const SCALE = 1 / 1.496e11;
 const ORBIT_LINE_POINTS = 256;
 
 const DISPLAY_RADII: Record<string, number> = {
-  sun: 1.2, jupiter: 0.65, saturn: 0.55, uranus: 0.45,
-  neptune: 0.4, earth: 0.3, venus: 0.3, mars: 0.25, mercury: 0.2,
+  sun: 0.25, jupiter: 0.65, saturn: 0.55, uranus: 0.45,
+  neptune: 0.4, earth: 0.18, venus: 0.18, mars: 0.15, mercury: 0.12,
 };
 
 function computeBodyPosition(templateId: string, jd: number): [number, number, number] | null {
@@ -183,7 +183,7 @@ function ExploreCanvas() {
       const factor = e.deltaY > 0 ? 1.1 : 0.9;
       const dir = camera.position.clone().normalize();
       const dist = camera.position.length();
-      camera.position.copy(dir.multiplyScalar(Math.max(15, Math.min(180, dist * factor))));
+      camera.position.copy(dir.multiplyScalar(Math.max(2, Math.min(180, dist * factor))));
     };
 
     // --- Touch & Trackpad support ---
