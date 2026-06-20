@@ -1,6 +1,6 @@
-import { useUIStore } from '../stores/uiStore';
-import { REAL_DATA, PHYSICAL_CONSTANTS } from '../engine/constants';
-import { physicalRadiusToRender } from '../engine/coordinateTransform';
+import { useUIStore } from '../../stores/uiStore';
+import { REAL_DATA, PHYSICAL_CONSTANTS } from '../../engine/constants';
+import { physicalRadiusToRender } from '../../engine/coordinateTransform';
 import './CoordinateDisplay.css';
 
 function formatPhysical(val: number): string {
@@ -50,11 +50,11 @@ export default function CoordinateDisplay() {
           <span className="label">天体: {selectedToolId === 'sun' ? '太阳' : REAL_DATA[selectedToolId!]?.name ?? selectedToolId}</span>
           <span className="sep">|</span>
           <span className="label">画布:</span>
-          <span className="value">{selectedToolId === 'sun' ? '50.0' : formatRender(physicalRadiusToRender(REAL_DATA[selectedToolId!]?.radius ?? 1e6, false))}</span>
+          <span className="value">{formatRender(physicalRadiusToRender(REAL_DATA[selectedToolId!]?.radius ?? 1e6))}</span>
           <span className="unit">px</span>
           <span className="sep">|</span>
           <span className="label">渲染:</span>
-          <span className="value">{selectedToolId === 'sun' ? '50.0' : formatRender(physicalRadiusToRender(REAL_DATA[selectedToolId!]?.radius ?? 1e6, false))}</span>
+          <span className="value">{formatRender(physicalRadiusToRender(REAL_DATA[selectedToolId!]?.radius ?? 1e6))}</span>
           <span className="unit">uv</span>
           <span className="sep">|</span>
           <span className="label">物理:</span>

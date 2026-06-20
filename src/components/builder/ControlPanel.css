@@ -92,7 +92,7 @@
   color: #ff6666;
 }
 
-.ctrl-btn.auto-build {
+.ctrl-btn.restore {
   width: 100%;
   background: rgba(255, 170, 0, 0.15);
   border-color: rgba(255, 170, 0, 0.4);
@@ -101,7 +101,7 @@
   padding: 8px 12px;
 }
 
-.ctrl-btn.auto-build:hover:not(:disabled) {
+.ctrl-btn.restore:hover:not(:disabled) {
   background: rgba(255, 170, 0, 0.25);
 }
 
@@ -271,4 +271,27 @@
   height: 4px;
   accent-color: #4488ff;
   cursor: pointer;
+}
+
+.scale-slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.scale-slider-label {
+  font-size: 11px;
+  color: #888;
+}
+
+.scale-btn-row {
+  display: flex;
+  gap: 6px;
+}
+
+.scale-btn-row .ctrl-btn.small {
+  flex: 1;
+  padding: 2px 0;
+  font-size: 14px;
 }

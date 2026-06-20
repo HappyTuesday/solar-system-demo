@@ -1,0 +1,166 @@
+.close-approach-overlay {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 260px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: rgba(10, 10, 30, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px 0;
+  z-index: 10;
+  user-select: none;
+  font-size: 12px;
+  color: #c8ccd4;
+  pointer-events: auto;
+}
+
+.cao-section {
+  padding: 0 10px;
+}
+
+.cao-section + .cao-section {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cao-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0e4ec;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cao-count {
+  font-size: 10px;
+  color: #8899aa;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0 6px;
+  line-height: 16px;
+}
+
+.cao-collision-log {
+  margin-bottom: 2px;
+}
+
+.cao-collision-entry {
+  padding: 2px 0;
+  color: #ff9944;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.cao-pair {
+  margin-top: 4px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cao-pair-danger {
+  background: rgba(255, 50, 30, 0.12);
+  border-left: 2px solid #ff321e;
+}
+
+.cao-pair-warn {
+  background: rgba(255, 170, 0, 0.08);
+  border-left: 2px solid #ffaa00;
+}
+
+.cao-pair-watch {
+  background: rgba(100, 200, 255, 0.05);
+  border-left: 2px solid #64c8ff;
+}
+
+.cao-pair-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.cao-pair-names {
+  font-weight: 500;
+  color: #dde2ea;
+}
+
+.cao-pair-badge {
+  font-size: 10px;
+  padding: 0 6px;
+  border-radius: 3px;
+  line-height: 16px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.cao-badge-danger {
+  background: rgba(255, 50, 30, 0.2);
+  color: #ff6655;
+}
+
+.cao-badge-warn {
+  background: rgba(255, 170, 0, 0.2);
+  color: #ffbb33;
+}
+
+.cao-badge-watch {
+  background: rgba(100, 200, 255, 0.15);
+  color: #88ccff;
+}
+
+.cao-pair-stats {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  color: #99a8b6;
+  margin-bottom: 3px;
+}
+
+.cao-ratio {
+  font-weight: 600;
+}
+
+.cao-ratio-danger {
+  color: #ff6655;
+}
+
+.cao-ratio-warn {
+  color: #ffbb33;
+}
+
+.cao-ratio-watch {
+  color: #88ccff;
+}
+
+.cao-bar-track {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.cao-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.2s ease;
+}
+
+.cao-bar-danger {
+  background: linear-gradient(90deg, #ff321e, #ff6655);
+}
+
+.cao-bar-warn {
+  background: linear-gradient(90deg, #ff8800, #ffbb33);
+}
+
+.cao-bar-watch {
+  background: linear-gradient(90deg, #4488ff, #88ccff);
+}

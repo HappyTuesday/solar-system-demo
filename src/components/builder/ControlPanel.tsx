@@ -3,10 +3,9 @@ import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { REAL_DATA, HINT_ORDER } from '../../engine/constants';
-import { renderToPhysical } from '../../engine/coordinateTransform';
+import { renderToPhysical, scaleUp, scaleDown, scaleSizeUp, scaleSizeDown } from '../../engine/coordinateTransform';
 import { calculateErrors } from '../../engine/scoring';
-import { AUTO_BUILD_PLAN } from '../../engine/autoBuild';
-import { useAutoBuild } from '../../hooks/useAutoBuild';
+import { useRestore } from '../../hooks/useRestore';
 import { getSharedScene } from '../../rendering/cameraRef';
 import { cleanupGizmos, removePreviewSphere } from '../../rendering/interaction';
 import VelocityInputForm from './VelocityInputForm';
@@ -21,9 +20,21 @@ export default function ControlPanel() {
   const adjustTimeScale = useBuildStore(s => s.adjustTimeScale);
   const showTrails = useUIStore(s => s.showTrails);
   const trailLength = useUIStore(s => s.trailLength);
-  const { isAutoBuilding, autoBuildProgress, startAutoBuild } = useAutoBuild();
+  const linearScale = useUIStore(s => s.linearScale);
+  const setLinearScaleValue = useUIStore(s => s.setLinearScaleValue);
+  const sizeMultiplier = useUIStore(s => s.sizeMultiplier);
+  const setSizeMultiplierValue = useUIStore(s => s.setSizeMultiplierValue);
+  const { isRestoring, startRestore } = useRestore();
 
   const [editingMass, setEditingMass] = useState<string>('');
+
+  const formatScaleRatio = (scale: number): string => {
+    const physPerRender = 1 / scale;
+    if (physPerRender >= 1e12) return `1 渲染单位 ≈ ${parseFloat((physPerRender / 1e12).toFixed(1))} 万亿 米`;
+    if (physPerRender >= 1e8) return `1 渲染单位 ≈ ${parseFloat((physPerRender / 1e8).toFixed(1))} 亿 米`;
+    if (physPerRender >= 1e4) return `1 渲染单位 ≈ ${parseFloat((physPerRender / 1e4).toFixed(1))} 万 米`;
+    return `1 渲染单位 ≈ ${physPerRender.toFixed(0)} 米`;
+  };
 
   const formatMass = (kg: number): string => {
     if (kg >= 1e27) return `${(kg / 1e27).toFixed(2)} × 10²⁷ kg`;
@@ -125,13 +136,11 @@ export default function ControlPanel() {
 
       <div className="panel-section button-row">
         <button
-          className="ctrl-btn auto-build"
-          onClick={startAutoBuild}
-          disabled={isAutoBuilding}
+          className="ctrl-btn restore"
+          onClick={startRestore}
+          disabled={isRestoring}
         >
-          {isAutoBuilding
-            ? `正在搭建... ${autoBuildProgress}/${AUTO_BUILD_PLAN.length}`
-            : '自动搭建'}
+          {isRestoring ? '还原中...' : '真实还原'}
         </button>
       </div>
 
@@ -247,10 +256,10 @@ export default function ControlPanel() {
           <div className="hint-text">请先在画布上放置太阳</div>
         ) : (
           <>
-            <button className="ctrl-btn primary" onClick={buildStore.isRunning ? buildStore.pauseBuild : buildStore.resumeBuild} disabled={isAutoBuilding}>
+            <button className="ctrl-btn primary" onClick={buildStore.isRunning ? buildStore.pauseBuild : buildStore.resumeBuild} disabled={isRestoring}>
               {buildStore.isRunning ? '⏸ 暂停' : '▶ 开始'}
             </button>
-            <button className="ctrl-btn success" onClick={handleComplete} disabled={isAutoBuilding}>
+            <button className="ctrl-btn success" onClick={handleComplete} disabled={isRestoring}>
               ✓ 完成
             </button>
           </>
@@ -263,7 +272,7 @@ export default function ControlPanel() {
           <button
             className="ctrl-btn small"
             onClick={() => adjustTimeScale(-1e5)}
-            disabled={!buildStore.startedAt || isAutoBuilding || timeScale <= 1e4}
+            disabled={!buildStore.startedAt || isRestoring || timeScale <= 1e4}
           >
             −
           </button>
@@ -271,7 +280,7 @@ export default function ControlPanel() {
           <button
             className="ctrl-btn small"
             onClick={() => adjustTimeScale(1e5)}
-            disabled={!buildStore.startedAt || isAutoBuilding || timeScale >= 1e6}
+            disabled={!buildStore.startedAt || isRestoring || timeScale >= 1e6}
           >
             +
           </button>
@@ -282,14 +291,14 @@ export default function ControlPanel() {
         <button
           className={`ctrl-btn ${uiStore.supervisionMode ? 'active' : ''}`}
           onClick={uiStore.toggleSupervision}
-          disabled={!buildStore.startedAt || isAutoBuilding}
+          disabled={!buildStore.startedAt || isRestoring}
         >
           👁 监督
         </button>
         <button
           className="ctrl-btn"
           onClick={handleHint}
-          disabled={!buildStore.startedAt || isAutoBuilding}
+          disabled={!buildStore.startedAt || isRestoring}
         >
           💡 提示
         </button>
@@ -301,7 +310,7 @@ export default function ControlPanel() {
             type="checkbox"
             checked={showTrails}
             onChange={e => uiStore.setShowTrails(e.target.checked)}
-            disabled={isAutoBuilding}
+            disabled={isRestoring}
           />
           <span>显示轨迹</span>
         </label>
@@ -316,28 +325,81 @@ export default function ControlPanel() {
               step="0.1"
               value={trailLength}
               onChange={e => uiStore.setTrailLength(parseFloat(e.target.value))}
-              disabled={isAutoBuilding}
+              disabled={isRestoring}
             />
           </div>
         )}
+      </div>
+
+      <div className="panel-section trail-controls">
+          <div className="scale-slider-row">
+            <span className="scale-slider-label">{formatScaleRatio(linearScale)}</span>
+            <div className="scale-btn-row">
+              <button
+                className="ctrl-btn small"
+                onClick={() => {
+                  const v = scaleDown();
+                  setLinearScaleValue(v);
+                }}
+                disabled={isRestoring}
+              >
+                −
+              </button>
+              <button
+                className="ctrl-btn small"
+                onClick={() => {
+                  const v = scaleUp();
+                  setLinearScaleValue(v);
+                }}
+                disabled={isRestoring}
+              >
+                +
+              </button>
+            </div>
+          </div>
+          <div className="scale-slider-row">
+            <span className="scale-slider-label">天体放大 {sizeMultiplier}×</span>
+            <div className="scale-btn-row">
+              <button
+                className="ctrl-btn small"
+                onClick={() => {
+                  const v = scaleSizeDown();
+                  setSizeMultiplierValue(v);
+                }}
+                disabled={isRestoring}
+              >
+                −
+              </button>
+              <button
+                className="ctrl-btn small"
+                onClick={() => {
+                  const v = scaleSizeUp();
+                  setSizeMultiplierValue(v);
+                }}
+                disabled={isRestoring}
+              >
+                +
+              </button>
+            </div>
+          </div>
       </div>
 
       <div className="panel-section button-row">
         <button
           className="ctrl-btn small"
           onClick={buildStore.undo}
-          disabled={buildStore.undoStack.length === 0 || isAutoBuilding}
+          disabled={buildStore.undoStack.length === 0 || isRestoring}
         >
           ↩ 撤销
         </button>
         <button
           className="ctrl-btn small"
           onClick={buildStore.redo}
-          disabled={buildStore.redoStack.length === 0 || isAutoBuilding}
+          disabled={buildStore.redoStack.length === 0 || isRestoring}
         >
           ↪ 重做
         </button>
-        <button className="ctrl-btn small danger" onClick={handleNewBuild} disabled={isAutoBuilding}>
+        <button className="ctrl-btn small danger" onClick={handleNewBuild} disabled={isRestoring}>
           ⊗ 新建
         </button>
       </div>
@@ -382,11 +444,11 @@ export default function ControlPanel() {
                 uiStore.setObservationTargetId(selectedBody.id);
               }
             }}
-            disabled={isAutoBuilding}
+            disabled={isRestoring}
           >
             {uiStore.observationTargetId === selectedBody.id ? '取消观测目标' : '设为观测目标'}
           </button>
-          <button className="ctrl-btn danger" onClick={handleDeleteBody} disabled={isAutoBuilding}>删除天体</button>
+          <button className="ctrl-btn danger" onClick={handleDeleteBody} disabled={isRestoring}>删除天体</button>
         </div>
       )}
 

@@ -4,7 +4,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { initScene, handleResize } from '../../rendering/setup';
 import { createBodyMesh, updateBodyMeshes, removeBodyMesh, bodyMeshMap } from '../../rendering/bodies';
-import { createReferencePlane, addOrbitRing, clearOrbitRings } from '../../rendering/grid';
+import { createReferencePlane, updateRefPlaneOrientation, resizeRefPlane, addOrbitRing, clearOrbitRings } from '../../rendering/grid';
 import { getPlacementPoint, setBodyHighlight, createPreviewSphere, updateGuideArrow, removeGuideArrow, createFloatingPreview, removeFloatingPreview } from '../../rendering/interaction';
 import { TrailManager } from '../../rendering/trails';
 import { advanceSimulation, detectCollisions, vec3Length } from '../../engine/physics';
@@ -26,6 +26,7 @@ export default function Canvas3D() {
   const trackingOffsetRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 100));
   const prevTargetIdRef = useRef<string | null>(null);
   const trailManagerRef = useRef<TrailManager | null>(null);
+  const refGroupRef = useRef<THREE.Group | null>(null);
 
   const bodies = useBuildStore(s => s.bodies);
   const isRunning = useBuildStore(s => s.isRunning);
@@ -47,6 +48,8 @@ export default function Canvas3D() {
   const setPreviewPosition = useUIStore(s => s.setPreviewPosition);
   const showTrails = useUIStore(s => s.showTrails);
   const trailLength = useUIStore(s => s.trailLength);
+  const linearScale = useUIStore(s => s.linearScale);
+  const sizeMultiplier = useUIStore(s => s.sizeMultiplier);
 
   // Cleanup floating preview when tool selection changes
   useEffect(() => {
@@ -60,27 +63,40 @@ export default function Canvas3D() {
     setBodyHighlight(selectedBodyIds, true);
   }, [selectedBodyIds]);
 
-  // Sync 3D bodies with store — runs whenever bodies change
-  const syncBodies = useCallback(() => {
+  // Track previous values to detect changes requiring rebuild
+  const prevLinearScaleRef = useRef(linearScale);
+  const prevSizeMultiplierRef = useRef(sizeMultiplier);
+
+  // Sync 3D bodies with store — runs whenever bodies, linearScale, or sizeMultiplier changes
+  useEffect(() => {
     if (!setupRef.current) return;
     const scene = setupRef.current.scene;
     const tm = trailManagerRef.current;
     const storeIds = new Set(bodies.map(b => b.id));
+    const scaleChanged = prevLinearScaleRef.current !== linearScale;
+    const sizeChanged = prevSizeMultiplierRef.current !== sizeMultiplier;
+    prevLinearScaleRef.current = linearScale;
+    prevSizeMultiplierRef.current = sizeMultiplier;
+
     for (const [id] of bodyMeshMap) {
       if (!storeIds.has(id)) {
+        removeBodyMesh(id, scene);
+        if (tm) tm.removeTrail(id);
+      } else if (scaleChanged || sizeChanged) {
         removeBodyMesh(id, scene);
         if (tm) tm.removeTrail(id);
       }
     }
     for (const body of bodies) {
-      if (!bodyMeshMap.has(body.id)) createBodyMesh(body, scene);
+      if (!bodyMeshMap.has(body.id)) {
+        createBodyMesh(body, scene);
+      }
     }
-  }, [bodies]);
+  }, [bodies, linearScale, sizeMultiplier]);
 
-  // Dedicated effect to sync mesh state immediately
   useEffect(() => {
-    syncBodies();
-  }, [syncBodies]);
+    resizeRefPlane(linearScale);
+  }, [linearScale]);
 
   useEffect(() => {
     if (trailManagerRef.current) {
@@ -163,6 +179,11 @@ export default function Canvas3D() {
         setCurrentLookAt([0, 0, 0]);
       }
 
+      if (refGroupRef.current) {
+        const lookAt = new THREE.Vector3(getCurrentLookAt()[0], getCurrentLookAt()[1], 0);
+        updateRefPlaneOrientation(camera, lookAt);
+      }
+
       renderer.render(scene, camera);
     };
 
@@ -171,7 +192,7 @@ export default function Canvas3D() {
     animFrameRef.current = requestAnimationFrame(animate);
 
     return () => cancelAnimationFrame(animFrameRef.current);
-  }, [isRunning, bodies, startedAt, syncBodies, advanceSim, removeBody, placeBody, updateBuildElapsed]);
+  }, [isRunning, bodies, startedAt, advanceSim, removeBody, placeBody, updateBuildElapsed]);
 
   // Init Three.js
   useEffect(() => {
@@ -184,7 +205,8 @@ export default function Canvas3D() {
     setSharedScene(setup.scene);
     // Ensure camera matches actual canvas dimensions (layout may not be complete at mount)
     setTimeout(() => handleResize(canvasRef.current!, setup.renderer, setup.camera), 100);
-    createReferencePlane(setup.scene, canvas.clientWidth, canvas.clientHeight);
+    const refGroup = createReferencePlane(setup.scene, canvas.clientWidth, canvas.clientHeight);
+    refGroupRef.current = refGroup;
     const trailManager = new TrailManager(setup.scene);
     trailManagerRef.current = trailManager;
     return () => {
@@ -297,7 +319,7 @@ export default function Canvas3D() {
           callisto: 0x888888, titan: 0xffcc88, phobos: 0x998877, deimos: 0x887766,
         };
         const color = DEFAULT_COLORS[selectedToolId] ?? 0x4488ff;
-        createPreviewSphere(setup.scene, point, physicalRadiusToRender(data.radius, selectedToolId === 'sun'), color);
+        createPreviewSphere(setup.scene, point, physicalRadiusToRender(data.radius), color);
       }
     }
   }, [selectedToolId, isPlacing, setIsPlacing]);
@@ -330,7 +352,7 @@ export default function Canvas3D() {
             io: 0xffcc44, europa: 0xddccbb, ganymede: 0xbbbbbb,
             callisto: 0x888888, titan: 0xffcc88, phobos: 0x998877, deimos: 0x887766,
           };
-          createFloatingPreview(setup.scene, point, physicalRadiusToRender(data.radius, selectedToolId === 'sun'), DEFAULT_COLORS[selectedToolId] ?? 0x4488ff, selectedToolId);
+          createFloatingPreview(setup.scene, point, physicalRadiusToRender(data.radius), DEFAULT_COLORS[selectedToolId] ?? 0x4488ff, selectedToolId);
         }
       }
     } else if (isPlacing) {
