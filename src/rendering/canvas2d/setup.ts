@@ -15,24 +15,25 @@ export function createViewport(): Viewport {
 
 export function initCanvas2D(container: HTMLElement): Canvas2DSetup {
   const canvas = document.createElement('canvas');
-  canvas.style.position = 'absolute';
-  canvas.style.top = '0';
-  canvas.style.left = '0';
+  canvas.style.display = 'block';
   canvas.style.width = '100%';
   canvas.style.height = '100%';
-  canvas.style.display = 'block';
   container.appendChild(canvas);
 
   const ctx = canvas.getContext('2d')!;
 
   function resize() {
-    const dpr = window.devicePixelRatio || 1;
     const rect = container.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    if (rect.width === 0 || rect.height === 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
   }
 
   resize();
+
+  const observer = new ResizeObserver(() => resize());
+  observer.observe(container);
   window.addEventListener('resize', resize);
 
   return { canvas, ctx };

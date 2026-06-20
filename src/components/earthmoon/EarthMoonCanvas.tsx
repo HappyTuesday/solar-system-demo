@@ -155,8 +155,8 @@ function EarthMoonCanvas() {
     scene.add(moon);
     bodyRefsRef.current.push({ id: 'moon', name: '月球', mesh: moon });
 
-    const moonOrbitGeom = new THREE.TorusGeometry(MOON_SEMI_MAJOR * SCALE, 0.08, 16, 256);
-    const moonOrbitMat = new THREE.MeshBasicMaterial({ color: 0x333355, transparent: true, opacity: 0.3 });
+    const moonOrbitGeom = new THREE.TorusGeometry(MOON_SEMI_MAJOR * SCALE, 0.03, 8, 512);
+    const moonOrbitMat = new THREE.MeshBasicMaterial({ color: 0x556688, transparent: true, opacity: 0.6 });
     const moonOrbit = new THREE.Mesh(moonOrbitGeom, moonOrbitMat);
 
     // TorusGeometry defaults to XY plane. Moon orbits in a tilted plane near XZ in Three.js.
