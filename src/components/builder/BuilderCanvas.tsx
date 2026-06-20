@@ -212,37 +212,38 @@ function BuilderCanvas() {
         e.preventDefault();
 
         const rect = canvas.getBoundingClientRect();
-        const t0 = { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
-        const t1 = { x: e.touches[1].clientX - rect.left, y: e.touches[1].clientY - rect.top };
-        const mx = (t0.x + t1.x) / 2;
-        const my = (t0.y + t1.y) / 2;
-        const dx = t1.x - t0.x;
-        const dy = t1.y - t0.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        const distRatio = dist / g.initialDist;
-        let newZoom = g.initialZoom * distRatio;
-        newZoom = Math.max(0.05, Math.min(20, newZoom));
-
-        // Zoom: keep the INITIAL midpoint fixed in world space
         const cssW = canvas.clientWidth;
         const cssH = canvas.clientHeight;
+        const t0x = e.touches[0].clientX - rect.left;
+        const t0y = e.touches[0].clientY - rect.top;
+        const t1x = e.touches[1].clientX - rect.left;
+        const t1y = e.touches[1].clientY - rect.top;
+
+        const midX = (t0x + t1x) / 2;
+        const midY = (t0y + t1y) / 2;
+        const dx = t1x - t0x;
+        const dy = t1y - t0y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        // Zoom: ratio relative to initial finger distance
+        let z = g.initialZoom * (dist / g.initialDist);
+        z = Math.max(0.05, Math.min(20, z));
+
+        // World point under the INITIAL midpoint
         const cx = cssW / 2;
         const cy = cssH / 2;
-        const [wx, wy] = screenToRender(g.initialMidX, g.initialMidY,
-          { offsetX: g.initialOffsetX, offsetY: g.initialOffsetY, zoom: g.initialZoom },
-          cssW, cssH);
-        let newOffsetX = (g.initialMidX - cx) / newZoom - wx;
-        let newOffsetY = -(g.initialMidY - cy) / newZoom - wy;
+        const wx = (g.initialMidX - cx) / g.initialZoom - g.initialOffsetX;
+        const wy = -(g.initialMidY - cy) / g.initialZoom - g.initialOffsetY;
 
-        // Pan: additional offset from finger midpoint movement
-        const midDx = mx - g.initialMidX;
-        const midDy = my - g.initialMidY;
-        newOffsetX += midDx / newZoom;
-        // Fingers move down (midDy > 0) → content moves down → offsetY decreases
-        newOffsetY -= midDy / newZoom;
+        // Offset to keep world point at initial midpoint at new zoom
+        let ox = (g.initialMidX - cx) / z - wx;
+        let oy = -(g.initialMidY - cy) / z - wy;
 
-        vpRef.current = { offsetX: newOffsetX, offsetY: newOffsetY, zoom: newZoom };
+        // Pan: finger midpoint movement
+        ox += (midX - g.initialMidX) / z;
+        oy -= (midY - g.initialMidY) / z;
+
+        vpRef.current = { offsetX: ox, offsetY: oy, zoom: z };
       }}
       onTouchEnd={() => { gestureRef.current = null; }}
       onContextMenu={e => e.preventDefault()}
