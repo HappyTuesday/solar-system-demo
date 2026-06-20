@@ -6,7 +6,6 @@ import { REAL_DATA } from '../../engine/constants';
 import { getMoonPhase, getEclipseType, predictEclipses } from '../../engine/eclipse';
 import { computeOffScreenBodies, type OffScreenEntry } from '../explore/OffScreenIndicator';
 import OffScreenIndicator from '../explore/OffScreenIndicator';
-import SunDirectionIndicator from './SunDirectionIndicator';
 
 const MU_SUN = 1.32712440018e20;
 const MU_EARTH = 3.986004418e14;
@@ -17,6 +16,40 @@ const MOON_LAN = 2.183;
 const MOON_AOP = 5.552;
 const MOON_EPOCH_JD = 2451545.0;
 const SCALE = 1 / 40000000;
+
+function projectSunToScreen(
+  camera: THREE.PerspectiveCamera,
+  sunWorldDir: THREE.Vector3,
+  w: number,
+  h: number,
+): { x: number; y: number; isBehind: boolean } {
+  const pos = sunWorldDir.clone().normalize().multiplyScalar(80);
+  const screenPos = pos.clone().project(camera);
+
+  const sx = (screenPos.x * 0.5 + 0.5);
+  const sy = (-screenPos.y * 0.5 + 0.5);
+  const behind = screenPos.z > 1;
+
+  if (behind) return { x: 0.5, y: 0.97, isBehind: true };
+
+  const dx = sx - 0.5;
+  const dy = sy - 0.5;
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+
+  let edgeX: number;
+  let edgeY: number;
+
+  if (absDx > absDy) {
+    edgeX = dx > 0 ? 0.98 : 0.02;
+    edgeY = 0.5 + dy * (0.48 / absDx);
+  } else {
+    edgeY = dy > 0 ? 0.98 : 0.02;
+    edgeX = 0.5 + dx * (0.48 / absDy);
+  }
+
+  return { x: edgeX, y: edgeY, isBehind: false };
+}
 
 function EarthMoonCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -34,6 +67,7 @@ function EarthMoonCanvas() {
   const sunDirRef = useRef<THREE.Vector3>(new THREE.Vector3(1, 0, 0));
   const [offScreenEntries, setOffScreenEntries] = useState<OffScreenEntry[]>([]);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+  const [sunScreen, setSunScreen] = useState({ x: 0.5, y: 0.02 });
 
   const updateOffScreen = useCallback(() => {
     const camera = cameraRef.current;
@@ -70,7 +104,8 @@ function EarthMoonCanvas() {
     renderer.shadowMap.enabled = true;
     container.appendChild(renderer.domElement);
 
-    const ambientLight = new THREE.AmbientLight(0x111133, 0.3);
+    // Brighter ambient so dark side is visible
+    const ambientLight = new THREE.AmbientLight(0x334466, 0.9);
     scene.add(ambientLight);
 
     const dirLight = new THREE.DirectionalLight(0xfff8e7, 2.5);
@@ -304,8 +339,10 @@ function EarthMoonCanvas() {
         (moon.material as THREE.MeshStandardMaterial).emissiveIntensity = 0;
       }
 
-      // Update off-screen indicators every 10 frames
+      // Update sun edge glow every 10 frames
       if (frameCount % 10 === 0) {
+        const ss = projectSunToScreen(camera, sunDirRef.current, container.clientWidth, container.clientHeight);
+        setSunScreen({ x: ss.x, y: ss.y });
         updateOffScreen();
       }
 
@@ -341,9 +378,22 @@ function EarthMoonCanvas() {
   return (
     <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
       <OffScreenIndicator entries={offScreenEntries} containerWidth={containerSize.w} containerHeight={containerSize.h} />
-      {sceneRef.current && (
-        <SunDirectionIndicator scene={sceneRef.current.scene} sunDirection={sunDirRef.current} />
-      )}
+
+      {/* Sun edge glow */}
+      <div
+        style={{
+          position: 'absolute',
+          left: sunScreen.x * containerSize.w - containerSize.w * 0.12,
+          top: sunScreen.y * containerSize.h - containerSize.h * 0.12,
+          width: containerSize.w * 0.24,
+          height: containerSize.h * 0.24,
+          background: 'radial-gradient(circle, rgba(255, 248, 220, 0.6) 0%, rgba(255, 220, 100, 0.25) 30%, rgba(255, 180, 50, 0.05) 60%, transparent 100%)',
+          borderRadius: '50%',
+          pointerEvents: 'none',
+          zIndex: 5,
+          filter: 'blur(2px)',
+        }}
+      />
     </div>
   );
 }
