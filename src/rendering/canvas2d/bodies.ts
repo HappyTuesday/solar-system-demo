@@ -24,17 +24,9 @@ export function drawBody(
 
   const color = BODY_COLORS[body.templateId] || '#888888';
 
-  const grad = ctx.createRadialGradient(
-    rx - r * 0.3, ry - r * 0.3, r * 0.05,
-    rx, ry, r,
-  );
-  grad.addColorStop(0, '#ffffff');
-  grad.addColorStop(0.25, color);
-  grad.addColorStop(1, '#000000');
-
   ctx.beginPath();
   ctx.arc(rx, ry, r, 0, Math.PI * 2);
-  ctx.fillStyle = grad;
+  ctx.fillStyle = color;
   ctx.fill();
 
   ctx.beginPath();
