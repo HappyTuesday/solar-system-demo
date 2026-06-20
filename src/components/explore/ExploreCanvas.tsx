@@ -78,6 +78,7 @@ function ExploreCanvas() {
   const animRef = useRef<number>(0);
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const zoomRef = useRef<number>(INITIAL_FRUSTUM);
+  const panRef = useRef({ x: 0, z: 0 });
   const bodyRefsRef = useRef<{ id: string; name: string; mesh: THREE.Mesh }[]>([]);
   const [offScreenEntries, setOffScreenEntries] = useState<OffScreenEntry[]>([]);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
@@ -170,7 +171,7 @@ function ExploreCanvas() {
       const dy = e.clientY - prevMouse.y;
       camera.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), -dx * 0.005);
       camera.position.applyAxisAngle(new THREE.Vector3(1, 0, 0), -dy * 0.005);
-      camera.lookAt(0, 0, 0);
+      camera.lookAt(panRef.current.x, 0, panRef.current.z);
       prevMouse = { x: e.clientX, y: e.clientY };
     };
     const onMouseUp = (e: MouseEvent) => {
@@ -208,15 +209,18 @@ function ExploreCanvas() {
     let touches0: { x: number; y: number } | null = null;
     let touches1: { x: number; y: number } | null = null;
     let touchDist0 = 0;
+    let touchMid0: { x: number; y: number } | null = null;
 
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length === 1) {
         touches0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         touches1 = null;
+        touchMid0 = null;
       } else if (e.touches.length >= 2) {
         touches0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         touches1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
         touchDist0 = Math.hypot(touches1.x - touches0.x, touches1.y - touches0.y);
+        touchMid0 = { x: (touches0.x + touches1.x) / 2, y: (touches0.y + touches1.y) / 2 };
       }
     };
 
@@ -227,12 +231,15 @@ function ExploreCanvas() {
         const dy = e.touches[0].clientY - touches0.y;
         camera.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), -dx * 0.005);
         camera.position.applyAxisAngle(new THREE.Vector3(1, 0, 0), -dy * 0.005);
-        camera.lookAt(0, 0, 0);
+        camera.lookAt(panRef.current.x, 0, panRef.current.z);
         touches0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       } else if (e.touches.length >= 2) {
         const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
         const newDist = Math.hypot(t1.x - t0.x, t1.y - t0.y);
+        const mid = { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 };
+
+        // Zoom
         if (touchDist0 > 0) {
           const factor = newDist / touchDist0;
           const newHalf = Math.max(0.5, Math.min(120, zoomRef.current / factor));
@@ -240,9 +247,28 @@ function ExploreCanvas() {
           const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
           updateOrthoZoom(camera, aspect, newHalf);
         }
+
+        // Pan (two-finger same-direction drag)
+        if (touchMid0) {
+          const dx = mid.x - touchMid0.x;
+          const dy = mid.y - touchMid0.y;
+          const w = container.clientWidth || 1;
+          const h = container.clientHeight || 1;
+          const halfH = zoomRef.current;
+          const halfW = halfH * (w / h);
+          const scaleX = (halfW * 2) / w;
+          const scaleY = (halfH * 2) / h;
+          panRef.current.x -= dx * scaleX;
+          panRef.current.z += dy * scaleY;
+          camera.position.x = panRef.current.x;
+          camera.position.z = panRef.current.z;
+          camera.lookAt(panRef.current.x, 0, panRef.current.z);
+        }
+
         touches0 = t0;
         touches1 = t1;
         touchDist0 = newDist;
+        touchMid0 = mid;
       }
     };
 
@@ -250,6 +276,7 @@ function ExploreCanvas() {
       touches0 = null;
       touches1 = null;
       touchDist0 = 0;
+      touchMid0 = null;
     };
 
     let gestureZoomStart = 0;
