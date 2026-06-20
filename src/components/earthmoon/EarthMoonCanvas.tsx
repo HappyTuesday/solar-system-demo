@@ -217,7 +217,7 @@ function EarthMoonCanvas() {
         const worldDx = e.deltaX * scaleX;
         const worldDy = -e.deltaY * scaleY;
         centerRef.current.addScaledVector(right, worldDx);
-        centerRef.current.addScaledVector(up, worldDy);
+        centerRef.current.addScaledVector(screenUp, worldDy);
         updateCamera(camera, centerRef.current, thetaRef.current, phiRef.current);
       }
       const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
@@ -275,7 +275,7 @@ function EarthMoonCanvas() {
         const screenUp = new THREE.Vector3().crossVectors(dir, right).normalize();
 
         centerRef.current.addScaledVector(right, -dMidX * scaleX);
-        centerRef.current.addScaledVector(up, -dMidY * scaleY);
+        centerRef.current.addScaledVector(screenUp, -dMidY * scaleY);
         updateCamera(camera, centerRef.current, thetaRef.current, phiRef.current);
 
         touchMid0 = curMid;
