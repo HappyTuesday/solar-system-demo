@@ -11,7 +11,7 @@ import {
 } from '../../rendering/canvas2d/setup';
 import { drawBody, drawPreviewCircle, hitTestBody } from '../../rendering/canvas2d/bodies';
 import { drawGrid } from '../../rendering/canvas2d/grid';
-import { handleWheel } from '../../rendering/canvas2d/interaction';
+import { handleWheel, handleTouchStart, handleTouchMove, handleTouchEnd } from '../../rendering/canvas2d/interaction';
 
 function BuilderCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -174,6 +174,19 @@ function BuilderCanvas() {
           canvas.clientWidth, canvas.clientHeight,
         );
       }}
+      onTouchStart={(e) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const result = handleTouchStart(e, vpRef.current, canvas.clientWidth, canvas.clientHeight);
+        if (result) vpRef.current = result;
+      }}
+      onTouchMove={(e) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const result = handleTouchMove(e, vpRef.current, canvas.clientWidth, canvas.clientHeight);
+        if (result) vpRef.current = result;
+      }}
+      onTouchEnd={() => handleTouchEnd()}
       onContextMenu={e => e.preventDefault()}
     />
   );
