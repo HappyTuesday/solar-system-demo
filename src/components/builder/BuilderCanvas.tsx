@@ -10,7 +10,7 @@ import {
   type Canvas2DSetup,
   type Viewport,
 } from '../../rendering/canvas2d/setup';
-import { drawBody, drawPreviewCircle } from '../../rendering/canvas2d/bodies';
+import { drawBody, drawPreviewCircle, hitTestBody } from '../../rendering/canvas2d/bodies';
 import { drawGrid } from '../../rendering/canvas2d/grid';
 import { handleWheel } from '../../rendering/canvas2d/interaction';
 
@@ -23,9 +23,16 @@ function BuilderCanvas() {
 
   const bodies = useBuildStore(s => s.bodies);
   const isRunning = useBuildStore(s => s.isRunning);
+  const timeScale = useBuildStore(s => s.timeScale);
   const selectedToolId = useUIStore(s => s.selectedToolId);
   const selectedBodyIds = useUIStore(s => s.selectedBodyIds);
+  const isPlacing = useUIStore(s => s.isPlacing);
+  const setSelectedBodyIds = useUIStore(s => s.setSelectedBodyIds);
+  const setSelectedTool = useUIStore(s => s.setSelectedTool);
   const setMousePositions = useUIStore(s => s.setMousePositions);
+  const setPreviewPosition = useUIStore(s => s.setPreviewPosition);
+  const setIsPlacing = useUIStore(s => s.setIsPlacing);
+  const setClickPosPhysical = useUIStore(s => s.setClickPosPhysical);
   const previewPosition = useUIStore(s => s.previewPosition);
 
   const render = useCallback(() => {
@@ -36,13 +43,13 @@ function BuilderCanvas() {
     const rect = container.getBoundingClientRect();
     const w = rect.width;
     const h = rect.height;
-    const vp = vpRef.current;
 
-    setup.ctx.clearRect(0, 0, w * (window.devicePixelRatio || 1), h * (window.devicePixelRatio || 1));
+    setup.ctx.clearRect(0, 0, w, h);
 
     setup.ctx.fillStyle = '#050510';
     setup.ctx.fillRect(0, 0, w, h);
 
+    const vp = vpRef.current;
     applyViewport(setup.ctx, vp, w, h);
 
     drawGrid(setup.ctx, vp, w, h);
@@ -64,7 +71,7 @@ function BuilderCanvas() {
 
       if (isRunning && dt > 0) {
         const buildState = useBuildStore.getState();
-        buildState.advanceSimulation(dt);
+        buildState.advanceSimulation(dt, 2);
         const currentBodies = useBuildStore.getState().bodies;
         const collisions = detectCollisions(currentBodies, 2);
         if (collisions.length > 0) {
@@ -97,17 +104,52 @@ function BuilderCanvas() {
     };
   }, []);
 
+  const getCanvasPos = useCallback((e: React.MouseEvent): [number, number] | null => {
+    if (!containerRef.current) return null;
+    const rect = containerRef.current.getBoundingClientRect();
+    return screenToPhysics(
+      e.clientX - rect.left,
+      e.clientY - rect.top,
+      vpRef.current,
+      rect.width,
+      rect.height,
+    );
+  }, []);
+
   return (
     <div
       ref={containerRef}
-      style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden', cursor: 'crosshair' }}
+      style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden', cursor: selectedToolId ? 'crosshair' : 'default' }}
       onMouseMove={(e) => {
-        if (!containerRef.current) return;
-        const setup = setupRef.current;
-        if (!setup) return;
-        const rect = containerRef.current.getBoundingClientRect();
-        const [px, py] = screenToPhysics(e.clientX - rect.left, e.clientY - rect.top, vpRef.current, rect.width, rect.height);
-        setMousePositions([px, py]);
+        const pos = getCanvasPos(e);
+        if (!pos) return;
+        setMousePositions(pos);
+
+        if (selectedToolId && !isPlacing) {
+          setPreviewPosition(pos);
+        }
+      }}
+      onMouseDown={(e) => {
+        if (e.button !== 0) return;
+        const pos = getCanvasPos(e);
+        if (!pos) return;
+
+        if (isPlacing) return;
+
+        if (selectedToolId) {
+          // Placement mode: click to confirm position, open velocity form
+          setClickPosPhysical(pos);
+          setIsPlacing(true);
+          return;
+        }
+
+        // Selection mode: click to select/deselect body
+        const hitId = hitTestBody(pos[0], pos[1], useBuildStore.getState().bodies);
+        if (hitId) {
+          setSelectedBodyIds([hitId]);
+        } else {
+          setSelectedBodyIds([]);
+        }
       }}
       onWheel={(e) => {
         if (!containerRef.current) return;

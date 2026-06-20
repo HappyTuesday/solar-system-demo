@@ -1,15 +1,10 @@
-import { useState, useEffect } from 'react';
-import * as THREE from 'three';
+import { useState } from 'react';
 import { REAL_DATA } from '../../engine/constants';
-import { getSharedScene } from '../../rendering/threejs/cameraRef';
-import { previewVelocityArrowInPlacement, removeVelocityArrow } from '../../rendering/threejs/interaction';
-import { renderToPhysical } from '../../engine/coordinateTransform';
 import type { CelestialBodyId } from '../../types';
 import './VelocityInputForm.css';
 
 interface VelocityInputFormProps {
   templateId: CelestialBodyId;
-  clickPosRender: [number, number, number];
   onConfirm: (speed: number, angleDeg: number) => void;
   onCancel: () => void;
 }
@@ -18,7 +13,6 @@ const MAX_SPEED = 200;
 
 export default function VelocityInputForm({
   templateId,
-  clickPosRender,
   onConfirm,
   onCancel,
 }: VelocityInputFormProps) {
@@ -31,28 +25,6 @@ export default function VelocityInputForm({
   const speedNum = parseFloat(speed);
   const angleNum = parseFloat(angle);
   const isValid = !isNaN(speedNum) && speedNum >= 0 && !isNaN(angleNum);
-
-  useEffect(() => {
-    const scene = getSharedScene();
-    if (!scene) return;
-
-    if (!isValid || speedNum === 0) {
-      removeVelocityArrow(scene);
-      return;
-    }
-
-    const posPhysical = renderToPhysical(clickPosRender);
-    const cappedSpeed = Math.min(speedNum, MAX_SPEED);
-    const angleDeg = ((angleNum % 360) + 360) % 360;
-    const clickPos = new THREE.Vector3(clickPosRender[0], clickPosRender[1], clickPosRender[2]);
-
-    previewVelocityArrowInPlacement(scene, clickPos, cappedSpeed * 1000, angleDeg, posPhysical, [0, 0, 0]);
-
-    return () => {
-      const s = getSharedScene();
-      if (s) removeVelocityArrow(s);
-    };
-  }, [speed, angle, clickPosRender, isValid, speedNum, angleNum]);
 
   const handleConfirm = () => {
     if (!isValid) return;

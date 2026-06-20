@@ -3,11 +3,7 @@ import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { REAL_DATA, HINT_ORDER } from '../../engine/constants';
-import { renderToPhysical, scaleUp, scaleDown, scaleSizeUp, scaleSizeDown } from '../../engine/coordinateTransform';
 import { calculateErrors } from '../../engine/scoring';
-import { useRestore } from '../../hooks/useRestore';
-import { getSharedScene, getClickPosRender, setClickPosRender, getObservationTargetId, setObservationTargetId } from '../../rendering/threejs/cameraRef';
-import { cleanupGizmos, removePreviewSphere } from '../../rendering/threejs/interaction';
 import VelocityInputForm from './VelocityInputForm';
 import type { CelestialBody } from '../../types';
 import './ControlPanel.css';
@@ -20,34 +16,14 @@ export default function ControlPanel() {
   const adjustTimeScale = useBuildStore(s => s.adjustTimeScale);
   const showTrails = useUIStore(s => s.showTrails);
   const trailLength = useUIStore(s => s.trailLength);
-  const linearScale = useUIStore(s => s.linearScale);
-  const setLinearScaleValue = useUIStore(s => s.setLinearScaleValue);
-  const sizeMultiplier = useUIStore(s => s.sizeMultiplier);
-  const setSizeMultiplierValue = useUIStore(s => s.setSizeMultiplierValue);
-  const { isRestoring, startRestore } = useRestore();
 
   const [editingMass, setEditingMass] = useState<string>('');
-
-  const formatScaleRatio = (scale: number): string => {
-    const physPerRender = 1 / scale;
-    if (physPerRender >= 1e12) return `1 渲染单位 ≈ ${parseFloat((physPerRender / 1e12).toFixed(1))} 万亿 米`;
-    if (physPerRender >= 1e8) return `1 渲染单位 ≈ ${parseFloat((physPerRender / 1e8).toFixed(1))} 亿 米`;
-    if (physPerRender >= 1e4) return `1 渲染单位 ≈ ${parseFloat((physPerRender / 1e4).toFixed(1))} 万 米`;
-    return `1 渲染单位 ≈ ${physPerRender.toFixed(0)} 米`;
-  };
 
   const formatMass = (kg: number): string => {
     if (kg >= 1e27) return `${(kg / 1e27).toFixed(2)} × 10²⁷ kg`;
     if (kg >= 1e24) return `${(kg / 1e24).toFixed(2)} × 10²⁴ kg`;
     if (kg >= 1e21) return `${(kg / 1e21).toFixed(2)} × 10²¹ kg`;
     return `${kg.toExponential(2)} kg`;
-  };
-
-  const formatDistance = (m: number): string => {
-    if (m >= 1e12) return `${(m / 1e12).toFixed(2)} 万亿 km`;
-    if (m >= 1e9) return `${(m / 1e9).toFixed(2)} 亿 km`;
-    if (m >= 1e6) return `${(m / 1e6).toFixed(0)} km`;
-    return `${m.toFixed(0)} m`;
   };
 
   const formatTime = (ms: number): string => {
@@ -117,6 +93,11 @@ export default function ControlPanel() {
     buildStore.resetBuild();
     uiStore.resetUI();
     historyStore.setCurrentRecordId(null);
+    // Re-place sun after reset
+    useBuildStore.getState().placeBody(
+      'sun', [0, 0, 0], [0, 0, 0], REAL_DATA.sun.mass,
+    );
+    useBuildStore.getState().startBuild();
   };
 
   return (
@@ -134,20 +115,9 @@ export default function ControlPanel() {
         </div>
       </div>
 
-      <div className="panel-section button-row">
-        <button
-          className="ctrl-btn restore"
-          onClick={startRestore}
-          disabled={isRestoring}
-        >
-          {isRestoring ? '还原中...' : '真实还原'}
-        </button>
-      </div>
-
       {uiStore.selectedToolId && !uiStore.isPlacing && (() => {
         const toolData = REAL_DATA[uiStore.selectedToolId];
         if (!toolData) return null;
-        const pos = uiStore.previewPosition;
 
         return (
           <div className="panel-section placement-info">
@@ -163,17 +133,11 @@ export default function ControlPanel() {
               <span>{formatMass(toolData.mass)}</span>
             </div>
             <div className="info-row">
-              <span>真实半径</span>
-              <span>{formatDistance(toolData.radius)}</span>
-            </div>
-            <div className="info-row">
               <span>鼠标位置</span>
               <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#888' }}>
-                {pos ? (() => {
-                  const physPos = renderToPhysical([pos[0], pos[1], 0]);
-                  const dist = Math.sqrt(physPos[0] * physPos[0] + physPos[1] * physPos[1]);
-                  return formatDistance(dist);
-                })() : '移动鼠标选择位置...'}
+                {uiStore.mousePhysicalPos
+                  ? `(${uiStore.mousePhysicalPos[0].toFixed(0)}, ${uiStore.mousePhysicalPos[1].toFixed(0)})`
+                  : '移动鼠标选择位置...'}
               </span>
             </div>
             <div className="placement-hint">
@@ -184,69 +148,55 @@ export default function ControlPanel() {
       })()}
 
       {uiStore.isPlacing && uiStore.selectedToolId && (() => {
-        const clickPos = getClickPosRender();
+        const clickPos = uiStore.clickPosPhysical;
         if (!clickPos) return null;
 
         const handleConfirm = (speed: number, angleDeg: number) => {
           const toolId = uiStore.selectedToolId!;
-          const physPos = renderToPhysical(clickPos);
           const angleRad = (angleDeg * Math.PI) / 180;
+          const px = clickPos[0];
+          const py = clickPos[1];
+          const pz = 0;
+          const dist = Math.sqrt(px * px + py * py);
 
           let vel: [number, number, number] = [0, 0, 0];
-          if (speed > 0) {
-            const rx = physPos[0];
-            const ry = physPos[1];
-            const rz = physPos[2];
-            const dist = Math.sqrt(rx * rx + ry * ry + rz * rz);
-            if (dist >= 1) {
-              const radialX = rx / dist;
-              const radialY = ry / dist;
-              const radialZ = rz / dist;
-              const tLen = Math.sqrt(radialX * radialX + radialY * radialY);
-              const tangentX = tLen < 1e-10 ? 0 : -radialY / tLen;
-              const tangentY = tLen < 1e-10 ? 1 : radialX / tLen;
-              const tangentZ = 0;
-              const cosA = Math.cos(angleRad);
-              const sinA = Math.sin(angleRad);
-              vel = [
-                speed * (cosA * tangentX + sinA * radialX),
-                speed * (cosA * tangentY + sinA * radialY),
-                speed * (cosA * tangentZ + sinA * radialZ),
-              ];
-            }
+          if (speed > 0 && dist > 1) {
+            const tx = -py / dist;
+            const ty = px / dist;
+            const cosA = Math.cos(angleRad);
+            const sinA = Math.sin(angleRad);
+            vel = [
+              speed * (cosA * tx + sinA * px / dist),
+              speed * (cosA * ty + sinA * py / dist),
+              0,
+            ];
           }
 
           const data = REAL_DATA[toolId];
-          buildStore.placeBody(toolId, physPos, vel, data?.mass ?? 1e24);
-          buildStore.resumeBuild();
+          buildStore.placeBody(toolId, [px, py, pz], vel, data?.mass ?? 1e24);
+
+          if (!buildStore.isRunning) {
+            buildStore.startBuild();
+          }
 
           if (uiStore.showHint) {
             const hintedId = HINT_ORDER[uiStore.hintIndex % HINT_ORDER.length];
             if (toolId === hintedId) uiStore.setHint(false);
           }
 
-          const scene = getSharedScene();
-          if (scene) {
-            cleanupGizmos(scene);
-          }
           uiStore.setSelectedTool(null);
           uiStore.setIsPlacing(false);
-          setClickPosRender(null);
+          uiStore.setClickPosPhysical(null);
         };
 
         const handleCancel = () => {
-          const scene = getSharedScene();
-          if (scene) {
-            removePreviewSphere(scene);
-          }
           uiStore.setIsPlacing(false);
-          setClickPosRender(null);
+          uiStore.setClickPosPhysical(null);
         };
 
         return (
           <VelocityInputForm
             templateId={uiStore.selectedToolId!}
-            clickPosRender={clickPos}
             onConfirm={handleConfirm}
             onCancel={handleCancel}
           />
@@ -254,18 +204,12 @@ export default function ControlPanel() {
       })()}
 
       <div className="panel-section button-row">
-        {!buildStore.startedAt ? (
-          <div className="hint-text">请先在画布上放置太阳</div>
-        ) : (
-          <>
-            <button className="ctrl-btn primary" onClick={buildStore.isRunning ? buildStore.pauseBuild : buildStore.resumeBuild} disabled={isRestoring}>
-              {buildStore.isRunning ? '⏸ 暂停' : '▶ 开始'}
-            </button>
-            <button className="ctrl-btn success" onClick={handleComplete} disabled={isRestoring}>
-              ✓ 完成
-            </button>
-          </>
-        )}
+        <button className="ctrl-btn primary" onClick={buildStore.isRunning ? buildStore.pauseBuild : buildStore.resumeBuild}>
+          {buildStore.isRunning ? '⏸ 暂停' : '▶ 开始'}
+        </button>
+        <button className="ctrl-btn success" onClick={handleComplete}>
+          ✓ 完成
+        </button>
       </div>
 
       <div className="panel-section time-scale-row">
@@ -274,7 +218,7 @@ export default function ControlPanel() {
           <button
             className="ctrl-btn small"
             onClick={() => adjustTimeScale(-1e5)}
-            disabled={!buildStore.startedAt || isRestoring || timeScale <= 1e4}
+            disabled={!buildStore.startedAt || timeScale <= 1e4}
           >
             −
           </button>
@@ -282,7 +226,7 @@ export default function ControlPanel() {
           <button
             className="ctrl-btn small"
             onClick={() => adjustTimeScale(1e5)}
-            disabled={!buildStore.startedAt || isRestoring || timeScale >= 1e6}
+            disabled={!buildStore.startedAt || timeScale >= 1e6}
           >
             +
           </button>
@@ -293,14 +237,12 @@ export default function ControlPanel() {
         <button
           className={`ctrl-btn ${uiStore.supervisionMode ? 'active' : ''}`}
           onClick={uiStore.toggleSupervision}
-          disabled={!buildStore.startedAt || isRestoring}
         >
           👁 监督
         </button>
         <button
           className="ctrl-btn"
           onClick={handleHint}
-          disabled={!buildStore.startedAt || isRestoring}
         >
           💡 提示
         </button>
@@ -312,7 +254,6 @@ export default function ControlPanel() {
             type="checkbox"
             checked={showTrails}
             onChange={e => uiStore.setShowTrails(e.target.checked)}
-            disabled={isRestoring}
           />
           <span>显示轨迹</span>
         </label>
@@ -327,81 +268,27 @@ export default function ControlPanel() {
               step="0.1"
               value={trailLength}
               onChange={e => uiStore.setTrailLength(parseFloat(e.target.value))}
-              disabled={isRestoring}
             />
           </div>
         )}
-      </div>
-
-      <div className="panel-section trail-controls">
-          <div className="scale-slider-row">
-            <span className="scale-slider-label">{formatScaleRatio(linearScale)}</span>
-            <div className="scale-btn-row">
-              <button
-                className="ctrl-btn small"
-                onClick={() => {
-                  const v = scaleDown();
-                  setLinearScaleValue(v);
-                }}
-                disabled={isRestoring}
-              >
-                −
-              </button>
-              <button
-                className="ctrl-btn small"
-                onClick={() => {
-                  const v = scaleUp();
-                  setLinearScaleValue(v);
-                }}
-                disabled={isRestoring}
-              >
-                +
-              </button>
-            </div>
-          </div>
-          <div className="scale-slider-row">
-            <span className="scale-slider-label">天体放大 {sizeMultiplier}×</span>
-            <div className="scale-btn-row">
-              <button
-                className="ctrl-btn small"
-                onClick={() => {
-                  const v = scaleSizeDown();
-                  setSizeMultiplierValue(v);
-                }}
-                disabled={isRestoring}
-              >
-                −
-              </button>
-              <button
-                className="ctrl-btn small"
-                onClick={() => {
-                  const v = scaleSizeUp();
-                  setSizeMultiplierValue(v);
-                }}
-                disabled={isRestoring}
-              >
-                +
-              </button>
-            </div>
-          </div>
       </div>
 
       <div className="panel-section button-row">
         <button
           className="ctrl-btn small"
           onClick={buildStore.undo}
-          disabled={buildStore.undoStack.length === 0 || isRestoring}
+          disabled={buildStore.undoStack.length === 0}
         >
           ↩ 撤销
         </button>
         <button
           className="ctrl-btn small"
           onClick={buildStore.redo}
-          disabled={buildStore.redoStack.length === 0 || isRestoring}
+          disabled={buildStore.redoStack.length === 0}
         >
           ↪ 重做
         </button>
-        <button className="ctrl-btn small danger" onClick={handleNewBuild} disabled={isRestoring}>
+        <button className="ctrl-btn small danger" onClick={handleNewBuild}>
           ⊗ 新建
         </button>
       </div>
@@ -426,31 +313,7 @@ export default function ControlPanel() {
             <span>速度 (m/s)</span>
             <span>{Math.sqrt(selectedBody.velocity[0] ** 2 + selectedBody.velocity[1] ** 2 + selectedBody.velocity[2] ** 2).toFixed(0)}</span>
           </div>
-          <div className="info-row">
-            <span>自转速度</span>
-            <input
-              type="range"
-              min="0"
-              max="5"
-              step="0.1"
-              value={selectedBody.rotationSpeed}
-              onChange={e => buildStore.modifyRotationSpeed(selectedBody.id, parseFloat(e.target.value))}
-            />
-          </div>
-          <button
-            className="ctrl-btn"
-            onClick={() => {
-              if (getObservationTargetId() === selectedBody.id) {
-                setObservationTargetId(null);
-              } else {
-                setObservationTargetId(selectedBody.id);
-              }
-            }}
-            disabled={isRestoring}
-          >
-            {getObservationTargetId() === selectedBody.id ? '取消观测目标' : '设为观测目标'}
-          </button>
-          <button className="ctrl-btn danger" onClick={handleDeleteBody} disabled={isRestoring}>删除天体</button>
+          <button className="ctrl-btn danger" onClick={handleDeleteBody}>删除天体</button>
         </div>
       )}
 

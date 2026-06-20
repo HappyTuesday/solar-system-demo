@@ -1,17 +1,8 @@
 import { useUIStore } from '../../stores/uiStore';
-import { REAL_DATA, PHYSICAL_CONSTANTS } from '../../engine/constants';
-import { physicalRadiusToRender } from '../../engine/coordinateTransform';
+import { useBuildStore } from '../../stores/buildStore';
+import { REAL_DATA } from '../../engine/constants';
+import { getSimplifiedRadius } from '../../engine/coordinateTransform';
 import './CoordinateDisplay.css';
-
-function formatPhysical(val: number): string {
-  if (Math.abs(val) < 1 && val !== 0) return val.toExponential(2);
-  if (Math.abs(val) >= 1e6) return val.toExponential(3);
-  return val.toFixed(1);
-}
-
-function formatRender(val: number): string {
-  return val.toFixed(1);
-}
 
 function fmtTwo(pos: [number, number] | null): string {
   if (!pos) return '(—, —)';
@@ -21,41 +12,32 @@ function fmtTwo(pos: [number, number] | null): string {
 export default function CoordinateDisplay() {
   const mousePhysicalPos = useUIStore(s => s.mousePhysicalPos);
   const selectedToolId = useUIStore(s => s.selectedToolId);
-
-  const showBodySize = !!(selectedToolId && mousePhysicalPos);
+  const bodies = useBuildStore(s => s.bodies);
 
   return (
     <div className="coordinate-display">
       <div className="coordinate-row">
-        <span className="label">[物理]</span>
+        <span className="label">位置</span>
         <span className="value">{fmtTwo(mousePhysicalPos)}</span>
-        <span className="unit">m</span>
+        <span className="unit">画布坐标</span>
       </div>
-      {showBodySize && (
+      {selectedToolId && (
         <div className="coordinate-row">
-          <span className="label">天体: {selectedToolId === 'sun' ? '太阳' : REAL_DATA[selectedToolId!]?.name ?? selectedToolId}</span>
+          <span className="label">天体: {REAL_DATA[selectedToolId]?.name ?? selectedToolId}</span>
           <span className="sep">|</span>
-          <span className="label">画布:</span>
-          <span className="value">{formatRender(physicalRadiusToRender(REAL_DATA[selectedToolId!]?.radius ?? 1e6))}</span>
+          <span className="label">半径:</span>
+          <span className="value">{getSimplifiedRadius(selectedToolId)}</span>
           <span className="unit">px</span>
           <span className="sep">|</span>
-          <span className="label">渲染:</span>
-          <span className="value">{formatRender(physicalRadiusToRender(REAL_DATA[selectedToolId!]?.radius ?? 1e6))}</span>
-          <span className="unit">uv</span>
-          <span className="sep">|</span>
-          <span className="label">物理:</span>
-          <span className="value">{selectedToolId === 'sun' ? `${(PHYSICAL_CONSTANTS.sunRadius / 1e9).toFixed(2)}×10⁹` : `${((REAL_DATA[selectedToolId!]?.radius ?? 0) / 1e6).toFixed(2)}×10⁶`}</span>
-          <span className="unit">m</span>
-          {selectedToolId !== 'sun' && (
-            <>
-              <span className="sep">|</span>
-              <span className="label">质量:</span>
-              <span className="value">{formatPhysical(REAL_DATA[selectedToolId!]?.mass ?? 0)}</span>
-              <span className="unit">kg</span>
-            </>
-          )}
+          <span className="label">质量:</span>
+          <span className="value">{(REAL_DATA[selectedToolId]?.mass ?? 0).toExponential(2)}</span>
+          <span className="unit">kg</span>
         </div>
       )}
+      <div className="coordinate-row">
+        <span className="label">天体数</span>
+        <span className="value">{bodies.length}</span>
+      </div>
     </div>
   );
 }

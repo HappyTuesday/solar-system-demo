@@ -3,6 +3,7 @@ import type { UIState } from '../types';
 import { setLinearScale, getLinearScale, getSizeMultiplier, setSizeMultiplier } from '../engine/coordinateTransform';
 
 interface UIStore extends UIState {
+  clickPosPhysical: [number, number] | null;
   setSelectedTool: (id: string | null) => void;
   setSelectedBodyIds: (ids: string[]) => void;
   toggleSupervision: () => void;
@@ -13,6 +14,7 @@ interface UIStore extends UIState {
   setPreviewPosition: (pos: [number, number] | null) => void;
   setPreviewSpeed: (speed: number) => void;
   setMousePositions: (pos: [number, number] | null) => void;
+  setClickPosPhysical: (pos: [number, number] | null) => void;
   setShowTrails: (show: boolean) => void;
   setTrailLength: (len: number) => void;
   linearScale: number;
@@ -37,6 +39,7 @@ export const useUIStore = create<UIStore>((set) => ({
   linearScale: getLinearScale(),
   sizeMultiplier: getSizeMultiplier(),
   mousePhysicalPos: null,
+  clickPosPhysical: null,
 
   setSelectedTool: (id) => set({ selectedToolId: id, previewPosition: null, previewSpeed: 0 }),
   setSelectedBodyIds: (ids) => set({ selectedBodyIds: ids }),
@@ -57,12 +60,9 @@ export const useUIStore = create<UIStore>((set) => ({
     setSizeMultiplier(v);
     set({ sizeMultiplier: v });
   },
+  setClickPosPhysical: (pos) => set({ clickPosPhysical: pos }),
   setMousePositions: (pos) => set({ mousePhysicalPos: pos }),
   resetUI: () => {
-    const defaultScale = 1e-8;
-    const defaultSize = 10;
-    setLinearScale(defaultScale);
-    setSizeMultiplier(defaultSize);
     set({
       selectedToolId: null,
       selectedBodyIds: [],
@@ -74,8 +74,7 @@ export const useUIStore = create<UIStore>((set) => ({
       previewPosition: null,
       previewSpeed: 0,
       mousePhysicalPos: null,
-      linearScale: defaultScale,
-      sizeMultiplier: defaultSize,
+      clickPosPhysical: null,
     });
   },
 }));
