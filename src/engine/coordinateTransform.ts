@@ -1,168 +1,125 @@
+import { SIMPLIFIED_RADII } from './constants';
+
 // src/engine/coordinateTransform.ts
 // 纯函数，无 React/Three.js 依赖，属于 engine/ 层
 //
-// 坐标转换模型
-// ============
-// 太阳系物理坐标（m）与渲染坐标系之间的双向转换。使用了三种不同的缩放模型：
+// 坐标转换模型 —— 线性映射
+// ========================
+// 太阳系物理坐标（m）与渲染坐标系之间的双向转换，全部使用线性缩放。
 //
-// 1. 位置缩放 —— 对数压缩
-//    r_render = A * ln(1 + B * r_physical / R_SUN)
-//    相比幂律压缩，对数函数在近太阳区域增长更快、远轨道压缩更平缓，
-//    使得行星在渲染空间中分布更加均匀，减少太阳周围的空白区域。
-//    速度通过该映射的导数（雅可比）进行径向/切向分量精确变换。
-//
-// 2. 尺寸缩放 —— 对数映射
-//    r_render = log10(radius / LOG_BASE + 1) * LOG_FACTOR
-//    clamp: max(raw, MIN_RENDER_R)
-//    天体真实半径跨越数个量级，对数映射后全部可见且可交互。
-//    逆变换在 clamp 点以下有损（见 renderRadiusToPhysical 注释）。
-//
-// 3. 质量缩放 —— 线性映射
-//    renderMass = physicalMass / M_SUN * 10000
-//    仅用于 UI 显示，不参与物理计算。
+// 1. 位置缩放
+//    r_render = r_physical * linearScale
+// 2. 尺寸缩放
+//    r_render = radius * linearScale
+// 3. 速度缩放
+//    v_render = v_physical * linearScale
 
-// Treat distances below this as at origin (1 micrometer)
-const EPSILON = 1e-6;
+const M_SUN = 1.989e30;
+const MASS_RENDER_SCALE = 10000 / M_SUN;
 
-const R_SUN = 6.9634e8; // 太阳真实半径 (m)
-const M_SUN = 1.989e30; // 太阳真实质量 (kg)
-const LOG_A = 300;       // 对数缩放振幅
-const LOG_B = 0.0115;    // 对数缩放系数（越大近距增长越快）
-const LOG_BASE = 1e6;    // 对数缩放基准 (m)
-const LOG_FACTOR = 12;   // 对数缩放因子
-const MIN_RENDER_R = 5;  // 最小渲染半径
-const SUN_RENDER_R = 50; // 太阳渲染半径
-const MASS_RENDER_SCALE = 10000 / M_SUN; // 质量显示缩放
+let _linearScale = 1e-8;
+export function getLinearScale(): number { return _linearScale; }
+export function setLinearScale(v: number): void { _linearScale = v; }
+
+let _sizeMultiplier = 10;
+export function getSizeMultiplier(): number { return _sizeMultiplier; }
+export function setSizeMultiplier(v: number): void { _sizeMultiplier = v; }
+export function scaleSizeUp(): number {
+  _sizeMultiplier *= 2;
+  return _sizeMultiplier;
+}
+export function scaleSizeDown(): number {
+  _sizeMultiplier = Math.max(1, _sizeMultiplier / 2);
+  return _sizeMultiplier;
+}
+
+const MANTISSA_STEPS = [1, 2, 4, 5, 6, 8];
+
+function decompose(v: number): { m: number; n: number } {
+  const n = Math.floor(Math.log10(v));
+  const m = v / Math.pow(10, n);
+  if (m >= 9.5) return { m: 1, n: n + 1 };
+  if (m < 0.95 && n > -15) return { m: m * 10, n: n - 1 };
+  return { m, n };
+}
+
+function compose(m: number, n: number): number {
+  return Number((m * Math.pow(10, n)).toExponential());
+}
+
+export function scaleUp(): number {
+  const { m, n } = decompose(_linearScale);
+  const idx = MANTISSA_STEPS.findIndex(s => s >= m);
+  if (idx === -1 || idx === MANTISSA_STEPS.length - 1) {
+    _linearScale = compose(MANTISSA_STEPS[0], n + 1);
+  } else {
+    _linearScale = compose(MANTISSA_STEPS[idx + 1], n);
+  }
+  return _linearScale;
+}
+
+export function scaleDown(): number {
+  const { m, n } = decompose(_linearScale);
+  const idx = MANTISSA_STEPS.findLastIndex(s => s <= m);
+  if (idx <= 0) {
+    _linearScale = compose(MANTISSA_STEPS[MANTISSA_STEPS.length - 1], n - 1);
+  } else {
+    _linearScale = compose(MANTISSA_STEPS[idx - 1], n);
+  }
+  return _linearScale;
+}
 
 // ===== 位置转换 =====
 
 export function physicalToRender(pos: [number, number, number]): [number, number, number] {
-  const r = Math.sqrt(pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]);
-  if (r < EPSILON) return [0, 0, 0];
-  const rRender = LOG_A * Math.log(1 + LOG_B * r / R_SUN);
-  const scale = rRender / r;
-  return [pos[0] * scale, pos[1] * scale, pos[2] * scale];
+  return [pos[0] * _linearScale, pos[1] * _linearScale, pos[2] * _linearScale];
 }
 
 export function renderToPhysical(pos: [number, number, number]): [number, number, number] {
-  const r = Math.sqrt(pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]);
-  if (r < EPSILON) return [0, 0, 0];
-  const rPhys = (R_SUN / LOG_B) * (Math.exp(r / LOG_A) - 1);
-  const scale = rPhys / r;
-  return [pos[0] * scale, pos[1] * scale, pos[2] * scale];
+  const inv = 1.0 / _linearScale;
+  return [pos[0] * inv, pos[1] * inv, pos[2] * inv];
 }
 
-// ===== 距离标量（轨道环半径等） =====
+// ===== 距离标量 =====
 
 export function physicalDistanceToRender(distance: number): number {
-  return LOG_A * Math.log(1 + LOG_B * distance / R_SUN);
+  return distance * _linearScale;
 }
 
 export function renderDistanceToPhysical(distance: number): number {
-  return (R_SUN / LOG_B) * (Math.exp(distance / LOG_A) - 1);
+  return distance / _linearScale;
 }
 
-// ===== 天体尺寸（不受位置变换影响） =====
+// ===== 天体尺寸 =====
 
-export function physicalRadiusToRender(radius: number, isSun?: boolean): number {
-  if (isSun) return SUN_RENDER_R;
-  const raw = Math.log10(radius / LOG_BASE + 1) * LOG_FACTOR;
-  return Math.max(raw, MIN_RENDER_R);
+const MIN_RENDER_RADIUS = 10;
+
+export function physicalRadiusToRender(radius: number): number {
+  return Math.max(radius * _linearScale * _sizeMultiplier, MIN_RENDER_RADIUS);
 }
 
-/**
- * Note: inverse of physicalRadiusToRender is lossy below the min-render-radius
- * clamp point (render radius < 3 maps to ~1.37e6 m physical, not the original
- * small value). This function is intended for display purposes only.
- */
 export function renderRadiusToPhysical(rRadius: number): number {
-  return LOG_BASE * (Math.pow(10, rRadius / LOG_FACTOR) - 1);
+  return rRadius / (_linearScale * _sizeMultiplier);
 }
 
-// ===== 速度转换（径向/切向精确分解） =====
-//
-// 位置映射: f(r) = A * ln(1 + B * r / R_SUN)
-// 导数:     f'(r) = A * B / (R_SUN + B * r)
-// 比例:     f(r)/r = A * ln(1 + B * r / R_SUN) / r
-//
+// ===== 速度 =====
 
-function computeMappingFactors(r: number) {
-  const denom = R_SUN + LOG_B * r;
-  const f = LOG_A * Math.log(1 + LOG_B * r / R_SUN);
-  const fPrime = (LOG_A * LOG_B) / denom;
-  const fOverR = f / r;
-  return { f, fPrime, fOverR };
+export function physicalVelocityToRender(
+  vPhysical: [number, number, number],
+  _posPhysical: [number, number, number]
+): [number, number, number] {
+  return [vPhysical[0] * _linearScale, vPhysical[1] * _linearScale, vPhysical[2] * _linearScale];
 }
 
 export function renderVelocityToPhysical(
   vRender: [number, number, number],
-  posPhysical: [number, number, number]
+  _posPhysical: [number, number, number]
 ): [number, number, number] {
-  const r = Math.sqrt(posPhysical[0] * posPhysical[0] + posPhysical[1] * posPhysical[1] + posPhysical[2] * posPhysical[2]);
-  if (r < EPSILON) return [0, 0, 0];
-
-  const { fPrime, fOverR } = computeMappingFactors(r);
-
-  const ux = posPhysical[0] / r;
-  const uy = posPhysical[1] / r;
-  const uz = posPhysical[2] / r;
-
-  const vrDotU = vRender[0] * ux + vRender[1] * uy + vRender[2] * uz;
-  const vR_radial = vrDotU;
-  const vR_tangVec = [
-    vRender[0] - vR_radial * ux,
-    vRender[1] - vR_radial * uy,
-    vRender[2] - vR_radial * uz,
-  ];
-  const vR_tangLen = Math.sqrt(vR_tangVec[0] * vR_tangVec[0] + vR_tangVec[1] * vR_tangVec[1] + vR_tangVec[2] * vR_tangVec[2]);
-
-  const vP_radial = vR_radial / fPrime;
-
-  if (vR_tangLen < EPSILON) {
-    return [vP_radial * ux, vP_radial * uy, vP_radial * uz];
-  }
-
-  const vP_tangLen = vR_tangLen / fOverR;
-  const tux = vR_tangVec[0] / vR_tangLen;
-  const tuy = vR_tangVec[1] / vR_tangLen;
-  const tuz = vR_tangVec[2] / vR_tangLen;
-
-  return [
-    vP_radial * ux + vP_tangLen * tux,
-    vP_radial * uy + vP_tangLen * tuy,
-    vP_radial * uz + vP_tangLen * tuz,
-  ];
+  const inv = 1.0 / _linearScale;
+  return [vRender[0] * inv, vRender[1] * inv, vRender[2] * inv];
 }
 
-export function physicalVelocityToRender(
-  vPhysical: [number, number, number],
-  posPhysical: [number, number, number]
-): [number, number, number] {
-  const r = Math.sqrt(posPhysical[0] * posPhysical[0] + posPhysical[1] * posPhysical[1] + posPhysical[2] * posPhysical[2]);
-  if (r < EPSILON) return [0, 0, 0];
-
-  const { fPrime, fOverR } = computeMappingFactors(r);
-
-  const ux = posPhysical[0] / r;
-  const uy = posPhysical[1] / r;
-  const uz = posPhysical[2] / r;
-
-  const vpDotU = vPhysical[0] * ux + vPhysical[1] * uy + vPhysical[2] * uz;
-  const vP_radial = vpDotU;
-  const vP_tangVec = [
-    vPhysical[0] - vP_radial * ux,
-    vPhysical[1] - vP_radial * uy,
-    vPhysical[2] - vP_radial * uz,
-  ];
-
-  return [
-    vP_radial * fPrime * ux + vP_tangVec[0] * fOverR,
-    vP_radial * fPrime * uy + vP_tangVec[1] * fOverR,
-    vP_radial * fPrime * uz + vP_tangVec[2] * fOverR,
-  ];
-}
-
-// ===== 质量（仅线性映射，用于 display） =====
+// ===== 质量（仅用于 display） =====
 
 export function physicalMassToRender(mass: number): number {
   return mass * MASS_RENDER_SCALE;
@@ -170,4 +127,8 @@ export function physicalMassToRender(mass: number): number {
 
 export function renderMassToPhysical(mass: number): number {
   return mass / MASS_RENDER_SCALE;
+}
+
+export function getSimplifiedRadius(templateId: string): number {
+  return SIMPLIFIED_RADII[templateId] ?? 5;
 }
