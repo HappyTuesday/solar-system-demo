@@ -158,6 +158,22 @@ function EarthMoonCanvas() {
     const moonOrbitGeom = new THREE.TorusGeometry(MOON_SEMI_MAJOR * SCALE, 0.08, 16, 256);
     const moonOrbitMat = new THREE.MeshBasicMaterial({ color: 0x333355, transparent: true, opacity: 0.3 });
     const moonOrbit = new THREE.Mesh(moonOrbitGeom, moonOrbitMat);
+
+    // TorusGeometry defaults to XY plane. Moon orbits in a tilted plane near XZ in Three.js.
+    // Rotate to XZ plane, then apply orbital inclination and ascending node.
+    const qToXZ = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(1, 0, 0), -Math.PI / 2,
+    );
+    const qInc = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(1, 0, 0), MOON_INC,
+    );
+    const qLAN = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(0, 1, 0), MOON_LAN,
+    );
+    const orbitQ = new THREE.Quaternion();
+    orbitQ.multiplyQuaternions(qLAN, qInc);
+    orbitQ.multiply(qToXZ);
+    moonOrbit.setRotationFromQuaternion(orbitQ);
     scene.add(moonOrbit);
 
     const starsGeom = new THREE.BufferGeometry();
