@@ -12,7 +12,7 @@ const INITIAL_FRUSTUM = 35;
 const CAM_RADIUS = 5;
 
 const DISPLAY_RADII: Record<string, number> = {
-  sun: 0.25, jupiter: 0.65, saturn: 0.55, uranus: 0.45,
+  sun: 0.30, jupiter: 0.65, saturn: 0.55, uranus: 0.45,
   neptune: 0.4, earth: 0.18, venus: 0.18, mars: 0.15, mercury: 0.12,
 };
 
@@ -143,8 +143,8 @@ function ExploreCanvas() {
       const mat = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.1 });
       if (id === 'sun') {
         mat.color = new THREE.Color(0xffcc00);
-        mat.emissive = new THREE.Color(0xff8800);
-        mat.emissiveIntensity = 0.5;
+        mat.emissive = new THREE.Color(0xff6600);
+        mat.emissiveIntensity = 0.3;
       } else {
         mat.color = new THREE.Color(0xcccccc);
       }
@@ -157,10 +157,6 @@ function ExploreCanvas() {
         (tex) => {
           mat.map = tex;
           mat.color = new THREE.Color(0xffffff);
-          if (id === 'sun') {
-            mat.emissive = new THREE.Color(0xff6600);
-            mat.emissiveIntensity = 0.6;
-          }
           mat.needsUpdate = true;
         },
         undefined, () => {});

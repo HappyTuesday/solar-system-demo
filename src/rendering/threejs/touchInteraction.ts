@@ -146,7 +146,7 @@ function handleTouchMove(e: TouchEvent): void {
       setZoomDirect(newZ);
     }
 
-    panCamera(panDx, panDy);
+    panCamera(-panDx, -panDy);
 
     lastPinchDistance = dist;
     lastMidX = midX;
@@ -187,7 +187,7 @@ function handleWheel(e: WheelEvent): void {
     const dx = e.deltaX * WHEEL_PAN_SENSITIVITY;
     const dy = e.deltaY * WHEEL_PAN_SENSITIVITY;
     if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
-      panCamera(dx, dy);
+      panCamera(-dx, -dy);
     }
   }
 }

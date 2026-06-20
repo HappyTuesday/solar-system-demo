@@ -4,6 +4,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { REAL_DATA, HINT_ORDER } from '../../engine/constants';
 import { calculateErrors } from '../../engine/scoring';
+import { scaleUp, scaleDown } from '../../engine/coordinateTransform';
 import VelocityInputForm from './VelocityInputForm';
 import type { CelestialBody } from '../../types';
 import './ControlPanel.css';
@@ -39,6 +40,19 @@ export default function ControlPanel() {
     if (days < 1) return `${(days * 24).toFixed(1)} 小时`;
     if (days < 365) return `${days.toFixed(1)} 天`;
     return `${(days / 365).toFixed(2)} 年`;
+  };
+
+  const SUPERSCRIPTS: Record<string, string> = {
+    '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³',
+    '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+  };
+
+  const formatLinearScale = (s: number): string => {
+    const exp = Math.floor(Math.log10(s));
+    const mantissa = s / Math.pow(10, exp);
+    const expStr = String(exp);
+    const supExp = expStr.split('').map(c => SUPERSCRIPTS[c]).join('');
+    return `${mantissa.toFixed(1)}×10${supExp}`;
   };
 
   const handleComplete = () => {
@@ -227,6 +241,31 @@ export default function ControlPanel() {
             className="ctrl-btn small"
             onClick={() => adjustTimeScale(1e5)}
             disabled={!buildStore.startedAt || timeScale >= 1e6}
+          >
+            +
+          </button>
+        </div>
+      </div>
+
+      <div className="panel-section space-scale-row">
+        <span className="space-scale-label">空间比例</span>
+        <div className="space-scale-controls">
+          <button
+            className="ctrl-btn small"
+            onClick={() => {
+              const newScale = scaleDown();
+              uiStore.setLinearScaleValue(newScale);
+            }}
+          >
+            −
+          </button>
+          <span className="space-scale-value">{formatLinearScale(uiStore.linearScale)}</span>
+          <button
+            className="ctrl-btn small"
+            onClick={() => {
+              const newScale = scaleUp();
+              uiStore.setLinearScaleValue(newScale);
+            }}
           >
             +
           </button>

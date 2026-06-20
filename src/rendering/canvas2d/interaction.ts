@@ -24,8 +24,8 @@ export function handleWheel(
 
   // Two-finger pan (trackpad scroll)
   return {
-    offsetX: vp.offsetX + e.deltaX / vp.zoom,
-    offsetY: vp.offsetY - e.deltaY / vp.zoom,
+    offsetX: vp.offsetX - e.deltaX / vp.zoom,
+    offsetY: vp.offsetY + e.deltaY / vp.zoom,
     zoom: vp.zoom,
   };
 }

@@ -230,6 +230,34 @@
   color: #fff;
 }
 
+.space-scale-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.space-scale-label {
+  font-size: 11px;
+  color: #888;
+  white-space: nowrap;
+}
+
+.space-scale-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.space-scale-value {
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-weight: 600;
+  min-width: 80px;
+  text-align: center;
+  color: #fff;
+}
+
 .trail-controls {
   padding: 8px 0;
 }
