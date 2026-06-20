@@ -7,10 +7,10 @@ import { createBodyMesh, updateBodyMeshes, removeBodyMesh, bodyMeshMap } from '.
 import { createReferencePlane, updateRefPlaneOrientation, resizeRefPlane, addOrbitRing, clearOrbitRings } from '../../rendering/grid';
 import { getPlacementPoint, setBodyHighlight, createPreviewSphere, updateGuideArrow, removeGuideArrow, createFloatingPreview, removeFloatingPreview } from '../../rendering/interaction';
 import { TrailManager } from '../../rendering/trails';
-import { advanceSimulation, detectCollisions, vec3Length } from '../../engine/physics';
+import { detectCollisions, vec3Length } from '../../engine/physics';
 import { REAL_DATA, DRAG_CONFIG, HINT_ORDER } from '../../engine/constants';
 import { physicalRadiusToRender, physicalDistanceToRender, renderToPhysical, physicalVelocityToRender, physicalToRender } from '../../engine/coordinateTransform';
-import { setSharedCamera, setSharedCanvas, setObservationTargetId, setCurrentLookAt, getCurrentLookAt, setSharedScene } from '../../rendering/cameraRef';
+import { setSharedCamera, setSharedCanvas, setObservationTargetId, setCurrentLookAt, getCurrentLookAt, setSharedScene, setClickPosRender, getObservationTargetId } from '../../rendering/cameraRef';
 import { initTouchInteraction, destroyTouchInteraction } from '../../rendering/touchInteraction';
 import type { SceneSetup } from '../../rendering/setup';
 import * as THREE from 'three';
@@ -123,9 +123,7 @@ export default function Canvas3D() {
       handleResize(canvasRef.current!, renderer, camera);
 
       if (isRunning && bodies.length >= 2) {
-        const timeScale = useBuildStore.getState().timeScale;
-        const simDelta = advanceSimulation(bodies, dt, timeScale);
-        advanceSim(simDelta);
+        advanceSim(dt, 3);
         const events = detectCollisions(bodies);
         for (const event of events) {
           removeBody(event.bodyA.id);
@@ -147,7 +145,7 @@ export default function Canvas3D() {
       }
 
       // Camera tracking: center on observation target
-      const targetId = useUIStore.getState().observationTargetId;
+      const targetId = getObservationTargetId();
       if (targetId !== prevTargetIdRef.current) {
         prevTargetIdRef.current = targetId;
         const prevLookAt = getCurrentLookAt();
@@ -171,7 +169,6 @@ export default function Canvas3D() {
           setCurrentLookAt(rp);
           setObservationTargetId(targetId);
         } else {
-          useUIStore.getState().setObservationTargetId(null);
           setObservationTargetId(null);
           setCurrentLookAt([0, 0, 0]);
         }
@@ -306,8 +303,8 @@ export default function Canvas3D() {
       removeFloatingPreview(setup.scene);
       dragStartRef.current = point.clone();
       setIsPlacing(true);
-      useUIStore.getState().setClickPosRender([point.x, point.y, point.z]);
       useBuildStore.getState().pauseBuild();
+      setClickPosRender([point.x, point.y, point.z]);
 
       const data = REAL_DATA[selectedToolId];
       if (data) {
@@ -329,20 +326,18 @@ export default function Canvas3D() {
     if (!setup) return;
 
     // Update mouse coordinates for CoordinateDisplay
-    const canvasPos: [number, number] = [e.clientX, e.clientY];
     const mousePoint = getPlacementPoint(e.nativeEvent, setup.camera, canvasRef.current!);
     if (mousePoint) {
-      const renderPos: [number, number, number] = [mousePoint.x, mousePoint.y, mousePoint.z];
-      const physMousePos = renderToPhysical(renderPos);
-      useUIStore.getState().setMousePositions(canvasPos, renderPos, physMousePos);
+      const physMousePos = renderToPhysical([mousePoint.x, mousePoint.y, mousePoint.z]);
+      useUIStore.getState().setMousePositions([physMousePos[0], physMousePos[1]]);
     } else {
-      useUIStore.getState().setMousePositions(canvasPos, null, null);
+      useUIStore.getState().setMousePositions(null);
     }
 
     if (selectedToolId && selectedToolId !== 'sun' && !isPlacing) {
       const point = getPlacementPoint(e.nativeEvent, setup.camera, canvasRef.current!);
       if (point) {
-        setPreviewPosition([point.x, point.y, point.z]);
+        setPreviewPosition([point.x, point.y]);
         const data = REAL_DATA[selectedToolId];
         if (data) {
           const DEFAULT_COLORS: Record<string, number> = {

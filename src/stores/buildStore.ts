@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { BuildState, CelestialBody } from '../types';
 import { scoreBuild } from '../engine/scoring';
+import { advanceSimulation as engineAdvanceSimulation } from '../engine/physics';
 import { PHYSICAL_CONSTANTS } from '../engine/constants';
 
 let instanceCounter = 0;
@@ -27,11 +28,11 @@ interface BuildStore extends BuildState {
   pauseBuild: () => void;
   resumeBuild: () => void;
   completeBuild: () => { score: number; planetScores: Record<string, unknown> } | null;
-  placeBody: (templateId: string, position: [number, number, number], velocity: [number, number, number], mass: number, rotationSpeed?: number) => void;
+  placeBody: (templateId: string, position: [number, number, number], velocity: [number, number, number], mass: number, rotationSpeed?: number, rotationPhase?: number) => void;
   removeBody: (instanceId: string) => void;
   modifyMass: (instanceId: string, mass: number) => void;
   modifyRotationSpeed: (instanceId: string, speed: number) => void;
-  advanceSimulation: (simDelta: number) => void;
+  advanceSimulation: (dt: number, dimension?: 2 | 3) => void;
   resetBuild: () => void;
   loadSnapshot: (state: BuildState) => void;
   getSnapshot: () => BuildState;
@@ -87,7 +88,7 @@ export const useBuildStore = create<BuildStore>((set, get) => ({
     return { score: result.totalScore, planetScores: result.planetScores };
   },
 
-  placeBody: (templateId, position, velocity, mass, rotationSpeed?: number) => {
+  placeBody: (templateId, position, velocity, mass, rotationSpeed, rotationPhase) => {
     const body: CelestialBody = {
       id: generateBodyId(templateId),
       templateId,
@@ -96,6 +97,7 @@ export const useBuildStore = create<BuildStore>((set, get) => ({
       mass,
       placedAt: Date.now(),
       rotationSpeed: rotationSpeed ?? 0,
+      rotationPhase: rotationPhase ?? 0,
     };
 
     set(state => ({ bodies: [...state.bodies, body] }));
@@ -139,11 +141,11 @@ export const useBuildStore = create<BuildStore>((set, get) => ({
     set(s => ({ bodies: s.bodies.map(b => (b.id === instanceId ? { ...b, rotationSpeed: speed } : b)) }));
   },
 
-  advanceSimulation: (simDelta) => {
-    // simDelta 为真实物理模拟秒数（由 engine advanceSimulation 返回）
-    set(state => ({
-      simulatedTime: state.simulatedTime + simDelta,
-    }));
+  advanceSimulation: (dt, dimension = 2) => {
+    const state = get();
+    const bodies = state.bodies;
+    const simDelta = engineAdvanceSimulation(bodies, dt, state.timeScale, dimension);
+    set({ simulatedTime: state.simulatedTime + simDelta });
   },
 
   resetBuild: () => set({ ...initialState, id: generateId(), timeScale: PHYSICAL_CONSTANTS.timeScale }),

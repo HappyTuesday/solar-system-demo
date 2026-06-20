@@ -13,36 +13,22 @@ function formatRender(val: number): string {
   return val.toFixed(1);
 }
 
-function fmtThree(pos: [number, number, number] | null): string {
-  if (!pos) return '(—, —, —)';
-  return `(${formatRender(pos[0])}, ${formatRender(pos[1])}, ${formatRender(pos[2])})`;
-}
-
 function fmtTwo(pos: [number, number] | null): string {
   if (!pos) return '(—, —)';
   return `(${pos[0].toFixed(0)}, ${pos[1].toFixed(0)})`;
 }
 
 export default function CoordinateDisplay() {
-  const mouseCanvasPos = useUIStore(s => s.mouseCanvasPos);
-  const mouseRenderPos = useUIStore(s => s.mouseRenderPos);
   const mousePhysicalPos = useUIStore(s => s.mousePhysicalPos);
   const selectedToolId = useUIStore(s => s.selectedToolId);
-  const isPlacing = useUIStore(s => s.isPlacing);
 
-  const showBodySize = !!(selectedToolId && mouseCanvasPos);
+  const showBodySize = !!(selectedToolId && mousePhysicalPos);
 
   return (
     <div className="coordinate-display">
       <div className="coordinate-row">
-        <span className="label">[画布]</span>
-        <span className="value">{fmtTwo(mouseCanvasPos)}</span>
-        <span className="sep">|</span>
-        <span className="label">[渲染]</span>
-        <span className="value">{fmtThree(mouseRenderPos)}</span>
-        <span className="sep">|</span>
         <span className="label">[物理]</span>
-        <span className="value">{fmtThree(mousePhysicalPos)}</span>
+        <span className="value">{fmtTwo(mousePhysicalPos)}</span>
         <span className="unit">m</span>
       </div>
       {showBodySize && (

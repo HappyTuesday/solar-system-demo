@@ -1,11 +1,15 @@
 import * as THREE from 'three';
 import {
-  getSharedCamera, getZoom, getCurrentLookAt,
+  getSharedCamera, getZoom, getCurrentLookAt, setCurrentLookAt, setObservationTargetId,
 } from './cameraRef';
 import {
   setZoomDirect, panCamera, rotateCameraHorizontal, rotateCameraVertical,
 } from './setup';
+import { bodyMeshMap } from './bodies';
 import { useUIStore } from '../stores/uiStore';
+import { useBuildStore } from '../stores/buildStore';
+import { REAL_DATA } from '../engine/constants';
+import { setLinearScale, setSizeMultiplier } from '../engine/coordinateTransform';
 
 interface GestureEvent extends UIEvent {
   scale: number;
@@ -212,15 +216,82 @@ function handleGestureEnd(e: Event): void {
   startZoomInertia();
 }
 
-// ===== Mouse drag rotation =====
+// ===== Mouse drag rotation & body click =====
 
 let mouseRotating = false;
 let mouseRotateStartX = 0;
 let mouseRotateStartY = 0;
+let mouseHasMoved = false;
+const raycaster = new THREE.Raycaster();
+
+function getIntersectionFromMouse(e: MouseEvent): THREE.Intersection | null {
+  const camera = getSharedCamera();
+  const canvas = _canvas;
+  if (!camera || !canvas) return null;
+
+  const rect = canvas.getBoundingClientRect();
+  const mouse = new THREE.Vector2(
+    ((e.clientX - rect.left) / rect.width) * 2 - 1,
+    -((e.clientY - rect.top) / rect.height) * 2 + 1
+  );
+
+  raycaster.setFromCamera(mouse, camera);
+  const meshes = Array.from(bodyMeshMap.values()).map(bm => bm.mesh);
+  if (meshes.length === 0) return null;
+
+  const hits = raycaster.intersectObjects(meshes, false);
+  return hits.length > 0 ? hits[0] : null;
+}
+
+function handleBodyClick(intersection: THREE.Intersection): void {
+  let bodyId: string | null = null;
+  for (const [id, bm] of bodyMeshMap) {
+    if (bm.mesh === intersection.object) {
+      bodyId = id;
+      break;
+    }
+  }
+  if (!bodyId) return;
+
+  const bodies = useBuildStore.getState().bodies;
+  const body = bodies.find(b => b.id === bodyId);
+  if (!body) return;
+
+  const selectedBodyIds = useUIStore.getState().selectedBodyIds;
+  if (selectedBodyIds.includes(bodyId)) {
+    useUIStore.getState().setSelectedBodyIds([]);
+    setObservationTargetId(null);
+  } else {
+    useUIStore.getState().setSelectedBodyIds([bodyId]);
+    setObservationTargetId(bodyId);
+    const data = REAL_DATA[body.templateId];
+    if (data) {
+      const newScale = 1e-7;
+      setLinearScale(newScale);
+      useUIStore.getState().setLinearScaleValue(newScale);
+      const h = document.querySelector('.canvas-wrapper')?.clientHeight ?? 800;
+      const targetSize = (0.1 * h) / (2 * data.radius * newScale);
+      const v = Math.max(1, targetSize);
+      setSizeMultiplier(v);
+      useUIStore.getState().setSizeMultiplierValue(v);
+      const camera = getSharedCamera();
+      if (camera) {
+        const renderRadius = data.radius * newScale * v;
+        const dist = Math.min(4000, Math.max(150, renderRadius * 1.5));
+        const rp = [body.position[0] * newScale, body.position[1] * newScale, body.position[2] * newScale] as [number, number, number];
+        camera.position.set(rp[0], rp[1], rp[2] + dist);
+        camera.lookAt(new THREE.Vector3(rp[0], rp[1], rp[2]));
+        setCurrentLookAt([rp[0], rp[1], rp[2]]);
+      }
+    }
+  }
+}
 
 function handleMouseDownForRotation(e: MouseEvent): void {
   if (useUIStore.getState().selectedToolId) return;
+
   mouseRotating = true;
+  mouseHasMoved = false;
   mouseRotateStartX = e.clientX;
   mouseRotateStartY = e.clientY;
 }
@@ -229,6 +300,9 @@ function handleMouseMoveForRotation(e: MouseEvent): void {
   if (!mouseRotating) return;
   const dx = e.clientX - mouseRotateStartX;
   const dy = e.clientY - mouseRotateStartY;
+  if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+    mouseHasMoved = true;
+  }
   mouseRotateStartX = e.clientX;
   mouseRotateStartY = e.clientY;
 
@@ -241,7 +315,13 @@ function handleMouseMoveForRotation(e: MouseEvent): void {
   }
 }
 
-function handleMouseUpForRotation(): void {
+function handleMouseUpForRotation(e: MouseEvent): void {
+  if (mouseRotating && !mouseHasMoved && !useUIStore.getState().selectedToolId) {
+    const hit = getIntersectionFromMouse(e);
+    if (hit) {
+      handleBodyClick(hit);
+    }
+  }
   mouseRotating = false;
 }
 

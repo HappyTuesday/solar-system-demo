@@ -55,3 +55,13 @@ export function setSharedScene(scene: THREE.Scene | null): void {
 export function getSharedScene(): THREE.Scene | null {
   return _scene;
 }
+
+let _clickPosRender: [number, number, number] | null = null;
+
+export function setClickPosRender(pos: [number, number, number] | null): void {
+  _clickPosRender = pos;
+}
+
+export function getClickPosRender(): [number, number, number] | null {
+  return _clickPosRender;
+}

@@ -6,7 +6,7 @@ import { REAL_DATA, HINT_ORDER } from '../../engine/constants';
 import { renderToPhysical, scaleUp, scaleDown, scaleSizeUp, scaleSizeDown } from '../../engine/coordinateTransform';
 import { calculateErrors } from '../../engine/scoring';
 import { useRestore } from '../../hooks/useRestore';
-import { getSharedScene } from '../../rendering/cameraRef';
+import { getSharedScene, getClickPosRender, setClickPosRender, getObservationTargetId, setObservationTargetId } from '../../rendering/cameraRef';
 import { cleanupGizmos, removePreviewSphere } from '../../rendering/interaction';
 import VelocityInputForm from './VelocityInputForm';
 import type { CelestialBody } from '../../types';
@@ -170,7 +170,7 @@ export default function ControlPanel() {
               <span>鼠标位置</span>
               <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#888' }}>
                 {pos ? (() => {
-                  const physPos = renderToPhysical([pos[0], pos[1], pos[2]]);
+                  const physPos = renderToPhysical([pos[0], pos[1], 0]);
                   const dist = Math.sqrt(physPos[0] * physPos[0] + physPos[1] * physPos[1]);
                   return formatDistance(dist);
                 })() : '移动鼠标选择位置...'}
@@ -183,10 +183,12 @@ export default function ControlPanel() {
         );
       })()}
 
-      {uiStore.isPlacing && uiStore.selectedToolId && uiStore.clickPosRender && (() => {
+      {uiStore.isPlacing && uiStore.selectedToolId && (() => {
+        const clickPos = getClickPosRender();
+        if (!clickPos) return null;
+
         const handleConfirm = (speed: number, angleDeg: number) => {
           const toolId = uiStore.selectedToolId!;
-          const clickPos = uiStore.clickPosRender!;
           const physPos = renderToPhysical(clickPos);
           const angleRad = (angleDeg * Math.PI) / 180;
 
@@ -229,7 +231,7 @@ export default function ControlPanel() {
           }
           uiStore.setSelectedTool(null);
           uiStore.setIsPlacing(false);
-          uiStore.setClickPosRender(null);
+          setClickPosRender(null);
         };
 
         const handleCancel = () => {
@@ -238,13 +240,13 @@ export default function ControlPanel() {
             removePreviewSphere(scene);
           }
           uiStore.setIsPlacing(false);
-          uiStore.setClickPosRender(null);
+          setClickPosRender(null);
         };
 
         return (
           <VelocityInputForm
             templateId={uiStore.selectedToolId!}
-            clickPosRender={uiStore.clickPosRender!}
+            clickPosRender={clickPos}
             onConfirm={handleConfirm}
             onCancel={handleCancel}
           />
@@ -438,15 +440,15 @@ export default function ControlPanel() {
           <button
             className="ctrl-btn"
             onClick={() => {
-              if (uiStore.observationTargetId === selectedBody.id) {
-                uiStore.setObservationTargetId(null);
+              if (getObservationTargetId() === selectedBody.id) {
+                setObservationTargetId(null);
               } else {
-                uiStore.setObservationTargetId(selectedBody.id);
+                setObservationTargetId(selectedBody.id);
               }
             }}
             disabled={isRestoring}
           >
-            {uiStore.observationTargetId === selectedBody.id ? '取消观测目标' : '设为观测目标'}
+            {getObservationTargetId() === selectedBody.id ? '取消观测目标' : '设为观测目标'}
           </button>
           <button className="ctrl-btn danger" onClick={handleDeleteBody} disabled={isRestoring}>删除天体</button>
         </div>

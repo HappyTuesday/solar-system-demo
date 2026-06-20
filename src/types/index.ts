@@ -97,17 +97,13 @@ export interface UIState {
   selectedToolId: CelestialBodyId | null;
   selectedBodyIds: string[];
   supervisionMode: boolean;
-  observationTargetId: string | null;
   showHint: boolean;
   isPlacing: boolean;
   hintIndex: number;
   showScoreModal: boolean;
-  previewPosition: [number, number, number] | null;
+  previewPosition: [number, number] | null;
   previewSpeed: number;
-  mouseCanvasPos: [number, number] | null;
-  mouseRenderPos: [number, number, number] | null;
-  mousePhysicalPos: [number, number, number] | null;
+  mousePhysicalPos: [number, number] | null;
   showTrails: boolean;
   trailLength: number;
-  clickPosRender: [number, number, number] | null;
 }

@@ -4,7 +4,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { CELESTIAL_TEMPLATES, REAL_DATA } from '../../engine/constants';
 import { setBodyOutline } from '../../rendering/bodies';
 import { setLinearScale, setSizeMultiplier } from '../../engine/coordinateTransform';
-import { getSharedCamera, setCurrentLookAt } from '../../rendering/cameraRef';
+import { getSharedCamera, setCurrentLookAt, setObservationTargetId } from '../../rendering/cameraRef';
 import * as THREE from 'three';
 import type { CelestialBody } from '../../types';
 import './BodyStatusPanel.css';
@@ -110,7 +110,6 @@ export default function BodyStatusPanel() {
   const simulatedTime = useBuildStore(s => s.simulatedTime);
   const selectedBodyIds = useUIStore(s => s.selectedBodyIds);
   const setSelectedBodyIds = useUIStore(s => s.setSelectedBodyIds);
-  const setObservationTargetId = useUIStore(s => s.setObservationTargetId);
   const setSizeMultiplierValue = useUIStore(s => s.setSizeMultiplierValue);
 
   const [displayData, setDisplayData] = useState<BodyDisplayData[]>([]);
