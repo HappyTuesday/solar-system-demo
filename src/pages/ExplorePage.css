@@ -1,0 +1,14 @@
+.explore-page {
+  height: calc(100vh - var(--nav-height));
+  display: flex;
+  background: #000;
+}
+
+.explore-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+}

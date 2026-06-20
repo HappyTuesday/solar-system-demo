@@ -1,0 +1,75 @@
+.home-page {
+  height: calc(100vh - var(--nav-height));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  overflow-y: auto;
+}
+
+.home-hero {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.home-title {
+  font-size: 2.8rem;
+  color: var(--accent-gold);
+  margin-bottom: 12px;
+}
+
+.home-subtitle {
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+}
+
+.home-cards {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 48px;
+}
+
+.home-card {
+  display: block;
+  width: 280px;
+  padding: 28px 24px;
+  background: var(--bg-secondary);
+  border: 1px solid #2a2a4a;
+  border-radius: 12px;
+  text-decoration: none;
+  color: var(--text-primary);
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.home-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.home-card-icon {
+  font-size: 2rem;
+  margin-bottom: 12px;
+}
+
+.home-card h3 {
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+  color: var(--accent);
+}
+
+.home-card p {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.home-intro {
+  max-width: 640px;
+  text-align: center;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  font-size: 0.95rem;
+}

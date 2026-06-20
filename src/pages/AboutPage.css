@@ -1,0 +1,38 @@
+.about-page {
+  height: calc(100vh - var(--nav-height));
+  overflow-y: auto;
+  padding: 40px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.about-page h1 {
+  font-size: 1.8rem;
+  color: var(--accent-gold);
+  margin-bottom: 32px;
+}
+
+.about-page section {
+  margin-bottom: 28px;
+}
+
+.about-page h2 {
+  font-size: 1.1rem;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.about-page p,
+.about-page li {
+  color: var(--text-secondary);
+  line-height: 1.7;
+  font-size: 0.95rem;
+}
+
+.about-page ul {
+  padding-left: 20px;
+}
+
+.about-page li {
+  margin-bottom: 6px;
+}
