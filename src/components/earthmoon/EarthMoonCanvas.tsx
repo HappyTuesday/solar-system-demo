@@ -15,18 +15,15 @@ const MOON_INC = 0.0898;
 const MOON_LAN = 2.183;
 const MOON_AOP = 5.552;
 const MOON_EPOCH_JD = 2451545.0;
-const SCALE = 1 / 40000000;
+const SCALE_EM = 1 / 40000000;
 const INITIAL_FRUSTUM = 14;
+const CAM_RADIUS = 5;
 
 function makeOrthoCamera(w: number, h: number, halfSize: number) {
   const aspect = Math.max(w, 1) / Math.max(h, 1);
   const halfH = halfSize;
   const halfW = halfH * aspect;
-  const camera = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.001, 500);
-  camera.position.set(0, 15, 0);
-  camera.up.set(0, 0, 1);
-  camera.lookAt(0, 0, 0);
-  return camera;
+  return new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.001, 500);
 }
 
 function updateOrthoZoom(camera: THREE.OrthographicCamera, aspect: number, halfSize: number) {
@@ -39,51 +36,39 @@ function updateOrthoZoom(camera: THREE.OrthographicCamera, aspect: number, halfS
   camera.updateProjectionMatrix();
 }
 
-function projectSunToScreen(
-  camera: THREE.OrthographicCamera,
-  sunWorldDir: THREE.Vector3,
-): { x: number; y: number; isBehind: boolean } {
+function updateCamera(camera: THREE.OrthographicCamera, center: THREE.Vector3, theta: number, phi: number) {
+  const r = CAM_RADIUS;
+  camera.position.set(
+    center.x + r * Math.sin(phi) * Math.cos(theta),
+    center.y + r * Math.cos(phi),
+    center.z + r * Math.sin(phi) * Math.sin(theta),
+  );
+  camera.up.set(0, 0, 1);
+  camera.lookAt(center);
+}
+
+function projectSunToScreen(camera: THREE.OrthographicCamera, sunWorldDir: THREE.Vector3) {
   const pos = sunWorldDir.clone().normalize().multiplyScalar(80);
-  const screenPos = pos.clone().project(camera);
-
-  const sx = (screenPos.x * 0.5 + 0.5);
-  const sy = (-screenPos.y * 0.5 + 0.5);
-
-  const dx = sx - 0.5;
-  const dy = sy - 0.5;
-  const absDx = Math.abs(dx);
-  const absDy = Math.abs(dy);
-
-  let edgeX: number;
-  let edgeY: number;
-
-  if (absDx > absDy) {
-    edgeX = dx > 0 ? 0.98 : 0.02;
-    edgeY = 0.5 + dy * (0.48 / absDx);
-  } else {
-    edgeY = dy > 0 ? 0.98 : 0.02;
-    edgeX = 0.5 + dx * (0.48 / absDy);
-  }
-
-  return { x: edgeX, y: edgeY, isBehind: false };
+  const sp = pos.clone().project(camera);
+  const sx = (sp.x * 0.5 + 0.5);
+  const sy = (-sp.y * 0.5 + 0.5);
+  const dx = sx - 0.5, dy = sy - 0.5;
+  const adx = Math.abs(dx), ady = Math.abs(dy);
+  if (adx > ady) return { x: dx > 0 ? 0.98 : 0.02, y: 0.5 + dy * (0.48 / adx), isBehind: false };
+  return { x: 0.5 + dx * (0.48 / ady), y: dy > 0 ? 0.98 : 0.02, isBehind: false };
 }
 
 function EarthMoonCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
-  const zoomRef = useRef<number>(INITIAL_FRUSTUM);
-  const panRef = useRef({ x: 0, z: 0 });
+  const centerRef = useRef(new THREE.Vector3(0, 0, 0));
+  const thetaRef = useRef(0);
+  const phiRef = useRef(0.001);
+  const zoomRef = useRef(INITIAL_FRUSTUM);
   const bodyRefsRef = useRef<{ id: string; name: string; mesh: THREE.Mesh }[]>([]);
-  const sceneRef = useRef<{
-    scene: THREE.Scene;
-    camera: THREE.OrthographicCamera;
-    renderer: THREE.WebGLRenderer;
-    earth: THREE.Mesh;
-    moon: THREE.Mesh;
-    dirLight: THREE.DirectionalLight;
-  } | null>(null);
   const sunDirRef = useRef<THREE.Vector3>(new THREE.Vector3(1, 0, 0));
+  const sceneRef = useRef<{ scene: THREE.Scene; earth: THREE.Mesh; moon: THREE.Mesh; dirLight: THREE.DirectionalLight } | null>(null);
   const [offScreenEntries, setOffScreenEntries] = useState<OffScreenEntry[]>([]);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
   const [sunScreen, setSunScreen] = useState({ x: 0.5, y: 0.02 });
@@ -113,6 +98,7 @@ function EarthMoonCanvas() {
     scene.background = new THREE.Color(0x000008);
 
     const camera = makeOrthoCamera(w, h, INITIAL_FRUSTUM);
+    updateCamera(camera, centerRef.current, thetaRef.current, phiRef.current);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -121,8 +107,7 @@ function EarthMoonCanvas() {
     renderer.shadowMap.enabled = true;
     container.appendChild(renderer.domElement);
 
-    const ambientLight = new THREE.AmbientLight(0x334466, 0.9);
-    scene.add(ambientLight);
+    scene.add(new THREE.AmbientLight(0x334466, 0.9));
 
     const dirLight = new THREE.DirectionalLight(0xfff8e7, 2.5);
     dirLight.position.set(100, 0, 0);
@@ -157,21 +142,12 @@ function EarthMoonCanvas() {
     scene.add(moon);
     bodyRefsRef.current.push({ id: 'moon', name: '月球', mesh: moon });
 
-    const moonOrbitGeom = new THREE.TorusGeometry(MOON_SEMI_MAJOR * SCALE, 0.03, 8, 512);
+    const moonOrbitGeom = new THREE.TorusGeometry(MOON_SEMI_MAJOR * SCALE_EM, 0.03, 8, 512);
     const moonOrbitMat = new THREE.MeshBasicMaterial({ color: 0x556688, transparent: true, opacity: 0.6 });
     const moonOrbit = new THREE.Mesh(moonOrbitGeom, moonOrbitMat);
-
-    // TorusGeometry defaults to XY plane. Moon orbits in a tilted plane near XZ in Three.js.
-    // Rotate to XZ plane, then apply orbital inclination and ascending node.
-    const qToXZ = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(1, 0, 0), -Math.PI / 2,
-    );
-    const qInc = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(1, 0, 0), MOON_INC,
-    );
-    const qLAN = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(0, 1, 0), MOON_LAN,
-    );
+    const qToXZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    const qInc = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), MOON_INC);
+    const qLAN = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), MOON_LAN);
     const orbitQ = new THREE.Quaternion();
     orbitQ.multiplyQuaternions(qLAN, qInc);
     orbitQ.multiply(qToXZ);
@@ -182,154 +158,134 @@ function EarthMoonCanvas() {
     const starCount = 1500;
     const starsPos = new Float32Array(starCount * 3);
     for (let i = 0; i < starCount; i++) {
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
+      const a = Math.random() * Math.PI * 2;
+      const b = Math.acos(2 * Math.random() - 1);
       const r = 60 + Math.random() * 40;
-      starsPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      starsPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-      starsPos[i * 3 + 2] = r * Math.cos(phi);
+      starsPos[i * 3] = r * Math.sin(b) * Math.cos(a);
+      starsPos[i * 3 + 1] = r * Math.sin(b) * Math.sin(a);
+      starsPos[i * 3 + 2] = r * Math.cos(b);
     }
     starsGeom.setAttribute('position', new THREE.BufferAttribute(starsPos, 3));
     scene.add(new THREE.Points(starsGeom, new THREE.PointsMaterial({ color: 0xffffff, size: 0.15 })));
 
-    // --- Mouse interaction ---
+    // --- Input ---
     let isDragging = false;
     let prevMouse = { x: 0, y: 0 };
     const raycaster = new THREE.Raycaster();
 
-    const onMouseDown = (e: MouseEvent) => {
+    const onMD = (e: MouseEvent) => {
       if (e.button === 0) { isDragging = true; prevMouse = { x: e.clientX, y: e.clientY }; }
     };
-    const onMouseMove = (e: MouseEvent) => {
+    const onMM = (e: MouseEvent) => {
       if (!isDragging) return;
       const dx = e.clientX - prevMouse.x;
       const dy = e.clientY - prevMouse.y;
-      camera.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), -dx * 0.005);
-      camera.position.applyAxisAngle(new THREE.Vector3(1, 0, 0), -dy * 0.005);
-      camera.lookAt(panRef.current.x, 0, panRef.current.z);
+      thetaRef.current -= dx * 0.005;
+      phiRef.current = Math.max(0.001, Math.min(Math.PI - 0.001, phiRef.current + dy * 0.005));
+      updateCamera(camera, centerRef.current, thetaRef.current, phiRef.current);
       prevMouse = { x: e.clientX, y: e.clientY };
     };
-    const onMouseUp = (e: MouseEvent) => {
+    const onMU = (e: MouseEvent) => {
       if (!isDragging) return;
       isDragging = false;
-      const dx = Math.abs(e.clientX - prevMouse.x);
-      const dy = Math.abs(e.clientY - prevMouse.y);
-      if (dx < 3 && dy < 3) {
+      if (Math.abs(e.clientX - prevMouse.x) < 3 && Math.abs(e.clientY - prevMouse.y) < 3) {
         const rect = renderer.domElement.getBoundingClientRect();
         const mx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
         const my = -((e.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(new THREE.Vector2(mx, my), camera);
-        const intersects = raycaster.intersectObjects([earth, moon]);
-        if (intersects.length > 0) {
-          const obj = intersects[0].object;
-          useEarthMoonStore.getState().setSelectedBodyId(obj === earth ? 'earth' : 'moon');
+        const hits = raycaster.intersectObjects([earth, moon]);
+        if (hits.length > 0) {
+          useEarthMoonStore.getState().setSelectedBodyId(hits[0].object === earth ? 'earth' : 'moon');
         }
       }
     };
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const factor = e.deltaY > 0 ? 1.1 : 0.9;
-      const newHalf = Math.max(1, Math.min(60, zoomRef.current * factor));
-      zoomRef.current = newHalf;
+      zoomRef.current = Math.max(1, Math.min(60, zoomRef.current * factor));
       const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
-      updateOrthoZoom(camera, aspect, newHalf);
+      updateOrthoZoom(camera, aspect, zoomRef.current);
     };
 
-    // --- Touch & Trackpad support ---
-    let touches0: { x: number; y: number } | null = null;
-    let touches1: { x: number; y: number } | null = null;
-    let touchDist0 = 0;
+    // Touch
     let touchMid0: { x: number; y: number } | null = null;
+    let touchDist0 = 0;
 
-    const onTouchStart = (e: TouchEvent) => {
+    const onTS = (e: TouchEvent) => {
       if (e.touches.length === 1) {
-        touches0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        touches1 = null;
-        touchMid0 = null;
+        touchMid0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        touchDist0 = 0;
       } else if (e.touches.length >= 2) {
-        touches0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        touches1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
-        touchDist0 = Math.hypot(touches1.x - touches0.x, touches1.y - touches0.y);
-        touchMid0 = { x: (touches0.x + touches1.x) / 2, y: (touches0.y + touches1.y) / 2 };
+        const x0 = e.touches[0].clientX, y0 = e.touches[0].clientY;
+        const x1 = e.touches[1].clientX, y1 = e.touches[1].clientY;
+        touchMid0 = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
+        touchDist0 = Math.hypot(x1 - x0, y1 - y0);
       }
     };
-
-    const onTouchMove = (e: TouchEvent) => {
+    const onTM = (e: TouchEvent) => {
       e.preventDefault();
-      if (e.touches.length === 1 && touches0 && !touches1) {
-        const dx = e.touches[0].clientX - touches0.x;
-        const dy = e.touches[0].clientY - touches0.y;
-        camera.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), -dx * 0.005);
-        camera.position.applyAxisAngle(new THREE.Vector3(1, 0, 0), -dy * 0.005);
-        camera.lookAt(panRef.current.x, 0, panRef.current.z);
-        touches0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      } else if (e.touches.length >= 2) {
-        const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
-        const newDist = Math.hypot(t1.x - t0.x, t1.y - t0.y);
-        const mid = { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 };
+      if (e.touches.length === 1 && touchMid0 && touchDist0 === 0) {
+        const dx = e.touches[0].clientX - touchMid0.x;
+        const dy = e.touches[0].clientY - touchMid0.y;
+        thetaRef.current -= dx * 0.005;
+        phiRef.current = Math.max(0.001, Math.min(Math.PI - 0.001, phiRef.current + dy * 0.005));
+        updateCamera(camera, centerRef.current, thetaRef.current, phiRef.current);
+        touchMid0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else if (e.touches.length >= 2 && touchMid0) {
+        const t0x = e.touches[0].clientX, t0y = e.touches[0].clientY;
+        const t1x = e.touches[1].clientX, t1y = e.touches[1].clientY;
+        const curMid = { x: (t0x + t1x) / 2, y: (t0y + t1y) / 2 };
+        const curDist = Math.hypot(t1x - t0x, t1y - t0y);
 
         if (touchDist0 > 0) {
-          const factor = newDist / touchDist0;
-          const newHalf = Math.max(1, Math.min(60, zoomRef.current / factor));
-          zoomRef.current = newHalf;
+          const factor = curDist / touchDist0;
+          zoomRef.current = Math.max(1, Math.min(60, zoomRef.current / factor));
           const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
-          updateOrthoZoom(camera, aspect, newHalf);
+          updateOrthoZoom(camera, aspect, zoomRef.current);
         }
 
-        if (touchMid0) {
-          const dx = mid.x - touchMid0.x;
-          const dy = mid.y - touchMid0.y;
-          const wv = container.clientWidth || 1;
-          const hv = container.clientHeight || 1;
-          const halfH = zoomRef.current;
-          const halfW = halfH * (wv / hv);
-          const scaleX = (halfW * 2) / wv;
-          const scaleY = (halfH * 2) / hv;
-          panRef.current.x -= dx * scaleX;
-          panRef.current.z += dy * scaleY;
-          camera.position.x = panRef.current.x;
-          camera.position.z = panRef.current.z;
-          camera.lookAt(panRef.current.x, 0, panRef.current.z);
-        }
+        const dMidX = curMid.x - touchMid0.x;
+        const dMidY = curMid.y - touchMid0.y;
+        const cw = container.clientWidth || 1;
+        const ch = container.clientHeight || 1;
+        const halfH = zoomRef.current;
+        const halfW = halfH * (cw / ch);
+        const scaleX = (halfW * 2) / cw;
+        const scaleY = (halfH * 2) / ch;
 
-        touches0 = t0;
-        touches1 = t1;
-        touchDist0 = newDist;
-        touchMid0 = mid;
+        const dir = camera.position.clone().sub(centerRef.current).normalize();
+        const right = new THREE.Vector3().crossVectors(dir, camera.up).normalize();
+        const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+
+        centerRef.current.addScaledVector(right, -dMidX * scaleX);
+        centerRef.current.addScaledVector(up, -dMidY * scaleY);
+        updateCamera(camera, centerRef.current, thetaRef.current, phiRef.current);
+
+        touchMid0 = curMid;
+        touchDist0 = curDist;
       }
     };
+    const onTE = () => { touchMid0 = null; touchDist0 = 0; };
 
-    const onTouchEnd = () => {
-      touches0 = null;
-      touches1 = null;
-      touchDist0 = 0;
-      touchMid0 = null;
-    };
-
-    let gestureZoomStart = 0;
-    const onGestureStart = (e: Event) => {
-      gestureZoomStart = (e as any).scale || 1;
-    };
-    const onGestureChange = (e: Event) => {
-      const scale = (e as any).scale || 1;
-      const factor = scale / gestureZoomStart;
-      const newHalf = Math.max(1, Math.min(60, zoomRef.current / factor));
-      zoomRef.current = newHalf;
+    let gestureScale0 = 0;
+    const onGS = (e: Event) => { gestureScale0 = (e as any).scale || 1; };
+    const onGC = (e: Event) => {
+      const s = (e as any).scale || 1;
+      zoomRef.current = Math.max(1, Math.min(60, zoomRef.current / (s / gestureScale0)));
       const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
-      updateOrthoZoom(camera, aspect, newHalf);
-      gestureZoomStart = scale;
+      updateOrthoZoom(camera, aspect, zoomRef.current);
+      gestureScale0 = s;
     };
 
-    renderer.domElement.addEventListener('mousedown', onMouseDown);
-    renderer.domElement.addEventListener('mousemove', onMouseMove);
-    renderer.domElement.addEventListener('mouseup', onMouseUp);
+    renderer.domElement.addEventListener('mousedown', onMD);
+    renderer.domElement.addEventListener('mousemove', onMM);
+    renderer.domElement.addEventListener('mouseup', onMU);
     renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
-    renderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
-    renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false });
-    renderer.domElement.addEventListener('touchend', onTouchEnd);
-    renderer.domElement.addEventListener('gesturestart', onGestureStart);
-    renderer.domElement.addEventListener('gesturechange', onGestureChange);
+    renderer.domElement.addEventListener('touchstart', onTS, { passive: false });
+    renderer.domElement.addEventListener('touchmove', onTM, { passive: false });
+    renderer.domElement.addEventListener('touchend', onTE);
+    renderer.domElement.addEventListener('gesturestart', onGS);
+    renderer.domElement.addEventListener('gesturechange', onGC);
 
     const onResize = () => {
       const rw = container.clientWidth;
@@ -377,7 +333,7 @@ function EarthMoonCanvas() {
       const moonEVal = solveKepler(moonMmod, MOON_ECC);
       const moonNu = trueAnomaly(moonEVal, MOON_ECC);
       const moonSV = stateVectors(MOON_SEMI_MAJOR, MOON_ECC, MOON_INC, MOON_LAN, MOON_AOP, moonNu, MU_EARTH);
-      moon.position.set(moonSV.position[0] * SCALE, moonSV.position[2] * SCALE, -moonSV.position[1] * SCALE);
+      moon.position.set(moonSV.position[0] * SCALE_EM, moonSV.position[2] * SCALE_EM, -moonSV.position[1] * SCALE_EM);
 
       const earthToMoon: [number, number, number] = [moonSV.position[0], moonSV.position[1], moonSV.position[2]];
       const phase = getMoonPhase(sunFromEarth, earthToMoon);
@@ -399,8 +355,7 @@ function EarthMoonCanvas() {
       }
 
       if (frameCount % 10 === 0) {
-        const ss = projectSunToScreen(camera, sunDirRef.current);
-        setSunScreen({ x: ss.x, y: ss.y });
+        setSunScreen(projectSunToScreen(camera, sunDirRef.current));
         updateOffScreen();
       }
 
@@ -408,49 +363,30 @@ function EarthMoonCanvas() {
       animRef.current = requestAnimationFrame(animate);
     };
     animRef.current = requestAnimationFrame(animate);
-    sceneRef.current = { scene, camera, renderer, earth, moon, dirLight };
+    sceneRef.current = { scene, earth, moon, dirLight };
 
     return () => {
       cancelAnimationFrame(animRef.current);
       window.removeEventListener('resize', onResize);
-      renderer.domElement.removeEventListener('mousedown', onMouseDown);
-      renderer.domElement.removeEventListener('mousemove', onMouseMove);
-      renderer.domElement.removeEventListener('mouseup', onMouseUp);
-      renderer.domElement.removeEventListener('wheel', onWheel);
-      renderer.domElement.removeEventListener('touchstart', onTouchStart);
-      renderer.domElement.removeEventListener('touchmove', onTouchMove);
-      renderer.domElement.removeEventListener('touchend', onTouchEnd);
-      renderer.domElement.removeEventListener('gesturestart', onGestureStart);
-      renderer.domElement.removeEventListener('gesturechange', onGestureChange);
       renderer.dispose();
       container.removeChild(renderer.domElement);
     };
   }, [updateOffScreen]);
 
   useEffect(() => {
-    const jd = julianDate(Date.now());
-    const eclipses = predictEclipses(jd, 10);
-    useEarthMoonStore.getState().setEclipseDates(eclipses);
+    useEarthMoonStore.getState().setEclipseDates(predictEclipses(julianDate(Date.now()), 10));
   }, []);
 
   return (
     <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
       <OffScreenIndicator entries={offScreenEntries} containerWidth={containerSize.w} containerHeight={containerSize.h} />
-
-      <div
-        style={{
-          position: 'absolute',
-          left: sunScreen.x * containerSize.w - containerSize.w * 0.12,
-          top: sunScreen.y * containerSize.h - containerSize.h * 0.12,
-          width: containerSize.w * 0.24,
-          height: containerSize.h * 0.24,
-          background: 'radial-gradient(circle, rgba(255, 248, 220, 0.6) 0%, rgba(255, 220, 100, 0.25) 30%, rgba(255, 180, 50, 0.05) 60%, transparent 100%)',
-          borderRadius: '50%',
-          pointerEvents: 'none',
-          zIndex: 5,
-          filter: 'blur(2px)',
-        }}
-      />
+      <div style={{
+        position: 'absolute', left: sunScreen.x * containerSize.w - containerSize.w * 0.12,
+        top: sunScreen.y * containerSize.h - containerSize.h * 0.12,
+        width: containerSize.w * 0.24, height: containerSize.h * 0.24,
+        background: 'radial-gradient(circle, rgba(255,248,220,0.6) 0%, rgba(255,220,100,0.25) 30%, rgba(255,180,50,0.05) 60%, transparent 100%)',
+        borderRadius: '50%', pointerEvents: 'none', zIndex: 5, filter: 'blur(2px)',
+      }} />
     </div>
   );
 }

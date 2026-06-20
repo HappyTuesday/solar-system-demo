@@ -11,7 +11,7 @@ import {
 } from '../../rendering/canvas2d/setup';
 import { drawBody, drawPreviewCircle, hitTestBody } from '../../rendering/canvas2d/bodies';
 import { drawGrid } from '../../rendering/canvas2d/grid';
-import { handleWheel, handleTouchStart, handleTouchMove, handleTouchEnd } from '../../rendering/canvas2d/interaction';
+import { handleWheel } from '../../rendering/canvas2d/interaction';
 
 function BuilderCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -19,6 +19,16 @@ function BuilderCanvas() {
   const vpRef = useRef<Viewport>(createViewport());
   const animRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
+
+  // Touch gesture state
+  const gestureRef = useRef<{
+    initialMidX: number;
+    initialMidY: number;
+    initialDist: number;
+    initialZoom: number;
+    initialOffsetX: number;
+    initialOffsetY: number;
+  } | null>(null);
 
   const bodies = useBuildStore(s => s.bodies);
   const isRunning = useBuildStore(s => s.isRunning);
@@ -169,24 +179,72 @@ function BuilderCanvas() {
       onWheel={(e) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const ox = e.clientX - rect.left;
+        const oy = e.clientY - rect.top;
         vpRef.current = handleWheel(
-          e as unknown as WheelEvent, vpRef.current,
-          canvas.clientWidth, canvas.clientHeight,
-        );
+          { offsetX: ox, offsetY: oy, deltaY: (e as unknown as WheelEvent).deltaY } as WheelEvent,
+          vpRef.current, canvas.clientWidth, canvas.clientHeight);
       }}
       onTouchStart={(e) => {
         const canvas = canvasRef.current;
-        if (!canvas) return;
-        const result = handleTouchStart(e, vpRef.current, canvas.clientWidth, canvas.clientHeight);
-        if (result) vpRef.current = result;
+        if (!canvas || e.touches.length !== 2) { gestureRef.current = null; return; }
+        const rect = canvas.getBoundingClientRect();
+        const t0 = { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+        const t1 = { x: e.touches[1].clientX - rect.left, y: e.touches[1].clientY - rect.top };
+        const mx = (t0.x + t1.x) / 2;
+        const my = (t0.y + t1.y) / 2;
+        const dx = t1.x - t0.x;
+        const dy = t1.y - t0.y;
+        gestureRef.current = {
+          initialMidX: mx,
+          initialMidY: my,
+          initialDist: Math.sqrt(dx * dx + dy * dy),
+          initialZoom: vpRef.current.zoom,
+          initialOffsetX: vpRef.current.offsetX,
+          initialOffsetY: vpRef.current.offsetY,
+        };
       }}
       onTouchMove={(e) => {
+        const g = gestureRef.current;
         const canvas = canvasRef.current;
-        if (!canvas) return;
-        const result = handleTouchMove(e, vpRef.current, canvas.clientWidth, canvas.clientHeight);
-        if (result) vpRef.current = result;
+        if (!g || !canvas || e.touches.length !== 2) return;
+        e.preventDefault();
+
+        const rect = canvas.getBoundingClientRect();
+        const t0 = { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+        const t1 = { x: e.touches[1].clientX - rect.left, y: e.touches[1].clientY - rect.top };
+        const mx = (t0.x + t1.x) / 2;
+        const my = (t0.y + t1.y) / 2;
+        const dx = t1.x - t0.x;
+        const dy = t1.y - t0.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        const distRatio = dist / g.initialDist;
+        let newZoom = g.initialZoom * distRatio;
+        newZoom = Math.max(0.05, Math.min(20, newZoom));
+
+        // Zoom: keep the INITIAL midpoint fixed in world space
+        const cssW = canvas.clientWidth;
+        const cssH = canvas.clientHeight;
+        const cx = cssW / 2;
+        const cy = cssH / 2;
+        const [wx, wy] = screenToRender(g.initialMidX, g.initialMidY,
+          { offsetX: g.initialOffsetX, offsetY: g.initialOffsetY, zoom: g.initialZoom },
+          cssW, cssH);
+        let newOffsetX = (g.initialMidX - cx) / newZoom - wx;
+        let newOffsetY = -(g.initialMidY - cy) / newZoom - wy;
+
+        // Pan: additional offset from finger midpoint movement
+        const midDx = mx - g.initialMidX;
+        const midDy = my - g.initialMidY;
+        newOffsetX += midDx / newZoom;
+        // Fingers move down (midDy > 0) → content moves down → offsetY decreases
+        newOffsetY -= midDy / newZoom;
+
+        vpRef.current = { offsetX: newOffsetX, offsetY: newOffsetY, zoom: newZoom };
       }}
-      onTouchEnd={() => handleTouchEnd()}
+      onTouchEnd={() => { gestureRef.current = null; }}
       onContextMenu={e => e.preventDefault()}
     />
   );

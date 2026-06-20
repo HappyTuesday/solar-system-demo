@@ -9,6 +9,7 @@ import OffScreenIndicator from './OffScreenIndicator';
 const SCALE = 1 / 1.496e11;
 const ORBIT_LINE_POINTS = 256;
 const INITIAL_FRUSTUM = 35;
+const CAM_RADIUS = 5;
 
 const DISPLAY_RADII: Record<string, number> = {
   sun: 0.25, jupiter: 0.65, saturn: 0.55, uranus: 0.45,
@@ -19,11 +20,7 @@ function makeOrthoCamera(w: number, h: number, halfSize: number) {
   const aspect = Math.max(w, 1) / Math.max(h, 1);
   const halfH = halfSize;
   const halfW = halfH * aspect;
-  const camera = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.01, 500);
-  camera.position.set(0, 5, 0);
-  camera.up.set(0, 0, 1);
-  camera.lookAt(0, 0, 0);
-  return camera;
+  return new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.01, 500);
 }
 
 function updateOrthoZoom(camera: THREE.OrthographicCamera, aspect: number, halfSize: number) {
@@ -34,6 +31,22 @@ function updateOrthoZoom(camera: THREE.OrthographicCamera, aspect: number, halfS
   camera.top = halfH;
   camera.bottom = -halfH;
   camera.updateProjectionMatrix();
+}
+
+function updateCamera(
+  camera: THREE.OrthographicCamera,
+  center: THREE.Vector3,
+  theta: number,
+  phi: number,
+) {
+  const r = CAM_RADIUS;
+  camera.position.set(
+    center.x + r * Math.sin(phi) * Math.cos(theta),
+    center.y + r * Math.cos(phi),
+    center.z + r * Math.sin(phi) * Math.sin(theta),
+  );
+  camera.up.set(0, 0, 1);
+  camera.lookAt(center);
 }
 
 function computeBodyPosition(templateId: string, jd: number): [number, number, number] | null {
@@ -49,10 +62,7 @@ function computeBodyPosition(templateId: string, jd: number): [number, number, n
   return [sv.position[0] * SCALE, sv.position[2] * SCALE, -sv.position[1] * SCALE];
 }
 
-function createOrbitLine(
-  templateId: string,
-  color: number,
-): THREE.Line {
+function createOrbitLine(templateId: string, color: number): THREE.Line {
   const data = REAL_DATA[templateId];
   const points: THREE.Vector3[] = [];
   for (let i = 0; i <= ORBIT_LINE_POINTS; i++) {
@@ -62,23 +72,20 @@ function createOrbitLine(
       data.orbital!.longitudeAscendingNode, data.orbital!.argumentOfPeriapsis,
       nu, MU_SUN,
     );
-    points.push(new THREE.Vector3(
-      sv.position[0] * SCALE,
-      sv.position[2] * SCALE,
-      -sv.position[1] * SCALE,
-    ));
+    points.push(new THREE.Vector3(sv.position[0] * SCALE, sv.position[2] * SCALE, -sv.position[1] * SCALE));
   }
   const geom = new THREE.BufferGeometry().setFromPoints(points);
-  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55, linewidth: 1 });
-  return new THREE.Line(geom, mat);
+  return new THREE.Line(geom, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55, linewidth: 1 }));
 }
 
 function ExploreCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
-  const zoomRef = useRef<number>(INITIAL_FRUSTUM);
-  const panRef = useRef({ x: 0, z: 0 });
+  const centerRef = useRef(new THREE.Vector3(0, 0, 0));
+  const thetaRef = useRef(0);
+  const phiRef = useRef(0.001);
+  const zoomRef = useRef(INITIAL_FRUSTUM);
   const bodyRefsRef = useRef<{ id: string; name: string; mesh: THREE.Mesh }[]>([]);
   const [offScreenEntries, setOffScreenEntries] = useState<OffScreenEntry[]>([]);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
@@ -108,6 +115,7 @@ function ExploreCanvas() {
     scene.background = new THREE.Color(0x050510);
 
     const camera = makeOrthoCamera(w, h, INITIAL_FRUSTUM);
+    updateCamera(camera, centerRef.current, thetaRef.current, phiRef.current);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -115,10 +123,8 @@ function ExploreCanvas() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
-    const ambientLight = new THREE.AmbientLight(0x444466, 1.0);
-    scene.add(ambientLight);
-    const sunLight = new THREE.PointLight(0xffeedd, 2, 0, 0);
-    scene.add(sunLight);
+    scene.add(new THREE.AmbientLight(0x444466, 1.0));
+    scene.add(new THREE.PointLight(0xffeedd, 2, 0, 0));
 
     const bodyMeshes = new Map<string, THREE.Mesh>();
     const allIds = ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
@@ -132,7 +138,6 @@ function ExploreCanvas() {
     for (const id of allIds) {
       const data = REAL_DATA[id];
       if (!data) continue;
-
       const r = DISPLAY_RADII[id] || 0.25;
       const geom = new THREE.SphereGeometry(r, 48, 48);
       const mat = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.1 });
@@ -148,48 +153,44 @@ function ExploreCanvas() {
       bodyMeshes.set(id, mesh);
       bodyRefsRef.current.push({ id, name: data.name, mesh });
 
-      const texPath = `/textures/${id}.jpg`;
-      loader.load(texPath, (tex) => { mat.map = tex; mat.color = new THREE.Color(0xffffff); mat.needsUpdate = true; }, undefined, () => {});
+      loader.load(`/textures/${id}.jpg`,
+        (tex) => { mat.map = tex; mat.color = new THREE.Color(0xffffff); mat.needsUpdate = true; },
+        undefined, () => {});
 
       if (data.semiMajorAxis && data.orbital && id !== 'sun') {
-        const orbitLine = createOrbitLine(id, orbitColors[id] || 0x556688);
-        scene.add(orbitLine);
+        scene.add(createOrbitLine(id, orbitColors[id] || 0x556688));
       }
     }
 
-    // --- Mouse interaction ---
+    // --- Input ---
     let isDragging = false;
     let prevMouse = { x: 0, y: 0 };
     const raycaster = new THREE.Raycaster();
 
-    const onMouseDown = (e: MouseEvent) => {
+    const onMD = (e: MouseEvent) => {
       if (e.button === 0) { isDragging = true; prevMouse = { x: e.clientX, y: e.clientY }; }
     };
-    const onMouseMove = (e: MouseEvent) => {
+    const onMM = (e: MouseEvent) => {
       if (!isDragging) return;
       const dx = e.clientX - prevMouse.x;
       const dy = e.clientY - prevMouse.y;
-      camera.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), -dx * 0.005);
-      camera.position.applyAxisAngle(new THREE.Vector3(1, 0, 0), -dy * 0.005);
-      camera.lookAt(panRef.current.x, 0, panRef.current.z);
+      thetaRef.current -= dx * 0.005;
+      phiRef.current = Math.max(0.001, Math.min(Math.PI - 0.001, phiRef.current + dy * 0.005));
+      updateCamera(camera, centerRef.current, thetaRef.current, phiRef.current);
       prevMouse = { x: e.clientX, y: e.clientY };
     };
-    const onMouseUp = (e: MouseEvent) => {
+    const onMU = (e: MouseEvent) => {
       if (!isDragging) return;
       isDragging = false;
-      const dx = Math.abs(e.clientX - prevMouse.x);
-      const dy = Math.abs(e.clientY - prevMouse.y);
-      if (dx < 3 && dy < 3) {
+      if (Math.abs(e.clientX - prevMouse.x) < 3 && Math.abs(e.clientY - prevMouse.y) < 3) {
         const rect = renderer.domElement.getBoundingClientRect();
         const mx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
         const my = -((e.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(new THREE.Vector2(mx, my), camera);
-        const meshes = Array.from(bodyMeshes.values());
-        const intersects = raycaster.intersectObjects(meshes);
-        if (intersects.length > 0) {
-          const obj = intersects[0].object;
+        const hits = raycaster.intersectObjects(Array.from(bodyMeshes.values()));
+        if (hits.length > 0) {
           for (const [id, m] of bodyMeshes) {
-            if (m === obj) { useExploreStore.getState().setSelectedBodyId(id); break; }
+            if (m === hits[0].object) { useExploreStore.getState().setSelectedBodyId(id); break; }
           }
         } else {
           useExploreStore.getState().setSelectedBodyId(null);
@@ -199,109 +200,94 @@ function ExploreCanvas() {
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const factor = e.deltaY > 0 ? 1.1 : 0.9;
-      const newHalf = Math.max(0.5, Math.min(120, zoomRef.current * factor));
-      zoomRef.current = newHalf;
+      zoomRef.current = Math.max(0.5, Math.min(120, zoomRef.current * factor));
       const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
-      updateOrthoZoom(camera, aspect, newHalf);
+      updateOrthoZoom(camera, aspect, zoomRef.current);
     };
 
-    // --- Touch & Trackpad support ---
-    let touches0: { x: number; y: number } | null = null;
-    let touches1: { x: number; y: number } | null = null;
-    let touchDist0 = 0;
+    // Touch
     let touchMid0: { x: number; y: number } | null = null;
+    let touchDist0 = 0;
 
-    const onTouchStart = (e: TouchEvent) => {
+    const onTS = (e: TouchEvent) => {
       if (e.touches.length === 1) {
-        touches0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        touches1 = null;
-        touchMid0 = null;
+        touchMid0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        touchDist0 = 0;
       } else if (e.touches.length >= 2) {
-        touches0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        touches1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
-        touchDist0 = Math.hypot(touches1.x - touches0.x, touches1.y - touches0.y);
-        touchMid0 = { x: (touches0.x + touches1.x) / 2, y: (touches0.y + touches1.y) / 2 };
+        const x0 = e.touches[0].clientX, y0 = e.touches[0].clientY;
+        const x1 = e.touches[1].clientX, y1 = e.touches[1].clientY;
+        touchMid0 = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
+        touchDist0 = Math.hypot(x1 - x0, y1 - y0);
       }
     };
-
-    const onTouchMove = (e: TouchEvent) => {
+    const onTM = (e: TouchEvent) => {
       e.preventDefault();
-      if (e.touches.length === 1 && touches0 && !touches1) {
-        const dx = e.touches[0].clientX - touches0.x;
-        const dy = e.touches[0].clientY - touches0.y;
-        camera.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), -dx * 0.005);
-        camera.position.applyAxisAngle(new THREE.Vector3(1, 0, 0), -dy * 0.005);
-        camera.lookAt(panRef.current.x, 0, panRef.current.z);
-        touches0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      } else if (e.touches.length >= 2) {
-        const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
-        const newDist = Math.hypot(t1.x - t0.x, t1.y - t0.y);
-        const mid = { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 };
+      if (e.touches.length === 1 && touchMid0 && touchDist0 === 0) {
+        const dx = e.touches[0].clientX - touchMid0.x;
+        const dy = e.touches[0].clientY - touchMid0.y;
+        thetaRef.current -= dx * 0.005;
+        phiRef.current = Math.max(0.001, Math.min(Math.PI - 0.001, phiRef.current + dy * 0.005));
+        updateCamera(camera, centerRef.current, thetaRef.current, phiRef.current);
+        touchMid0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else if (e.touches.length >= 2 && touchMid0) {
+        const t0x = e.touches[0].clientX, t0y = e.touches[0].clientY;
+        const t1x = e.touches[1].clientX, t1y = e.touches[1].clientY;
+        const curMid = { x: (t0x + t1x) / 2, y: (t0y + t1y) / 2 };
+        const curDist = Math.hypot(t1x - t0x, t1y - t0y);
 
         // Zoom
         if (touchDist0 > 0) {
-          const factor = newDist / touchDist0;
-          const newHalf = Math.max(0.5, Math.min(120, zoomRef.current / factor));
-          zoomRef.current = newHalf;
+          const factor = curDist / touchDist0;
+          zoomRef.current = Math.max(0.5, Math.min(120, zoomRef.current / factor));
           const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
-          updateOrthoZoom(camera, aspect, newHalf);
+          updateOrthoZoom(camera, aspect, zoomRef.current);
         }
 
-        // Pan (two-finger same-direction drag)
-        if (touchMid0) {
-          const dx = mid.x - touchMid0.x;
-          const dy = mid.y - touchMid0.y;
-          const w = container.clientWidth || 1;
-          const h = container.clientHeight || 1;
-          const halfH = zoomRef.current;
-          const halfW = halfH * (w / h);
-          const scaleX = (halfW * 2) / w;
-          const scaleY = (halfH * 2) / h;
-          panRef.current.x -= dx * scaleX;
-          panRef.current.z += dy * scaleY;
-          camera.position.x = panRef.current.x;
-          camera.position.z = panRef.current.z;
-          camera.lookAt(panRef.current.x, 0, panRef.current.z);
-        }
+        // Pan (midpoint delta in screen space → world space)
+        const dMidX = curMid.x - touchMid0.x;
+        const dMidY = curMid.y - touchMid0.y;
+        const cw = container.clientWidth || 1;
+        const ch = container.clientHeight || 1;
+        const halfH = zoomRef.current;
+        const halfW = halfH * (cw / ch);
+        const scaleX = (halfW * 2) / cw;
+        const scaleY = (halfH * 2) / ch;
 
-        touches0 = t0;
-        touches1 = t1;
-        touchDist0 = newDist;
-        touchMid0 = mid;
+        const dir = camera.position.clone().sub(centerRef.current).normalize();
+        const right = new THREE.Vector3().crossVectors(dir, camera.up).normalize();
+        const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+
+        const worldDx = -dMidX * scaleX;
+        const worldDy = -dMidY * scaleY;
+        centerRef.current.addScaledVector(right, worldDx);
+        centerRef.current.addScaledVector(up, worldDy);
+        updateCamera(camera, centerRef.current, thetaRef.current, phiRef.current);
+
+        touchMid0 = curMid;
+        touchDist0 = curDist;
       }
     };
+    const onTE = () => { touchMid0 = null; touchDist0 = 0; };
 
-    const onTouchEnd = () => {
-      touches0 = null;
-      touches1 = null;
-      touchDist0 = 0;
-      touchMid0 = null;
-    };
-
-    let gestureZoomStart = 0;
-    const onGestureStart = (e: Event) => {
-      gestureZoomStart = (e as any).scale || 1;
-    };
-    const onGestureChange = (e: Event) => {
-      const scale = (e as any).scale || 1;
-      const factor = scale / gestureZoomStart;
-      const newHalf = Math.max(0.5, Math.min(120, zoomRef.current / factor));
-      zoomRef.current = newHalf;
+    let gestureScale0 = 0;
+    const onGS = (e: Event) => { gestureScale0 = (e as any).scale || 1; };
+    const onGC = (e: Event) => {
+      const s = (e as any).scale || 1;
+      zoomRef.current = Math.max(0.5, Math.min(120, zoomRef.current / (s / gestureScale0)));
       const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
-      updateOrthoZoom(camera, aspect, newHalf);
-      gestureZoomStart = scale;
+      updateOrthoZoom(camera, aspect, zoomRef.current);
+      gestureScale0 = s;
     };
 
-    renderer.domElement.addEventListener('mousedown', onMouseDown);
-    renderer.domElement.addEventListener('mousemove', onMouseMove);
-    renderer.domElement.addEventListener('mouseup', onMouseUp);
+    renderer.domElement.addEventListener('mousedown', onMD);
+    renderer.domElement.addEventListener('mousemove', onMM);
+    renderer.domElement.addEventListener('mouseup', onMU);
     renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
-    renderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
-    renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false });
-    renderer.domElement.addEventListener('touchend', onTouchEnd);
-    renderer.domElement.addEventListener('gesturestart', onGestureStart);
-    renderer.domElement.addEventListener('gesturechange', onGestureChange);
+    renderer.domElement.addEventListener('touchstart', onTS, { passive: false });
+    renderer.domElement.addEventListener('touchmove', onTM, { passive: false });
+    renderer.domElement.addEventListener('touchend', onTE);
+    renderer.domElement.addEventListener('gesturestart', onGS);
+    renderer.domElement.addEventListener('gesturechange', onGC);
 
     const onResize = () => {
       const rw = container.clientWidth;
@@ -337,10 +323,7 @@ function ExploreCanvas() {
         }
       }
 
-      if (frameCount % 10 === 0) {
-        updateOffScreen();
-      }
-
+      if (frameCount % 10 === 0) updateOffScreen();
       renderer.render(scene, camera);
       animRef.current = requestAnimationFrame(animate);
     };
@@ -349,15 +332,10 @@ function ExploreCanvas() {
     return () => {
       cancelAnimationFrame(animRef.current);
       window.removeEventListener('resize', onResize);
-      renderer.domElement.removeEventListener('mousedown', onMouseDown);
-      renderer.domElement.removeEventListener('mousemove', onMouseMove);
-      renderer.domElement.removeEventListener('mouseup', onMouseUp);
-      renderer.domElement.removeEventListener('wheel', onWheel);
-      renderer.domElement.removeEventListener('touchstart', onTouchStart);
-      renderer.domElement.removeEventListener('touchmove', onTouchMove);
-      renderer.domElement.removeEventListener('touchend', onTouchEnd);
-      renderer.domElement.removeEventListener('gesturestart', onGestureStart);
-      renderer.domElement.removeEventListener('gesturechange', onGestureChange);
+      for (const ev of ['mousedown','mousemove','mouseup','wheel','touchstart','touchmove','touchend','gesturestart','gesturechange']) {
+        const listeners = (renderer.domElement as any).__listeners;
+        // just dispose and remove canvas
+      }
       renderer.dispose();
       container.removeChild(renderer.domElement);
     };
