@@ -4,11 +4,9 @@ import { useUIStore } from '../../stores/uiStore';
 import { detectCollisions } from '../../engine/physics';
 import { renderToPhysical } from '../../engine/coordinateTransform';
 import {
-  initCanvas2D,
   createViewport,
   applyViewport,
   screenToRender,
-  type Canvas2DSetup,
   type Viewport,
 } from '../../rendering/canvas2d/setup';
 import { drawBody, drawPreviewCircle, hitTestBody } from '../../rendering/canvas2d/bodies';
@@ -16,8 +14,8 @@ import { drawGrid } from '../../rendering/canvas2d/grid';
 import { handleWheel } from '../../rendering/canvas2d/interaction';
 
 function BuilderCanvas() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const setupRef = useRef<Canvas2DSetup | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const vpRef = useRef<Viewport>(createViewport());
   const animRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
@@ -34,49 +32,65 @@ function BuilderCanvas() {
   const setClickPosPhysical = useUIStore(s => s.setClickPosPhysical);
   const previewPosition = useUIStore(s => s.previewPosition);
 
-  const render = useCallback(() => {
-    const setup = setupRef.current;
-    const container = containerRef.current;
-    if (!setup || !container) return;
-
-    const canvas = setup.canvas;
+  // Resize canvas backing store to match CSS layout size
+  const syncSize = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (w === 0 || h === 0) return;
+    const pw = Math.round(w * dpr);
+    const ph = Math.round(h * dpr);
+    if (canvas.width !== pw) canvas.width = pw;
+    if (canvas.height !== ph) canvas.height = ph;
+  }, []);
 
-    // Ensure backing store matches container CSS size
-    const rect = container.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
-    const needW = Math.round(rect.width * dpr);
-    const needH = Math.round(rect.height * dpr);
-    if (canvas.width !== needW) canvas.width = needW;
-    if (canvas.height !== needH) canvas.height = needH;
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    ctxRef.current = canvas.getContext('2d');
+    syncSize();
 
+    const observer = new ResizeObserver(() => syncSize());
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, [syncSize]);
+
+  const render = useCallback(() => {
+    const ctx = ctxRef.current;
+    const canvas = canvasRef.current;
+    if (!ctx || !canvas) return;
+
+    syncSize();
+
+    const dpr = window.devicePixelRatio || 1;
     const physW = canvas.width;
     const physH = canvas.height;
     if (physW === 0 || physH === 0) return;
     const cssW = physW / dpr;
     const cssH = physH / dpr;
 
-    // Clear full canvas
-    setup.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    setup.ctx.clearRect(0, 0, physW, physH);
-    setup.ctx.fillStyle = '#050510';
-    setup.ctx.fillRect(0, 0, physW, physH);
+    // Clear
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, physW, physH);
+    ctx.fillStyle = '#050510';
+    ctx.fillRect(0, 0, physW, physH);
 
-    // Apply viewport (Render → Canvas, includes DPR + Y flip)
     const vp = vpRef.current;
-    applyViewport(setup.ctx, vp);
+    applyViewport(ctx, vp);
 
-    drawGrid(setup.ctx, vp, cssW, cssH);
+    drawGrid(ctx, vp, cssW, cssH);
 
     for (const body of bodies) {
       const isSelected = selectedBodyIds.includes(body.id);
-      drawBody(setup.ctx, body, isSelected);
+      drawBody(ctx, body, isSelected);
     }
 
     if (selectedToolId && previewPosition) {
-      drawPreviewCircle(setup.ctx, previewPosition[0], previewPosition[1], selectedToolId);
+      drawPreviewCircle(ctx, previewPosition[0], previewPosition[1], selectedToolId);
     }
-  }, [bodies, selectedBodyIds, selectedToolId, previewPosition]);
+  }, [bodies, selectedBodyIds, selectedToolId, previewPosition, syncSize]);
 
   useEffect(() => {
     const loop = (time: number) => {
@@ -106,39 +120,28 @@ function BuilderCanvas() {
     return () => cancelAnimationFrame(animRef.current);
   }, [isRunning, render]);
 
-  useLayoutEffect(() => {
-    if (!containerRef.current) return;
-    setupRef.current = initCanvas2D(containerRef.current);
-    return () => {
-      const setup = setupRef.current;
-      if (setup) {
-        setup.canvas.remove();
-        setupRef.current = null;
-      }
-    };
-  }, []);
-
   const getRenderPos = useCallback((e: React.MouseEvent): [number, number] | null => {
-    if (!containerRef.current) return null;
-    const setup = setupRef.current;
-    if (!setup) return null;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = containerRef.current.getBoundingClientRect();
-    const cssW = setup.canvas.width / dpr;
-    const cssH = setup.canvas.height / dpr;
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
     return screenToRender(
       e.clientX - rect.left,
       e.clientY - rect.top,
       vpRef.current,
-      cssW,
-      cssH,
+      canvas.clientWidth,
+      canvas.clientHeight,
     );
   }, []);
 
   return (
-    <div
-      ref={containerRef}
-      style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden', cursor: selectedToolId ? 'crosshair' : 'default' }}
+    <canvas
+      ref={canvasRef}
+      style={{
+        display: 'block',
+        width: '100%',
+        height: '100%',
+        cursor: selectedToolId ? 'crosshair' : 'default',
+      }}
       onMouseMove={(e) => {
         const rPos = getRenderPos(e);
         if (!rPos) return;
@@ -164,13 +167,12 @@ function BuilderCanvas() {
         else setSelectedBodyIds([]);
       }}
       onWheel={(e) => {
-        if (!containerRef.current) return;
-        const setup = setupRef.current;
-        if (!setup) return;
-        const dpr = window.devicePixelRatio || 1;
-        const cssW = setup.canvas.width / dpr;
-        const cssH = setup.canvas.height / dpr;
-        vpRef.current = handleWheel(e as unknown as WheelEvent, vpRef.current, cssW, cssH);
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        vpRef.current = handleWheel(
+          e as unknown as WheelEvent, vpRef.current,
+          canvas.clientWidth, canvas.clientHeight,
+        );
       }}
       onContextMenu={e => e.preventDefault()}
     />

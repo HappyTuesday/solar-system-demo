@@ -1,8 +1,3 @@
-export interface Canvas2DSetup {
-  canvas: HTMLCanvasElement;
-  ctx: CanvasRenderingContext2D;
-}
-
 export interface Viewport {
   offsetX: number;
   offsetY: number;
@@ -13,39 +8,7 @@ export function createViewport(): Viewport {
   return { offsetX: 0, offsetY: 0, zoom: 1 };
 }
 
-export function initCanvas2D(container: HTMLElement): Canvas2DSetup {
-  const canvas = document.createElement('canvas');
-  canvas.style.display = 'block';
-  canvas.style.width = '100%';
-  canvas.style.height = '100%';
-  container.appendChild(canvas);
-
-  const ctx = canvas.getContext('2d')!;
-
-  function resize() {
-    const rect = container.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(rect.width * dpr);
-    canvas.height = Math.round(rect.height * dpr);
-  }
-
-  resize();
-
-  const observer = new ResizeObserver(() => resize());
-  observer.observe(container);
-  window.addEventListener('resize', resize);
-
-  return { canvas, ctx };
-}
-
-// Maps render coordinate (rx, ry) to canvas physical pixel
-// render:   X right, Y up
-// canvas:    X right, Y down (physical pixels, includes DPR)
-export function applyViewport(
-  ctx: CanvasRenderingContext2D,
-  vp: Viewport,
-) {
+export function applyViewport(ctx: CanvasRenderingContext2D, vp: Viewport) {
   const dpr = window.devicePixelRatio || 1;
   const physW = ctx.canvas.width;
   const physH = ctx.canvas.height;
@@ -55,13 +18,9 @@ export function applyViewport(
   ctx.setTransform(z, 0, 0, -z, cx, cy);
 }
 
-// CSS pixel (screenX, screenY) → render coordinate (rx, ry)
 export function screenToRender(
-  screenX: number,
-  screenY: number,
-  vp: Viewport,
-  cssWidth: number,
-  cssHeight: number,
+  screenX: number, screenY: number,
+  vp: Viewport, cssWidth: number, cssHeight: number,
 ): [number, number] {
   const cx = cssWidth / 2;
   const cy = cssHeight / 2;
