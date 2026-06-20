@@ -1,9 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { useEarthMoonStore } from '../../stores/earthMoonStore';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
 import { REAL_DATA } from '../../engine/constants';
 import { getMoonPhase, getEclipseType, predictEclipses } from '../../engine/eclipse';
+import { computeOffScreenBodies, type OffScreenEntry } from '../explore/OffScreenIndicator';
+import OffScreenIndicator from '../explore/OffScreenIndicator';
 import SunDirectionIndicator from './SunDirectionIndicator';
 
 const MU_SUN = 1.32712440018e20;
@@ -19,6 +21,8 @@ const SCALE = 1 / 40000000;
 function EarthMoonCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const bodyRefsRef = useRef<{ id: string; name: string; mesh: THREE.Mesh }[]>([]);
   const sceneRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -28,19 +32,37 @@ function EarthMoonCanvas() {
     dirLight: THREE.DirectionalLight;
   } | null>(null);
   const sunDirRef = useRef<THREE.Vector3>(new THREE.Vector3(1, 0, 0));
+  const [offScreenEntries, setOffScreenEntries] = useState<OffScreenEntry[]>([]);
+  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+
+  const updateOffScreen = useCallback(() => {
+    const camera = cameraRef.current;
+    if (!camera) return;
+    const entries = computeOffScreenBodies(camera, bodyRefsRef.current, 0.05);
+    setOffScreenEntries(prev => {
+      if (prev.length !== entries.length) return entries;
+      for (let i = 0; i < entries.length; i++) {
+        if (entries[i].id !== prev[i]?.id) return entries;
+      }
+      return prev;
+    });
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
     const container = containerRef.current;
-    const w = container.clientWidth;
-    const h = container.clientHeight;
+    const rect = container.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+    setContainerSize({ w, h });
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x000008);
 
-    const camera = new THREE.PerspectiveCamera(50, w / h, 0.001, 500);
+    const camera = new THREE.PerspectiveCamera(50, Math.max(w, 1) / Math.max(h, 1), 0.001, 500);
     camera.position.set(0, 6, 10);
     camera.lookAt(0, 0, 0);
+    cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(w, h);
@@ -67,20 +89,22 @@ function EarthMoonCanvas() {
     const loader = new THREE.TextureLoader();
 
     const earthGeom = new THREE.SphereGeometry(2, 64, 64);
-    const earthMat = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.1 });
-    loader.load('/textures/earth.jpg', (tex) => { earthMat.map = tex; earthMat.needsUpdate = true; });
+    const earthMat = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.1, color: 0x4488ff });
+    loader.load('/textures/earth.jpg', (tex) => { earthMat.map = tex; earthMat.color = new THREE.Color(0xffffff); earthMat.needsUpdate = true; });
     const earth = new THREE.Mesh(earthGeom, earthMat);
     earth.receiveShadow = true;
     earth.rotation.z = 0.408;
     scene.add(earth);
+    bodyRefsRef.current.push({ id: 'earth', name: '地球', mesh: earth });
 
     const moonGeom = new THREE.SphereGeometry(0.55, 48, 48);
-    const moonMat = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0.05 });
-    loader.load('/textures/moon.jpg', (tex) => { moonMat.map = tex; moonMat.needsUpdate = true; });
+    const moonMat = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0.05, color: 0xcccccc });
+    loader.load('/textures/moon.jpg', (tex) => { moonMat.map = tex; moonMat.color = new THREE.Color(0xffffff); moonMat.needsUpdate = true; });
     const moon = new THREE.Mesh(moonGeom, moonMat);
     moon.castShadow = true;
     moon.receiveShadow = true;
     scene.add(moon);
+    bodyRefsRef.current.push({ id: 'moon', name: '月球', mesh: moon });
 
     const moonOrbitGeom = new THREE.TorusGeometry(MOON_SEMI_MAJOR * SCALE, 0.08, 16, 256);
     const moonOrbitMat = new THREE.MeshBasicMaterial({ color: 0x333355, transparent: true, opacity: 0.3 });
@@ -101,6 +125,7 @@ function EarthMoonCanvas() {
     starsGeom.setAttribute('position', new THREE.BufferAttribute(starsPos, 3));
     scene.add(new THREE.Points(starsGeom, new THREE.PointsMaterial({ color: 0xffffff, size: 0.15 })));
 
+    // --- Mouse interaction ---
     let isDragging = false;
     let prevMouse = { x: 0, y: 0 };
     const raycaster = new THREE.Raycaster();
@@ -142,24 +167,92 @@ function EarthMoonCanvas() {
       camera.position.copy(dir.multiplyScalar(Math.max(1, Math.min(60, dist * factor))));
     };
 
+    // --- Touch & Trackpad support ---
+    let touches0: { x: number; y: number } | null = null;
+    let touches1: { x: number; y: number } | null = null;
+    let touchDist0 = 0;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        touches0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        touches1 = null;
+      } else if (e.touches.length >= 2) {
+        touches0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        touches1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
+        touchDist0 = Math.hypot(touches1.x - touches0.x, touches1.y - touches0.y);
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      if (e.touches.length === 1 && touches0 && !touches1) {
+        const dx = e.touches[0].clientX - touches0.x;
+        const dy = e.touches[0].clientY - touches0.y;
+        camera.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), -dx * 0.005);
+        camera.position.applyAxisAngle(new THREE.Vector3(1, 0, 0), -dy * 0.005);
+        camera.lookAt(0, 0, 0);
+        touches0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else if (e.touches.length >= 2) {
+        const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
+        const newDist = Math.hypot(t1.x - t0.x, t1.y - t0.y);
+        if (touchDist0 > 0) {
+          const factor = newDist / touchDist0;
+          const dir = camera.position.clone().normalize();
+          const dist = camera.position.length();
+          camera.position.copy(dir.multiplyScalar(Math.max(1, Math.min(60, dist / factor))));
+        }
+        touches0 = t0;
+        touches1 = t1;
+        touchDist0 = newDist;
+      }
+    };
+
+    const onTouchEnd = () => {
+      touches0 = null;
+      touches1 = null;
+      touchDist0 = 0;
+    };
+
+    let gestureZoomStart = 0;
+    const onGestureStart = (e: Event) => {
+      gestureZoomStart = (e as any).scale || 1;
+    };
+    const onGestureChange = (e: Event) => {
+      const scale = (e as any).scale || 1;
+      const factor = scale / gestureZoomStart;
+      const dir = camera.position.clone().normalize();
+      const dist = camera.position.length();
+      camera.position.copy(dir.multiplyScalar(Math.max(1, Math.min(60, dist / factor))));
+      gestureZoomStart = scale;
+    };
+
     renderer.domElement.addEventListener('mousedown', onMouseDown);
     renderer.domElement.addEventListener('mousemove', onMouseMove);
     renderer.domElement.addEventListener('mouseup', onMouseUp);
     renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
+    renderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
+    renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false });
+    renderer.domElement.addEventListener('touchend', onTouchEnd);
+    renderer.domElement.addEventListener('gesturestart', onGestureStart);
+    renderer.domElement.addEventListener('gesturechange', onGestureChange);
 
     const onResize = () => {
       const rw = container.clientWidth;
       const rh = container.clientHeight;
-      camera.aspect = rw / rh;
+      setContainerSize({ w: rw, h: rh });
+      camera.aspect = rw / Math.max(rh, 1);
       camera.updateProjectionMatrix();
       renderer.setSize(rw, rh);
     };
     window.addEventListener('resize', onResize);
 
     let lastTime = performance.now();
+    let frameCount = 0;
     const animate = (time: number) => {
       const dt = (time - lastTime) / 1000;
       lastTime = time;
+      frameCount++;
 
       const store = useEarthMoonStore.getState();
       if (store.isRunning && dt > 0) {
@@ -211,6 +304,11 @@ function EarthMoonCanvas() {
         (moon.material as THREE.MeshStandardMaterial).emissiveIntensity = 0;
       }
 
+      // Update off-screen indicators every 10 frames
+      if (frameCount % 10 === 0) {
+        updateOffScreen();
+      }
+
       renderer.render(scene, camera);
       animRef.current = requestAnimationFrame(animate);
     };
@@ -224,10 +322,15 @@ function EarthMoonCanvas() {
       renderer.domElement.removeEventListener('mousemove', onMouseMove);
       renderer.domElement.removeEventListener('mouseup', onMouseUp);
       renderer.domElement.removeEventListener('wheel', onWheel);
+      renderer.domElement.removeEventListener('touchstart', onTouchStart);
+      renderer.domElement.removeEventListener('touchmove', onTouchMove);
+      renderer.domElement.removeEventListener('touchend', onTouchEnd);
+      renderer.domElement.removeEventListener('gesturestart', onGestureStart);
+      renderer.domElement.removeEventListener('gesturechange', onGestureChange);
       renderer.dispose();
       container.removeChild(renderer.domElement);
     };
-  }, []);
+  }, [updateOffScreen]);
 
   useEffect(() => {
     const jd = julianDate(Date.now());
@@ -236,7 +339,8 @@ function EarthMoonCanvas() {
   }, []);
 
   return (
-    <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+    <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+      <OffScreenIndicator entries={offScreenEntries} containerWidth={containerSize.w} containerHeight={containerSize.h} />
       {sceneRef.current && (
         <SunDirectionIndicator scene={sceneRef.current.scene} sunDirection={sunDirRef.current} />
       )}

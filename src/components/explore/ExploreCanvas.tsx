@@ -1,8 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { useExploreStore } from '../../stores/exploreStore';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
 import { REAL_DATA, MU_SUN } from '../../engine/constants';
+import { computeOffScreenBodies, type OffScreenEntry } from './OffScreenIndicator';
+import OffScreenIndicator from './OffScreenIndicator';
 
 const SCALE = 1 / 1.496e10;
 
@@ -22,19 +24,39 @@ function computeBodyPosition(templateId: string, jd: number): [number, number, n
 function ExploreCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const bodyRefsRef = useRef<{ id: string; name: string; mesh: THREE.Mesh }[]>([]);
+  const [offScreenEntries, setOffScreenEntries] = useState<OffScreenEntry[]>([]);
+  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+
+  const updateOffScreen = useCallback(() => {
+    const camera = cameraRef.current;
+    if (!camera) return;
+    const entries = computeOffScreenBodies(camera, bodyRefsRef.current, 0.05);
+    setOffScreenEntries(prev => {
+      if (prev.length !== entries.length) return entries;
+      for (let i = 0; i < entries.length; i++) {
+        if (entries[i].id !== prev[i]?.id) return entries;
+      }
+      return prev;
+    });
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
     const container = containerRef.current;
-    const w = container.clientWidth;
-    const h = container.clientHeight;
+    const rect = container.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+    setContainerSize({ w, h });
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x000005);
 
-    const camera = new THREE.PerspectiveCamera(45, w / h, 0.01, 100);
+    const camera = new THREE.PerspectiveCamera(45, Math.max(w, 1) / Math.max(h, 1), 0.01, 100);
     camera.position.set(6, 4, 8);
     camera.lookAt(0, 0, 0);
+    cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(w, h);
@@ -66,6 +88,7 @@ function ExploreCanvas() {
       const mesh = new THREE.Mesh(geom, mat);
       scene.add(mesh);
       bodyMeshes.set(id, mesh);
+      bodyRefsRef.current.push({ id, name: data.name, mesh });
 
       const texPath = `/textures/${id}.jpg`;
       loader.load(texPath, (tex) => { mat.map = tex; mat.color = new THREE.Color(0xffffff); mat.needsUpdate = true; }, undefined, () => {});
@@ -95,6 +118,7 @@ function ExploreCanvas() {
     const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.03 });
     scene.add(new THREE.Points(starsGeom, starsMat));
 
+    // --- Mouse interaction ---
     let isDragging = false;
     let prevMouse = { x: 0, y: 0 };
     const raycaster = new THREE.Raycaster();
@@ -141,24 +165,92 @@ function ExploreCanvas() {
       camera.position.copy(dir.multiplyScalar(Math.max(0.5, Math.min(20, dist * factor))));
     };
 
+    // --- Touch & Trackpad support ---
+    let touches0: { x: number; y: number } | null = null;
+    let touches1: { x: number; y: number } | null = null;
+    let touchDist0 = 0;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        touches0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        touches1 = null;
+      } else if (e.touches.length >= 2) {
+        touches0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        touches1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
+        touchDist0 = Math.hypot(touches1.x - touches0.x, touches1.y - touches0.y);
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      if (e.touches.length === 1 && touches0 && !touches1) {
+        const dx = e.touches[0].clientX - touches0.x;
+        const dy = e.touches[0].clientY - touches0.y;
+        camera.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), -dx * 0.005);
+        camera.position.applyAxisAngle(new THREE.Vector3(1, 0, 0), -dy * 0.005);
+        camera.lookAt(0, 0, 0);
+        touches0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else if (e.touches.length >= 2) {
+        const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
+        const newDist = Math.hypot(t1.x - t0.x, t1.y - t0.y);
+        if (touchDist0 > 0) {
+          const factor = newDist / touchDist0;
+          const dir = camera.position.clone().normalize();
+          const dist = camera.position.length();
+          camera.position.copy(dir.multiplyScalar(Math.max(0.5, Math.min(20, dist / factor))));
+        }
+        touches0 = t0;
+        touches1 = t1;
+        touchDist0 = newDist;
+      }
+    };
+
+    const onTouchEnd = () => {
+      touches0 = null;
+      touches1 = null;
+      touchDist0 = 0;
+    };
+
+    let gestureZoomStart = 0;
+    const onGestureStart = (e: Event) => {
+      gestureZoomStart = (e as any).scale || 1;
+    };
+    const onGestureChange = (e: Event) => {
+      const scale = (e as any).scale || 1;
+      const factor = scale / gestureZoomStart;
+      const dir = camera.position.clone().normalize();
+      const dist = camera.position.length();
+      camera.position.copy(dir.multiplyScalar(Math.max(0.5, Math.min(20, dist / factor))));
+      gestureZoomStart = scale;
+    };
+
     renderer.domElement.addEventListener('mousedown', onMouseDown);
     renderer.domElement.addEventListener('mousemove', onMouseMove);
     renderer.domElement.addEventListener('mouseup', onMouseUp);
     renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
+    renderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
+    renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false });
+    renderer.domElement.addEventListener('touchend', onTouchEnd);
+    renderer.domElement.addEventListener('gesturestart', onGestureStart);
+    renderer.domElement.addEventListener('gesturechange', onGestureChange);
 
     const onResize = () => {
       const rw = container.clientWidth;
       const rh = container.clientHeight;
-      camera.aspect = rw / rh;
+      setContainerSize({ w: rw, h: rh });
+      camera.aspect = rw / Math.max(rh, 1);
       camera.updateProjectionMatrix();
       renderer.setSize(rw, rh);
     };
     window.addEventListener('resize', onResize);
 
     let lastTime = performance.now();
+    let frameCount = 0;
     const animate = (time: number) => {
       const dt = (time - lastTime) / 1000;
       lastTime = time;
+      frameCount++;
 
       const store = useExploreStore.getState();
       if (store.isRunning && dt > 0) {
@@ -177,6 +269,11 @@ function ExploreCanvas() {
         }
       }
 
+      // Update off-screen indicators every 10 frames
+      if (frameCount % 10 === 0) {
+        updateOffScreen();
+      }
+
       renderer.render(scene, camera);
       animRef.current = requestAnimationFrame(animate);
     };
@@ -189,12 +286,21 @@ function ExploreCanvas() {
       renderer.domElement.removeEventListener('mousemove', onMouseMove);
       renderer.domElement.removeEventListener('mouseup', onMouseUp);
       renderer.domElement.removeEventListener('wheel', onWheel);
+      renderer.domElement.removeEventListener('touchstart', onTouchStart);
+      renderer.domElement.removeEventListener('touchmove', onTouchMove);
+      renderer.domElement.removeEventListener('touchend', onTouchEnd);
+      renderer.domElement.removeEventListener('gesturestart', onGestureStart);
+      renderer.domElement.removeEventListener('gesturechange', onGestureChange);
       renderer.dispose();
       container.removeChild(renderer.domElement);
     };
-  }, []);
+  }, [updateOffScreen]);
 
-  return <div ref={containerRef} style={{ flex: 1, minHeight: 0 }} />;
+  return (
+    <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+      <OffScreenIndicator entries={offScreenEntries} containerWidth={containerSize.w} containerHeight={containerSize.h} />
+    </div>
+  );
 }
 
 export default ExploreCanvas;
