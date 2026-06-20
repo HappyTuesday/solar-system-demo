@@ -212,8 +212,8 @@ function EarthMoonCanvas() {
         const scaleX = (halfW * 2) / cw;
         const scaleY = (halfH * 2) / ch;
         const dir = camera.position.clone().sub(centerRef.current).normalize();
-        const right = new THREE.Vector3().crossVectors(dir, camera.up).normalize();
-        const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+        const right = new THREE.Vector3().crossVectors(camera.up, dir).normalize();
+        const screenUp = new THREE.Vector3().crossVectors(dir, right).normalize();
         const worldDx = e.deltaX * scaleX;
         const worldDy = -e.deltaY * scaleY;
         centerRef.current.addScaledVector(right, worldDx);
@@ -271,8 +271,8 @@ function EarthMoonCanvas() {
         const scaleY = (halfH * 2) / ch;
 
         const dir = camera.position.clone().sub(centerRef.current).normalize();
-        const right = new THREE.Vector3().crossVectors(dir, camera.up).normalize();
-        const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+        const right = new THREE.Vector3().crossVectors(camera.up, dir).normalize();
+        const screenUp = new THREE.Vector3().crossVectors(dir, right).normalize();
 
         centerRef.current.addScaledVector(right, -dMidX * scaleX);
         centerRef.current.addScaledVector(up, -dMidY * scaleY);

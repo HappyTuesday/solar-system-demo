@@ -212,12 +212,13 @@ function ExploreCanvas() {
         const scaleX = (halfW * 2) / cw;
         const scaleY = (halfH * 2) / ch;
         const dir = camera.position.clone().sub(centerRef.current).normalize();
-        const right = new THREE.Vector3().crossVectors(dir, camera.up).normalize();
-        const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+        const right = new THREE.Vector3().crossVectors(camera.up, dir).normalize();
+        const screenUp = new THREE.Vector3().crossVectors(dir, right).normalize();
+        // deltaX>0 = swipe right → pan right. deltaY>0 = swipe down → pan down.
         const worldDx = e.deltaX * scaleX;
         const worldDy = -e.deltaY * scaleY;
         centerRef.current.addScaledVector(right, worldDx);
-        centerRef.current.addScaledVector(up, worldDy);
+        centerRef.current.addScaledVector(screenUp, worldDy);
         updateCamera(camera, centerRef.current, thetaRef.current, phiRef.current);
       }
       const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
@@ -273,13 +274,13 @@ function ExploreCanvas() {
         const scaleY = (halfH * 2) / ch;
 
         const dir = camera.position.clone().sub(centerRef.current).normalize();
-        const right = new THREE.Vector3().crossVectors(dir, camera.up).normalize();
-        const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+        const right = new THREE.Vector3().crossVectors(camera.up, dir).normalize();
+        const screenUp = new THREE.Vector3().crossVectors(dir, right).normalize();
 
         const worldDx = -dMidX * scaleX;
         const worldDy = -dMidY * scaleY;
         centerRef.current.addScaledVector(right, worldDx);
-        centerRef.current.addScaledVector(up, worldDy);
+        centerRef.current.addScaledVector(screenUp, worldDy);
         updateCamera(camera, centerRef.current, thetaRef.current, phiRef.current);
 
         touchMid0 = curMid;

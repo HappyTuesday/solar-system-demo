@@ -180,11 +180,13 @@ function BuilderCanvas() {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const rect = canvas.getBoundingClientRect();
-        const ox = e.clientX - rect.left;
-        const oy = e.clientY - rect.top;
-        vpRef.current = handleWheel(
-          { offsetX: ox, offsetY: oy, deltaY: (e as unknown as WheelEvent).deltaY } as WheelEvent,
-          vpRef.current, canvas.clientWidth, canvas.clientHeight);
+        vpRef.current = handleWheel({
+          offsetX: e.clientX - rect.left,
+          offsetY: e.clientY - rect.top,
+          deltaY: e.deltaY,
+          deltaX: e.deltaX,
+          ctrlKey: e.ctrlKey,
+        }, vpRef.current, canvas.clientWidth, canvas.clientHeight);
       }}
       onTouchStart={(e) => {
         const canvas = canvasRef.current;
