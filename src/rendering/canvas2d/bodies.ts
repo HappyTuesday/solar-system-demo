@@ -13,6 +13,27 @@ const BODY_COLORS: Record<string, string> = {
   neptune: '#4466ff',
 };
 
+const textureCache = new Map<string, HTMLImageElement>();
+const loadingSet = new Set<string>();
+
+function loadTexture(templateId: string) {
+  if (textureCache.has(templateId) || loadingSet.has(templateId)) return;
+  loadingSet.add(templateId);
+  const img = new Image();
+  img.onload = () => {
+    textureCache.set(templateId, img);
+    loadingSet.delete(templateId);
+  };
+  img.onerror = () => loadingSet.delete(templateId);
+  img.src = `/textures/${templateId}.jpg`;
+}
+
+export function preloadTextures() {
+  for (const id of Object.keys(BODY_COLORS)) {
+    loadTexture(id);
+  }
+}
+
 export function drawBody(
   ctx: CanvasRenderingContext2D,
   body: CelestialBody,
@@ -20,20 +41,40 @@ export function drawBody(
 ) {
   const [rx, ry] = physicalToRender(body.position);
   const r = getSimplifiedRadius(body.templateId);
-  const color = BODY_COLORS[body.templateId] || '#888888';
+  if (r <= 0) return;
 
-  const grad = ctx.createRadialGradient(
-    rx - r * 0.25, ry - r * 0.25, r * 0.1,
-    rx, ry, r,
-  );
-  grad.addColorStop(0, '#ffffff');
-  grad.addColorStop(0.3, color);
-  grad.addColorStop(1, '#000000');
-
+  ctx.save();
   ctx.beginPath();
   ctx.arc(rx, ry, r, 0, Math.PI * 2);
-  ctx.fillStyle = grad;
-  ctx.fill();
+  ctx.clip();
+
+  const tex = textureCache.get(body.templateId);
+  if (tex) {
+    const size = r * 2;
+    ctx.drawImage(tex, rx - r, ry - r, size, size);
+  } else {
+    // Fallback gradient while texture loads
+    const color = BODY_COLORS[body.templateId] || '#888888';
+    const grad = ctx.createRadialGradient(rx - r * 0.25, ry - r * 0.25, r * 0.1, rx, ry, r);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.3, color);
+    grad.addColorStop(1, '#000000');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(rx, ry, r, 0, Math.PI * 2);
+    ctx.fill();
+    // Trigger load
+    loadTexture(body.templateId);
+  }
+
+  // Subtle border for clarity
+  ctx.beginPath();
+  ctx.arc(rx, ry, r, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.restore();
 
   if (isSelected) {
     ctx.beginPath();
@@ -44,7 +85,6 @@ export function drawBody(
   }
 }
 
-// Preview at render coordinates
 export function drawPreviewCircle(
   ctx: CanvasRenderingContext2D,
   rx: number,
@@ -97,7 +137,6 @@ export function drawVelocityArrow(
   ctx.fill();
 }
 
-// Hit test at render coordinates against bodies (converting body physical→render)
 export function hitTestBody(
   rx: number,
   ry: number,

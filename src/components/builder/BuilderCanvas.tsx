@@ -9,7 +9,7 @@ import {
   screenToRender,
   type Viewport,
 } from '../../rendering/canvas2d/setup';
-import { drawBody, drawPreviewCircle, hitTestBody } from '../../rendering/canvas2d/bodies';
+import { drawBody, drawPreviewCircle, hitTestBody, preloadTextures } from '../../rendering/canvas2d/bodies';
 import { drawGrid } from '../../rendering/canvas2d/grid';
 import { handleWheel } from '../../rendering/canvas2d/interaction';
 
@@ -61,6 +61,7 @@ function BuilderCanvas() {
     if (!canvas) return;
     ctxRef.current = canvas.getContext('2d');
     syncSize();
+    preloadTextures();
 
     const observer = new ResizeObserver(() => syncSize());
     observer.observe(canvas);
