@@ -14,8 +14,8 @@ export function drawGrid(
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
   ctx.lineWidth = 1;
 
-  const startX = Math.floor(Math.min(topLeftX, bottomRightX) / step) * step;
-  const endX = Math.max(topLeftX, bottomRightX);
+  const startX = Math.ceil(Math.min(topLeftX, bottomRightX) / step) * step;
+  const endX = Math.floor(Math.max(topLeftX, bottomRightX) / step) * step;
   for (let x = startX; x <= endX; x += step) {
     ctx.beginPath();
     ctx.moveTo(x, Math.min(topLeftY, bottomRightY));
@@ -23,8 +23,8 @@ export function drawGrid(
     ctx.stroke();
   }
 
-  const startY = Math.floor(Math.min(topLeftY, bottomRightY) / step) * step;
-  const endY = Math.max(topLeftY, bottomRightY);
+  const startY = Math.ceil(Math.min(topLeftY, bottomRightY) / step) * step;
+  const endY = Math.floor(Math.max(topLeftY, bottomRightY) / step) * step;
   for (let y = startY; y <= endY; y += step) {
     ctx.beginPath();
     ctx.moveTo(Math.min(topLeftX, bottomRightX), y);

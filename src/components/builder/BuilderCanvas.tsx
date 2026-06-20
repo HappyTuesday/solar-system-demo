@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useLayoutEffect, useEffect, useRef, useCallback } from 'react';
 import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
 import { detectCollisions } from '../../engine/physics';
@@ -109,7 +109,7 @@ function BuilderCanvas() {
     return () => cancelAnimationFrame(animRef.current);
   }, [isRunning, render]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!containerRef.current) return;
     setupRef.current = initCanvas2D(containerRef.current);
     return () => {

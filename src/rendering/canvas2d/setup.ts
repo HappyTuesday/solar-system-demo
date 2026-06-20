@@ -16,8 +16,6 @@ export function createViewport(): Viewport {
 export function initCanvas2D(container: HTMLElement): Canvas2DSetup {
   const canvas = document.createElement('canvas');
   canvas.style.display = 'block';
-  canvas.style.width = '100%';
-  canvas.style.height = '100%';
   container.appendChild(canvas);
 
   const ctx = canvas.getContext('2d')!;
@@ -26,6 +24,9 @@ export function initCanvas2D(container: HTMLElement): Canvas2DSetup {
     const rect = container.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
     const dpr = window.devicePixelRatio || 1;
+    // Set CSS pixel size explicitly (not percentage, to avoid flex resolution issues)
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
     canvas.width = Math.round(rect.width * dpr);
     canvas.height = Math.round(rect.height * dpr);
   }
