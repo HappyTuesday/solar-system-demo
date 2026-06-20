@@ -1,11 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
-import { CELESTIAL_TEMPLATES, REAL_DATA } from '../../engine/constants';
-import { setBodyOutline } from '../../rendering/threejs/bodies';
-import { setLinearScale, setSizeMultiplier } from '../../engine/coordinateTransform';
-import { getSharedCamera, setCurrentLookAt, setObservationTargetId } from '../../rendering/threejs/cameraRef';
-import * as THREE from 'three';
+import { CELESTIAL_TEMPLATES } from '../../engine/constants';
 import type { CelestialBody } from '../../types';
 import './BodyStatusPanel.css';
 
@@ -19,14 +15,6 @@ const BODY_COLORS: Record<string, string> = {
   saturn: '#ffeecc',
   uranus: '#88ccff',
   neptune: '#4488ff',
-  moon: '#cccccc',
-  io: '#ffcc44',
-  europa: '#ddccbb',
-  ganymede: '#bbbbbb',
-  callisto: '#888888',
-  titan: '#ffcc88',
-  phobos: '#998877',
-  deimos: '#887766',
 };
 
 const TEMPLATE_ORDER: Record<string, number> = {};
@@ -82,9 +70,6 @@ function computeDisplayData(bodies: CelestialBody[]): BodyDisplayData[] {
         const angleRad = Math.atan2(dy, dx);
         const angleDeg = ((angleRad / Math.PI) * 180 + 360) % 360;
         angle = `${angleDeg.toFixed(0)}°`;
-      } else if (!parentId) {
-        distance = '-';
-        angle = '-';
       }
 
       return {
@@ -110,7 +95,6 @@ export default function BodyStatusPanel() {
   const simulatedTime = useBuildStore(s => s.simulatedTime);
   const selectedBodyIds = useUIStore(s => s.selectedBodyIds);
   const setSelectedBodyIds = useUIStore(s => s.setSelectedBodyIds);
-  const setSizeMultiplierValue = useUIStore(s => s.setSizeMultiplierValue);
 
   const [displayData, setDisplayData] = useState<BodyDisplayData[]>([]);
   const lastUpdateRef = useRef(0);
@@ -126,35 +110,10 @@ export default function BodyStatusPanel() {
   }, [bodies, simulatedTime]);
 
   const handleClick = (id: string) => {
-    const body = bodies.find(b => b.id === id);
-    if (!body) return;
-
     if (selectedBodyIds.includes(id)) {
       setSelectedBodyIds([]);
-      setObservationTargetId(null);
     } else {
       setSelectedBodyIds([id]);
-      setObservationTargetId(id);
-      const data = REAL_DATA[body.templateId];
-      if (data) {
-        const newScale = 1e-7;
-        setLinearScale(newScale);
-        useUIStore.getState().setLinearScaleValue(newScale);
-        const h = document.querySelector('.canvas-wrapper')?.clientHeight ?? 800;
-        const targetSize = (0.1 * h) / (2 * data.radius * newScale);
-        const v = Math.max(1, targetSize);
-        setSizeMultiplier(v);
-        setSizeMultiplierValue(v);
-        const camera = getSharedCamera();
-        if (camera) {
-          const renderRadius = data.radius * newScale * v;
-          const dist = Math.min(4000, Math.max(150, renderRadius * 1.5));
-          const rp = [body.position[0] * newScale, body.position[1] * newScale, body.position[2] * newScale] as [number, number, number];
-          camera.position.set(rp[0], rp[1], rp[2] + dist);
-          camera.lookAt(new THREE.Vector3(rp[0], rp[1], rp[2]));
-          setCurrentLookAt([rp[0], rp[1], rp[2]]);
-        }
-      }
     }
   };
 
@@ -178,8 +137,6 @@ export default function BodyStatusPanel() {
             key={item.id}
             className={`body-status-item${isSelected ? ' selected' : ''}`}
             onClick={() => handleClick(item.id)}
-            onMouseEnter={() => setBodyOutline(item.id, true)}
-            onMouseLeave={() => setBodyOutline(item.id, false)}
           >
             <div className="body-status-item-header">
               <span className="body-status-dot" style={{ backgroundColor: item.color }} />
