@@ -1,14 +1,12 @@
 .earthmoon-page {
   height: calc(100vh - var(--nav-height));
   display: flex;
+  flex-direction: column;
   background: #000;
 }
 
-.earthmoon-placeholder {
+.earthmoon-canvas-area {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  font-size: 1.1rem;
+  min-height: 0;
+  position: relative;
 }

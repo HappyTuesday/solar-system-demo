@@ -1,0 +1,16 @@
+.moon-phase-panel {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(13, 13, 42, 0.92);
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  padding: 14px 18px;
+  text-align: center;
+  min-width: 140px;
+  z-index: 10;
+}
+
+.moon-phase-icon { font-size: 2.2rem; margin-bottom: 6px; }
+.moon-phase-name { color: var(--accent); font-size: 0.95rem; font-weight: 600; margin-bottom: 6px; }
+.moon-phase-angle, .moon-phase-illumination { font-size: 0.78rem; color: var(--text-secondary); }
