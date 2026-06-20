@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
 import { detectCollisions } from '../../engine/physics';
-import { physicalToRender, renderToPhysical } from '../../engine/coordinateTransform';
+import { renderToPhysical } from '../../engine/coordinateTransform';
 import {
   initCanvas2D,
   createViewport,
@@ -40,25 +40,28 @@ function BuilderCanvas() {
     if (!setup || !container) return;
 
     const rect = container.getBoundingClientRect();
-    const w = rect.width;
-    const h = rect.height;
+    const cssW = rect.width;
+    const cssH = rect.height;
+    const physW = setup.canvas.width;
+    const physH = setup.canvas.height;
 
-    setup.ctx.clearRect(0, 0, w, h);
-
+    // Clear full canvas in physical pixel space (no transform)
+    setup.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    setup.ctx.clearRect(0, 0, physW, physH);
     setup.ctx.fillStyle = '#050510';
-    setup.ctx.fillRect(0, 0, w, h);
+    setup.ctx.fillRect(0, 0, physW, physH);
 
+    // Apply viewport (Render → Canvas, includes DPR)
     const vp = vpRef.current;
-    applyViewport(setup.ctx, vp, w, h);
+    applyViewport(setup.ctx, vp, cssW, cssH);
 
-    drawGrid(setup.ctx, vp, w, h);
+    drawGrid(setup.ctx, vp, cssW, cssH);
 
     for (const body of bodies) {
       const isSelected = selectedBodyIds.includes(body.id);
       drawBody(setup.ctx, body, isSelected);
     }
 
-    // Preview circle at render position
     if (selectedToolId && previewPosition) {
       drawPreviewCircle(setup.ctx, previewPosition[0], previewPosition[1], selectedToolId);
     }
@@ -124,12 +127,10 @@ function BuilderCanvas() {
         const rPos = getRenderPos(e);
         if (!rPos) return;
 
-        // Store physical position for coordinate display
         const [px, py] = renderToPhysical([rPos[0], rPos[1], 0]);
         setMousePositions([px, py]);
 
         if (selectedToolId && !isPlacing) {
-          // Store render position for preview
           setPreviewPosition([rPos[0], rPos[1]]);
         }
       }}
@@ -141,14 +142,12 @@ function BuilderCanvas() {
         if (isPlacing) return;
 
         if (selectedToolId) {
-          // Convert render position to physical for placement
           const [physX, physY] = renderToPhysical([rPos[0], rPos[1], 0]);
           setClickPosPhysical([physX, physY]);
           setIsPlacing(true);
           return;
         }
 
-        // Selection mode: hit test at render position
         const hitId = hitTestBody(rPos[0], rPos[1], useBuildStore.getState().bodies);
         if (hitId) {
           setSelectedBodyIds([hitId]);

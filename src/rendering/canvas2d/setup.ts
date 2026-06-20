@@ -27,7 +27,6 @@ export function initCanvas2D(container: HTMLElement): Canvas2DSetup {
     const dpr = window.devicePixelRatio || 1;
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   resize();
@@ -36,25 +35,31 @@ export function initCanvas2D(container: HTMLElement): Canvas2DSetup {
   return { canvas, ctx };
 }
 
-// Render space: X right, Y up, origin at screen center
-// Canvas space: X right, Y down, origin at top-left
-export function applyViewport(ctx: CanvasRenderingContext2D, vp: Viewport, width: number, height: number) {
-  ctx.setTransform(
-    vp.zoom, 0, 0, -vp.zoom,
-    width / 2 + vp.offsetX * vp.zoom,
-    height / 2 - vp.offsetY * vp.zoom,
-  );
+// Maps Render (X右 Y上) → Canvas pixels (X右 Y下), includes DPR
+export function applyViewport(
+  ctx: CanvasRenderingContext2D,
+  vp: Viewport,
+  cssWidth: number,
+  cssHeight: number,
+) {
+  const dpr = window.devicePixelRatio || 1;
+  const z = vp.zoom * dpr;
+  const cx = (cssWidth / 2 + vp.offsetX * vp.zoom) * dpr;
+  const cy = (cssHeight / 2 - vp.offsetY * vp.zoom) * dpr;
+  ctx.setTransform(z, 0, 0, -z, cx, cy);
 }
 
-// Canvas (screenX, screenY) → Render (x right, y up)
+// Canvas CSS坐标 (screenX, screenY) → Render坐标 (X右 Y上)
 export function screenToRender(
   screenX: number,
   screenY: number,
   vp: Viewport,
-  width: number,
-  height: number,
+  cssWidth: number,
+  cssHeight: number,
 ): [number, number] {
-  const rx = (screenX - width / 2) / vp.zoom - vp.offsetX;
-  const ry = (screenY - height / 2) / (-vp.zoom) - vp.offsetY;
+  const cx = cssWidth / 2;
+  const cy = cssHeight / 2;
+  const rx = (screenX - cx) / vp.zoom - vp.offsetX;
+  const ry = -(screenY - cy) / vp.zoom - vp.offsetY;
   return [rx, ry];
 }

@@ -1,37 +1,23 @@
 import type { Viewport } from './setup';
+import { screenToRender } from './setup';
 
-// Canvas pixel → Render coordinates
-export function canvasToRender(
-  mx: number,
-  my: number,
-  vp: Viewport,
-  width: number,
-  height: number,
-): [number, number] {
-  return [
-    (mx - width / 2) / vp.zoom - vp.offsetX,
-    (my - height / 2) / (-vp.zoom) - vp.offsetY,
-  ];
-}
-
-// Wheel zoom centered on mouse position
 export function handleWheel(
   e: WheelEvent,
   vp: Viewport,
-  width: number,
-  height: number,
+  cssWidth: number,
+  cssHeight: number,
 ): Viewport {
-  const mouseX = e.offsetX;
-  const mouseY = e.offsetY;
-  const [worldX, worldY] = canvasToRender(mouseX, mouseY, vp, width, height);
+  const [wx, wy] = screenToRender(e.offsetX, e.offsetY, vp, cssWidth, cssHeight);
 
   const factor = e.deltaY > 0 ? 0.85 : 1.15;
-  const newZoom = Math.max(0.01, Math.min(50, vp.zoom * factor));
+  const newZoom = Math.max(0.05, Math.min(20, vp.zoom * factor));
 
-  // Recompute offset so world position under mouse stays fixed
+  // Keep world position under mouse fixed
+  const cx = cssWidth / 2;
+  const cy = cssHeight / 2;
   return {
-    offsetX: (mouseX - width / 2) / newZoom - worldX,
-    offsetY: (mouseY - height / 2) / (-newZoom) - worldY,
+    offsetX: (e.offsetX - cx) / newZoom - wx,
+    offsetY: -(e.offsetY - cy) / newZoom - wy,
     zoom: newZoom,
   };
 }

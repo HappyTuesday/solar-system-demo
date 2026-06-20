@@ -52,9 +52,11 @@ function screenToWorld(
   width: number,
   height: number,
 ): [number, number] {
+  const cx = width / 2;
+  const cy = height / 2;
   return [
-    (sx - width / 2) / vp.zoom - vp.offsetX,
-    (sy - height / 2) / (-vp.zoom) - vp.offsetY,
+    (sx - cx) / vp.zoom - vp.offsetX,
+    -(sy - cy) / vp.zoom - vp.offsetY,
   ];
 }
 
