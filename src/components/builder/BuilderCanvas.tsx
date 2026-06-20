@@ -2,11 +2,12 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
 import { detectCollisions } from '../../engine/physics';
+import { physicalToRender, renderToPhysical } from '../../engine/coordinateTransform';
 import {
   initCanvas2D,
   createViewport,
   applyViewport,
-  screenToPhysics,
+  screenToRender,
   type Canvas2DSetup,
   type Viewport,
 } from '../../rendering/canvas2d/setup';
@@ -23,12 +24,10 @@ function BuilderCanvas() {
 
   const bodies = useBuildStore(s => s.bodies);
   const isRunning = useBuildStore(s => s.isRunning);
-  const timeScale = useBuildStore(s => s.timeScale);
   const selectedToolId = useUIStore(s => s.selectedToolId);
   const selectedBodyIds = useUIStore(s => s.selectedBodyIds);
   const isPlacing = useUIStore(s => s.isPlacing);
   const setSelectedBodyIds = useUIStore(s => s.setSelectedBodyIds);
-  const setSelectedTool = useUIStore(s => s.setSelectedTool);
   const setMousePositions = useUIStore(s => s.setMousePositions);
   const setPreviewPosition = useUIStore(s => s.setPreviewPosition);
   const setIsPlacing = useUIStore(s => s.setIsPlacing);
@@ -59,6 +58,7 @@ function BuilderCanvas() {
       drawBody(setup.ctx, body, isSelected);
     }
 
+    // Preview circle at render position
     if (selectedToolId && previewPosition) {
       drawPreviewCircle(setup.ctx, previewPosition[0], previewPosition[1], selectedToolId);
     }
@@ -104,10 +104,10 @@ function BuilderCanvas() {
     };
   }, []);
 
-  const getCanvasPos = useCallback((e: React.MouseEvent): [number, number] | null => {
+  const getRenderPos = useCallback((e: React.MouseEvent): [number, number] | null => {
     if (!containerRef.current) return null;
     const rect = containerRef.current.getBoundingClientRect();
-    return screenToPhysics(
+    return screenToRender(
       e.clientX - rect.left,
       e.clientY - rect.top,
       vpRef.current,
@@ -121,30 +121,35 @@ function BuilderCanvas() {
       ref={containerRef}
       style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden', cursor: selectedToolId ? 'crosshair' : 'default' }}
       onMouseMove={(e) => {
-        const pos = getCanvasPos(e);
-        if (!pos) return;
-        setMousePositions(pos);
+        const rPos = getRenderPos(e);
+        if (!rPos) return;
+
+        // Store physical position for coordinate display
+        const [px, py] = renderToPhysical([rPos[0], rPos[1], 0]);
+        setMousePositions([px, py]);
 
         if (selectedToolId && !isPlacing) {
-          setPreviewPosition(pos);
+          // Store render position for preview
+          setPreviewPosition([rPos[0], rPos[1]]);
         }
       }}
       onMouseDown={(e) => {
         if (e.button !== 0) return;
-        const pos = getCanvasPos(e);
-        if (!pos) return;
+        const rPos = getRenderPos(e);
+        if (!rPos) return;
 
         if (isPlacing) return;
 
         if (selectedToolId) {
-          // Placement mode: click to confirm position, open velocity form
-          setClickPosPhysical(pos);
+          // Convert render position to physical for placement
+          const [physX, physY] = renderToPhysical([rPos[0], rPos[1], 0]);
+          setClickPosPhysical([physX, physY]);
           setIsPlacing(true);
           return;
         }
 
-        // Selection mode: click to select/deselect body
-        const hitId = hitTestBody(pos[0], pos[1], useBuildStore.getState().bodies);
+        // Selection mode: hit test at render position
+        const hitId = hitTestBody(rPos[0], rPos[1], useBuildStore.getState().bodies);
         if (hitId) {
           setSelectedBodyIds([hitId]);
         } else {

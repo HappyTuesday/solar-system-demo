@@ -1,6 +1,7 @@
 import type { Viewport } from './setup';
 
-export function canvasToPhysics(
+// Canvas pixel → Render coordinates
+export function canvasToRender(
   mx: number,
   my: number,
   vp: Viewport,
@@ -9,10 +10,11 @@ export function canvasToPhysics(
 ): [number, number] {
   return [
     (mx - width / 2) / vp.zoom - vp.offsetX,
-    -(my - height / 2) / vp.zoom - vp.offsetY,
+    (my - height / 2) / (-vp.zoom) - vp.offsetY,
   ];
 }
 
+// Wheel zoom centered on mouse position
 export function handleWheel(
   e: WheelEvent,
   vp: Viewport,
@@ -21,16 +23,15 @@ export function handleWheel(
 ): Viewport {
   const mouseX = e.offsetX;
   const mouseY = e.offsetY;
-
-  const worldX = (mouseX - width / 2) / vp.zoom - vp.offsetX;
-  const worldY = -(mouseY - height / 2) / vp.zoom - vp.offsetY;
+  const [worldX, worldY] = canvasToRender(mouseX, mouseY, vp, width, height);
 
   const factor = e.deltaY > 0 ? 0.85 : 1.15;
-  const newZoom = Math.max(0.1, Math.min(10, vp.zoom * factor));
+  const newZoom = Math.max(0.01, Math.min(50, vp.zoom * factor));
 
+  // Recompute offset so world position under mouse stays fixed
   return {
     offsetX: (mouseX - width / 2) / newZoom - worldX,
-    offsetY: -(mouseY - height / 2) / newZoom - worldY,
+    offsetY: (mouseY - height / 2) / (-newZoom) - worldY,
     zoom: newZoom,
   };
 }
@@ -40,11 +41,10 @@ export function handleMouseDrag(
   startX: number,
   startY: number,
   vp: Viewport,
-  zoom: number,
 ): Viewport {
   return {
-    offsetX: vp.offsetX + (e.clientX - startX) / zoom,
-    offsetY: vp.offsetY - (e.clientY - startY) / zoom,
-    zoom,
+    offsetX: vp.offsetX + (e.clientX - startX) / vp.zoom,
+    offsetY: vp.offsetY - (e.clientY - startY) / vp.zoom,
+    zoom: vp.zoom,
   };
 }

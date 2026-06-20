@@ -1,6 +1,8 @@
+import type { Viewport } from './setup';
+
 export function drawGrid(
   ctx: CanvasRenderingContext2D,
-  vp: { offsetX: number; offsetY: number; zoom: number },
+  vp: Viewport,
   width: number,
   height: number,
 ) {
@@ -12,25 +14,28 @@ export function drawGrid(
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
   ctx.lineWidth = 1;
 
-  const startX = Math.floor(topLeftX / step) * step;
-  for (let x = startX; x <= bottomRightX; x += step) {
+  const startX = Math.floor(Math.min(topLeftX, bottomRightX) / step) * step;
+  const endX = Math.max(topLeftX, bottomRightX);
+  for (let x = startX; x <= endX; x += step) {
     ctx.beginPath();
-    ctx.moveTo(x, topLeftY);
-    ctx.lineTo(x, bottomRightY);
+    ctx.moveTo(x, Math.min(topLeftY, bottomRightY));
+    ctx.lineTo(x, Math.max(topLeftY, bottomRightY));
     ctx.stroke();
   }
 
-  const startY = Math.floor(bottomRightY / step) * step;
-  for (let y = startY; y <= topLeftY; y += step) {
+  const startY = Math.floor(Math.min(topLeftY, bottomRightY) / step) * step;
+  const endY = Math.max(topLeftY, bottomRightY);
+  for (let y = startY; y <= endY; y += step) {
     ctx.beginPath();
-    ctx.moveTo(topLeftX, y);
-    ctx.lineTo(bottomRightX, y);
+    ctx.moveTo(Math.min(topLeftX, bottomRightX), y);
+    ctx.lineTo(Math.max(topLeftX, bottomRightX), y);
     ctx.stroke();
   }
 }
 
 function calcNiceStep(min: number, max: number, targetLines: number): number {
-  const range = max - min;
+  const range = Math.abs(max - min);
+  if (range < 1e-12) return 1;
   const rough = range / targetLines;
   const exp = Math.pow(10, Math.floor(Math.log10(Math.abs(rough))));
   const mant = rough / exp;
@@ -43,13 +48,13 @@ function calcNiceStep(min: number, max: number, targetLines: number): number {
 function screenToWorld(
   sx: number,
   sy: number,
-  vp: { offsetX: number; offsetY: number; zoom: number },
+  vp: Viewport,
   width: number,
   height: number,
 ): [number, number] {
   return [
     (sx - width / 2) / vp.zoom - vp.offsetX,
-    -(sy - height / 2) / vp.zoom - vp.offsetY,
+    (sy - height / 2) / (-vp.zoom) - vp.offsetY,
   ];
 }
 

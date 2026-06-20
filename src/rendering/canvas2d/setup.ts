@@ -36,22 +36,25 @@ export function initCanvas2D(container: HTMLElement): Canvas2DSetup {
   return { canvas, ctx };
 }
 
+// Render space: X right, Y up, origin at screen center
+// Canvas space: X right, Y down, origin at top-left
 export function applyViewport(ctx: CanvasRenderingContext2D, vp: Viewport, width: number, height: number) {
   ctx.setTransform(
-    vp.zoom, 0, 0, vp.zoom,
+    vp.zoom, 0, 0, -vp.zoom,
     width / 2 + vp.offsetX * vp.zoom,
     height / 2 - vp.offsetY * vp.zoom,
   );
 }
 
-export function screenToPhysics(
+// Canvas (screenX, screenY) → Render (x right, y up)
+export function screenToRender(
   screenX: number,
   screenY: number,
   vp: Viewport,
   width: number,
   height: number,
 ): [number, number] {
-  const physX = (screenX - width / 2) / vp.zoom - vp.offsetX;
-  const physY = -(screenY - height / 2) / vp.zoom - vp.offsetY;
-  return [physX, physY];
+  const rx = (screenX - width / 2) / vp.zoom - vp.offsetX;
+  const ry = (screenY - height / 2) / (-vp.zoom) - vp.offsetY;
+  return [rx, ry];
 }
