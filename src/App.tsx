@@ -1,38 +1,24 @@
-import CelestialToolbar from './components/toolbar/CelestialToolbar';
-import Canvas3D from './components/canvas/Canvas3D';
-import CoordinateDisplay from './components/CoordinateDisplay';
-import CameraControls from './components/canvas/CameraControls';
-import BodyStatusPanel from './components/canvas/BodyStatusPanel';
-import ControlPanel from './components/controls/ControlPanel';
-import HistoryPanel from './components/history/HistoryPanel';
-import ScoreModal from './components/controls/ScoreModal';
-import ErrorBoundary from './components/ErrorBoundary';
-import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { Routes, Route } from 'react-router-dom';
+import TopNav from './components/layout/TopNav';
+import HomePage from './pages/HomePage';
+import BuilderPage from './pages/BuilderPage';
+import ExplorePage from './pages/ExplorePage';
+import EarthMoonPage from './pages/EarthMoonPage';
+import AboutPage from './pages/AboutPage';
+import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import './App.css';
 
 function App() {
-  useKeyboardShortcuts();
-
   return (
     <ErrorBoundary>
-      <div className="app">
-        <div className="app-panel-left">
-          <CelestialToolbar />
-        </div>
-        <div className="app-panel-center">
-          <div className="canvas-wrapper">
-            <Canvas3D />
-          </div>
-          <CoordinateDisplay />
-          <CameraControls />
-          <BodyStatusPanel />
-        </div>
-        <div className="app-panel-right">
-          <ControlPanel />
-          <HistoryPanel />
-        </div>
-        <ScoreModal />
-      </div>
+      <TopNav />
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/builder" element={<BuilderPage />} />
+        <Route path="/explore" element={<ExplorePage />} />
+        <Route path="/earth-moon" element={<EarthMoonPage />} />
+        <Route path="/about" element={<AboutPage />} />
+      </Routes>
     </ErrorBoundary>
   );
 }
