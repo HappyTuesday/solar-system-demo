@@ -154,7 +154,15 @@ function ExploreCanvas() {
       bodyRefsRef.current.push({ id, name: data.name, mesh });
 
       loader.load(`/textures/${id}.jpg`,
-        (tex) => { mat.map = tex; mat.color = new THREE.Color(0xffffff); mat.needsUpdate = true; },
+        (tex) => {
+          mat.map = tex;
+          mat.color = new THREE.Color(0xffffff);
+          if (id === 'sun') {
+            mat.emissive = new THREE.Color(0xff6600);
+            mat.emissiveIntensity = 0.6;
+          }
+          mat.needsUpdate = true;
+        },
         undefined, () => {});
 
       if (data.semiMajorAxis && data.orbital && id !== 'sun') {
