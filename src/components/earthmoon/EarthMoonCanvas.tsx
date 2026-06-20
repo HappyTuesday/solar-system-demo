@@ -23,7 +23,8 @@ function makeOrthoCamera(w: number, h: number, halfSize: number) {
   const halfH = halfSize;
   const halfW = halfH * aspect;
   const camera = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.001, 500);
-  camera.position.set(0, 6, 10);
+  camera.position.set(0, 15, 0);
+  camera.up.set(0, 0, 1);
   camera.lookAt(0, 0, 0);
   return camera;
 }
