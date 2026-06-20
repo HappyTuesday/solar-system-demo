@@ -199,8 +199,27 @@ function ExploreCanvas() {
     };
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const factor = e.deltaY > 0 ? 1.1 : 0.9;
-      zoomRef.current = Math.max(0.5, Math.min(120, zoomRef.current * factor));
+      if (e.ctrlKey) {
+        // Pinch zoom on trackpad
+        const factor = e.deltaY > 0 ? 1.08 : 0.92;
+        zoomRef.current = Math.max(0.5, Math.min(120, zoomRef.current * factor));
+      } else {
+        // Two-finger pan on trackpad
+        const cw = container.clientWidth || 1;
+        const ch = container.clientHeight || 1;
+        const halfH = zoomRef.current;
+        const halfW = halfH * (cw / ch);
+        const scaleX = (halfW * 2) / cw;
+        const scaleY = (halfH * 2) / ch;
+        const dir = camera.position.clone().sub(centerRef.current).normalize();
+        const right = new THREE.Vector3().crossVectors(dir, camera.up).normalize();
+        const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+        const worldDx = e.deltaX * scaleX;
+        const worldDy = -e.deltaY * scaleY;
+        centerRef.current.addScaledVector(right, worldDx);
+        centerRef.current.addScaledVector(up, worldDy);
+        updateCamera(camera, centerRef.current, thetaRef.current, phiRef.current);
+      }
       const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
       updateOrthoZoom(camera, aspect, zoomRef.current);
     };
