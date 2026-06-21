@@ -77,3 +77,19 @@
   color: #999;
   margin-left: auto;
 }
+
+.toolbar-catalog-btn {
+  margin: 8px 4px 0;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: #88aacc;
+  cursor: pointer;
+  border-radius: 4px;
+  text-align: center;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.toolbar-catalog-btn:hover {
+  background: #1a1a3a;
+}

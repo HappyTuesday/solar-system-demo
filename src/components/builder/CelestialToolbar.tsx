@@ -1,8 +1,9 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useUIStore } from '../../stores/uiStore';
 import { useBuildStore } from '../../stores/buildStore';
 import { BUILD_CELESTIAL_TEMPLATES } from '../../engine/buildData';
 import type { CelestialBodyTemplate } from '../../types';
+import BodyCatalogModal from './BodyCatalogModal';
 import './CelestialToolbar.css';
 
 const DEFAULT_DOT_COLORS: Record<string, string> = {
@@ -75,8 +76,10 @@ function groupTemplates(): { title: string; items: CelestialBodyTemplate[] }[] {
 export default function CelestialToolbar() {
   const hasSun = useBuildStore(s => s.bodies.some(b => b.templateId === 'sun'));
   const groups = groupTemplates();
+  const [showCatalog, setShowCatalog] = useState(false);
 
   return (
+    <>
     <div className="toolbar">
       <div className="toolbar-header">天体工具栏</div>
       <div className="toolbar-adjusted-tip">※ 数据已修正，便于搭建</div>
@@ -93,6 +96,11 @@ export default function CelestialToolbar() {
           ))}
         </div>
       ))}
+      <div className="toolbar-catalog-btn" onClick={() => setShowCatalog(true)}>
+        ? 天体数据对照表
+      </div>
     </div>
+    {showCatalog && <BodyCatalogModal onClose={() => setShowCatalog(false)} />}
+    </>
   );
 }
