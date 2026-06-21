@@ -30,7 +30,7 @@ export default function ScoreModal() {
     <div className="score-overlay" onClick={handleClose}>
       <div className="score-card" onClick={e => e.stopPropagation()}>
         <h2>搭建完成！{scoreEmoji}</h2>
-        <p className="score-adjusted-note">※ 评分标准为校正后数据，与真实值有出入</p>
+        <p className="score-adjusted-note">※ 评分标准为修正后数据，与真实值有出入</p>
         <div className={`score-number score-${scoreColor}`}>
           {result.totalScore}
           <span className="score-unit">/100</span>

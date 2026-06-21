@@ -42,7 +42,7 @@ const ToolbarItem = memo(function ToolbarItem({ template, isMoon, disabled, disa
     >
       <span className="color-dot" style={{ background: DEFAULT_DOT_COLORS[template.id] ?? '#888' }} />
       <span className="item-name">{template.name}</span>
-      <span className="item-adjusted-note">※校正</span>
+      <span className="item-adjusted-note">※修正</span>
     </div>
   );
 });
@@ -79,7 +79,7 @@ export default function CelestialToolbar() {
   return (
     <div className="toolbar">
       <div className="toolbar-header">天体工具栏</div>
-      <div className="toolbar-adjusted-tip">※ 数据已校正，便于搭建</div>
+      <div className="toolbar-adjusted-tip">※ 数据已修正，便于搭建</div>
       {groups.map(group => (
         <div key={group.title} className="toolbar-group">
           <div className="toolbar-group-title">{group.title}</div>

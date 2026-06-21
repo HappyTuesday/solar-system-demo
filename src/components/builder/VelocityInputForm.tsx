@@ -84,7 +84,7 @@ export default function VelocityInputForm({
       {defaultOrbitalSpeed !== undefined && defaultOrbitalSpeed > 0 && (
         <div className="form-reference">
           ※ 推荐初速度：<span>{(defaultOrbitalSpeed / 1000).toFixed(1)} km/s</span>（0° 切线方向）<br/>
-          <span className="form-reference-note">数据已校正，便于搭建</span>
+          <span className="form-reference-note">数据已修正，便于搭建</span>
         </div>
       )}
 
