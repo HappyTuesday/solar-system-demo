@@ -146,7 +146,7 @@ function ExploreCanvas() {
     bodyMeshesRef.current = bodyMeshes;
 
     let lastTime = performance.now();
-    let simulatedTime = Date.now();
+    let simulatedTime = useSpaceshipStore.getState().simulatedTime;
 
     const animLookTarget = new THREE.Vector3();
 

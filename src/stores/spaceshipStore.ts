@@ -20,13 +20,14 @@ export interface SpaceshipStore extends SpaceshipState {
   reset: () => void;
 }
 
-const initialSpaceship = createSpaceshipState();
+const now = Date.now();
+const initialSpaceship = createSpaceshipState(now);
 
 const initialState = {
   ...initialSpaceship,
   isRunning: true,
   dashboardExpanded: true,
-  simulatedTime: Date.now(),
+  simulatedTime: now,
 };
 
 export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
@@ -42,10 +43,10 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
   toggleDashboard: () => set(s => ({ dashboardExpanded: !s.dashboardExpanded })),
   updatePhysics: (pos, vel) => set({ position: pos, velocity: vel }),
   setSimulatedTime: (t) => set({ simulatedTime: t }),
-  reset: () => set({
-    ...createSpaceshipState(),
+  reset: () => set(() => ({
+    ...createSpaceshipState(Date.now()),
     isRunning: true,
-  dashboardExpanded: true,
+    dashboardExpanded: true,
     simulatedTime: Date.now(),
-  }),
+  })),
 }));

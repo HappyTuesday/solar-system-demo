@@ -30,8 +30,8 @@ function computeEarthState(now: number): {
   };
 }
 
-export function createSpaceshipState(): SpaceshipState {
-  const earth = computeEarthState(Date.now());
+export function createSpaceshipState(now: number = Date.now()): SpaceshipState {
+  const earth = computeEarthState(now);
 
   const orbitSpeed = Math.sqrt(G_AU * REAL_DATA.earth.mass / ORBIT_RADIUS_AU);
 
