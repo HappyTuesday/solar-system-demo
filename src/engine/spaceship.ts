@@ -113,7 +113,7 @@ export interface BodyInfo {
 export function computeSpaceshipAcceleration(
   spaceship: SpaceshipState,
   bodies: BodyInfo[],
-  softening: number = 1e6,
+  softening: number = 1e-7,
 ): [number, number, number] {
   let ax = 0, ay = 0, az = 0;
   const [sx, sy, sz] = spaceship.position;
@@ -143,7 +143,7 @@ export function rk4StepSpaceship(
   bodies: BodyInfo[],
   dt: number,
 ): void {
-  const softening = 1e6;
+  const softening = 1e-7;
 
   const k1v = computeSpaceshipAcceleration(spaceship, bodies, softening);
   const k1r: [number, number, number] = [spaceship.velocity[0], spaceship.velocity[1], spaceship.velocity[2]];
