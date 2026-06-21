@@ -79,16 +79,22 @@ export default function CelestialToolbar() {
   const groups = groupTemplates();
   const [showCatalog, setShowCatalog] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [pinned, setPinned] = useState(false);
 
   return (
     <>
     <div className={`toolbar-tab ${expanded ? 'hidden' : ''}`} onMouseEnter={() => setExpanded(true)}>天体 <span className="tab-arrow">▸</span></div>
     <div
       className={`toolbar-overlay ${expanded ? 'expanded' : ''}`}
-      onMouseLeave={() => setExpanded(false)}
+      onMouseLeave={() => { if (!pinned) setExpanded(false); }}
     >
       <div className="toolbar">
-        <div className="toolbar-header">天体工具栏</div>
+        <div className="toolbar-header">
+          天体工具栏
+          <span className={`pin-btn ${pinned ? 'pinned' : ''}`} onClick={() => setPinned(!pinned)} title={pinned ? '取消固定' : '固定面板'}>
+            {pinned ? '📍' : '📌'}
+          </span>
+        </div>
         <div className="toolbar-adjusted-tip">※ 数据已修正，便于搭建</div>
         {groups.map(group => (
           <div key={group.title} className="toolbar-group">

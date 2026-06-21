@@ -20,6 +20,7 @@ export default function ControlPanel() {
 
   const [editingMass, setEditingMass] = useState<string>('');
   const [expanded, setExpanded] = useState(false);
+  const [pinned, setPinned] = useState(false);
 
   const formatTime = (ms: number): string => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -114,10 +115,18 @@ export default function ControlPanel() {
     <div className={`panel-tab ${expanded ? 'hidden' : ''}`} onMouseEnter={() => setExpanded(true)}>控制 <span className="tab-arrow">◂</span></div>
     <div
       className={`control-overlay ${expanded ? 'expanded' : ''}`}
-      onMouseLeave={() => setExpanded(false)}
+      onMouseLeave={() => { if (!pinned) setExpanded(false); }}
     >
       <div className="control-panel-inner">
         <div className="control-panel">
+      <div className="panel-section">
+        <div className="panel-header">
+          <span>控制面板</span>
+          <span className={`pin-btn ${pinned ? 'pinned' : ''}`} onClick={() => setPinned(!pinned)} title={pinned ? '取消固定' : '固定面板'}>
+            {pinned ? '📍' : '📌'}
+          </span>
+        </div>
+      </div>
       <div className="panel-section">
         <div className="timer-row">
           <div className="timer-display">
