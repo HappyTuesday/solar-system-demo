@@ -145,7 +145,7 @@ function Dashboard() {
           <div className="dashboard-panel-body">
             <div className="dashboard-section-left">
               <div style={{ display: 'flex', gap: 10 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 150 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 130 }}>
                   <div>
                     <div className="dashboard-section-label">位置 (AU)</div>
                     <div className="dashboard-position-row">
@@ -196,7 +196,7 @@ function Dashboard() {
                 </div>
 
                 {isOrbiting && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 210 }}>
                     <div className="dashboard-section-label" style={{ color: '#00b8ff' }}>绕飞参数 · {nearestBodyName}</div>
                     <div className="dashboard-orbital-grid">
                       <div className="dashboard-stat">

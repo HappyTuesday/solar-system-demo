@@ -44,7 +44,7 @@
 /* ---- Expanded Panel ---- */
 
 .dashboard-panel {
-  width: 860px;
+  width: 900px;
   background: rgba(5, 10, 30, 0.92);
   border: 1px solid rgba(0, 180, 255, 0.3);
   border-bottom: none;
