@@ -142,20 +142,22 @@ function MiniMap() {
 
       let nearestDistAU = Infinity;
       let nearestId = '';
+      let nearestX = 0;
+      let nearestY = 0;
       let nearestVx = 0;
       let nearestVy = 0;
       for (const id of ALL_IDS) {
         if (id === 'sun') {
           const dx2 = sp.position[0] ** 2 + sp.position[1] ** 2;
           const dist = Math.sqrt(dx2);
-          if (dist < nearestDistAU) { nearestDistAU = dist; nearestId = id; nearestVx = 0; nearestVy = 0; }
+          if (dist < nearestDistAU) { nearestDistAU = dist; nearestId = id; nearestX = 0; nearestY = 0; nearestVx = 0; nearestVy = 0; }
         } else {
           const state2d = computeBodyState2D(id, jd);
           if (!state2d) continue;
           const dx = state2d.x - sp.position[0];
           const dy = state2d.y - sp.position[1];
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < nearestDistAU) { nearestDistAU = dist; nearestId = id; nearestVx = state2d.vx; nearestVy = state2d.vy; }
+          if (dist < nearestDistAU) { nearestDistAU = dist; nearestId = id; nearestX = state2d.x; nearestY = state2d.y; nearestVx = state2d.vx; nearestVy = state2d.vy; }
         }
       }
 
@@ -169,6 +171,8 @@ function MiniMap() {
       const viewRange = smoothViewRange;
 
       const scale = usable / (2 * viewRange);
+      const anchorX = isZoomed ? nearestX : sp.position[0];
+      const anchorY = isZoomed ? nearestY : sp.position[1];
 
       ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
       ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
@@ -196,34 +200,44 @@ function MiniMap() {
       ctx.lineWidth = 1;
       ctx.strokeRect(PADDING, PADDING, usableW, usableH);
 
-      // Compute all body screen positions
+      // Compute all body screen positions (relative to anchor)
       const bodies: BodyDrawInfo[] = [];
+      let shipSx = cx;
+      let shipSy = cy;
       for (const id of ALL_IDS) {
         if (id === 'sun') {
-          const dx = 0 - sp.position[0];
-          const dy = 0 - sp.position[1];
-          const dist = Math.sqrt(dx * dx + dy * dy);
+          const dx = 0 - anchorX;
+          const dy = 0 - anchorY;
           const sx = cx + dx * scale;
           const sy = cy - dy * scale;
+          const distPx = Math.sqrt((sx - cx) ** 2 + (sy - cy) ** 2);
           bodies.push({
             id, color: BODY_COLORS[id],
-            sx, sy, distance: dist,
+            sx, sy, distance: distPx / (scale || 1),
             inView: sx > PADDING && sx < CANVAS_W - PADDING && sy > PADDING && sy < CANVAS_H - PADDING,
           });
         } else {
           const pos2d = computeBodyPos2D(id, jd);
           if (!pos2d) continue;
-          const dx = pos2d.x - sp.position[0];
-          const dy = pos2d.y - sp.position[1];
-          const dist = Math.sqrt(dx * dx + dy * dy);
+          const dx = pos2d.x - anchorX;
+          const dy = pos2d.y - anchorY;
           const sx = cx + dx * scale;
           const sy = cy - dy * scale;
+          const distPx = Math.sqrt((sx - cx) ** 2 + (sy - cy) ** 2);
           bodies.push({
             id, color: BODY_COLORS[id] || '#888888',
-            sx, sy, distance: dist,
+            sx, sy, distance: distPx / (scale || 1),
             inView: sx > PADDING && sx < CANVAS_W - PADDING && sy > PADDING && sy < CANVAS_H - PADDING,
           });
         }
+      }
+
+      // Ship screen position (relative to anchor)
+      {
+        const dx = sp.position[0] - anchorX;
+        const dy = sp.position[1] - anchorY;
+        shipSx = cx + dx * scale;
+        shipSy = cy - dy * scale;
       }
 
       // Draw bodies in view
@@ -253,11 +267,14 @@ function MiniMap() {
         }
       }
 
+      const edgeAnchorX = cx;
+      const edgeAnchorY = cy;
+
       // Draw edge indicators for bodies outside view
       for (const b of bodies) {
         if (b.inView) continue;
-        const dx = b.sx - cx;
-        const dy = b.sy - cy;
+        const dx = b.sx - edgeAnchorX;
+        const dy = b.sy - edgeAnchorY;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist < 0.001) continue;
         const ndx = dx / dist;
@@ -292,7 +309,7 @@ function MiniMap() {
         ctx.globalAlpha = 1;
       }
 
-      // Spaceship at center — use relative velocity direction to nearest body
+      // Spaceship — use relative velocity direction to nearest body
       const relVx = sp.velocity[0] - nearestVx;
       const relVy = sp.velocity[1] - nearestVy;
       const relSpeed = Math.sqrt(relVx * relVx + relVy * relVy);
@@ -303,15 +320,15 @@ function MiniMap() {
       // Direction line
       const dirLen = isZoomed ? 10 : 14;
       ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + Math.cos(shipAngle) * dirLen, cy - Math.sin(shipAngle) * dirLen);
+      ctx.moveTo(shipSx, shipSy);
+      ctx.lineTo(shipSx + Math.cos(shipAngle) * dirLen, shipSy - Math.sin(shipAngle) * dirLen);
       ctx.strokeStyle = 'rgba(0, 255, 128, 0.3)';
       ctx.lineWidth = 1;
       ctx.stroke();
 
       // Spaceship
       ctx.fillStyle = '#00b8ff';
-      drawSpaceship(ctx, cx, cy, shipAngle, isZoomed ? 6 : 8);
+      drawSpaceship(ctx, shipSx, shipSy, shipAngle, isZoomed ? 6 : 8);
 
       // Scale indicator
       const scaleBarAU = viewRange * 0.2;
@@ -339,7 +356,10 @@ function MiniMap() {
       // Legend
       ctx.textAlign = 'left';
       ctx.fillStyle = '#334455';
-      ctx.fillText('▲ 飞船 · 俯视图', 4, CANVAS_H - 4);
+      const legendText = isZoomed
+        ? `▲ ${REAL_DATA[nearestId]?.name || '天体'} · 绕飞视图`
+        : '▲ 飞船 · 俯视图';
+      ctx.fillText(legendText, 4, CANVAS_H - 4);
 
       ctx.restore();
       rafRef.current = requestAnimationFrame(draw);
