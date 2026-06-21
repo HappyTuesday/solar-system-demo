@@ -54,6 +54,56 @@ function drawDirectionArrow(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.restore();
 }
 
+function drawSpaceship(ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, size: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  // Fuselage body
+  ctx.beginPath();
+  ctx.moveTo(size, 0);
+  ctx.lineTo(size * 0.25, size * 0.3);
+  ctx.lineTo(-size * 0.15, size * 0.25);
+  ctx.lineTo(-size * 0.3, size * 0.4);
+  ctx.lineTo(-size * 0.45, size * 0.25);
+  ctx.lineTo(-size * 0.55, size * 0.08);
+  ctx.lineTo(-size * 0.55, -size * 0.08);
+  ctx.lineTo(-size * 0.45, -size * 0.25);
+  ctx.lineTo(-size * 0.3, -size * 0.4);
+  ctx.lineTo(-size * 0.15, -size * 0.25);
+  ctx.lineTo(size * 0.25, -size * 0.3);
+  ctx.closePath();
+
+  const grad = ctx.createLinearGradient(-size * 0.5, 0, size, 0);
+  grad.addColorStop(0, '#003366');
+  grad.addColorStop(0.4, '#0077bb');
+  grad.addColorStop(1, '#aaddff');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(0, 200, 255, 0.5)';
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+
+  // Cockpit
+  ctx.beginPath();
+  ctx.ellipse(size * 0.35, 0, size * 0.2, size * 0.12, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(180, 230, 255, 0.7)';
+  ctx.fill();
+
+  // Engine exhaust
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.55, -size * 0.06);
+  ctx.lineTo(-size * 0.85, -size * 0.02);
+  ctx.lineTo(-size * 0.85, size * 0.02);
+  ctx.lineTo(-size * 0.55, size * 0.06);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(0, 255, 128, 0.25)';
+  ctx.fill();
+
+  ctx.restore();
+}
+
 function MiniMap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
@@ -210,9 +260,9 @@ function MiniMap() {
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      // Spaceship triangle
+      // Spaceship
       ctx.fillStyle = '#00b8ff';
-      drawDirectionArrow(ctx, cx, cy, shipAngle, 7);
+      drawSpaceship(ctx, cx, cy, shipAngle, 8);
 
       // Scale indicator
       const scaleBarAU = 1;
