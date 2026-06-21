@@ -137,17 +137,17 @@
 .dashboard-dpad {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  grid-template-rows: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
   gap: 2px;
   flex: 2;
 }
 
-.dpad-up {
-  grid-column: 1 / -1;
+.dpad-left {
+  grid-row: 1 / -1;
 }
 
-.dpad-down {
-  grid-column: 1 / -1;
+.dpad-right {
+  grid-row: 1 / -1;
 }
 
 .dpad-btn {
@@ -174,14 +174,6 @@
 .dpad-btn:active {
   background: rgba(0, 180, 255, 0.35);
   color: #ffffff;
-}
-
-.dpad-center {
-  background: rgba(0, 180, 255, 0.03);
-  border-radius: 50%;
-  width: 60%;
-  height: 60%;
-  place-self: center;
 }
 
 .dashboard-thrust-row {

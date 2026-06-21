@@ -220,18 +220,17 @@ function Dashboard() {
               <div className="dashboard-controls-wrap">
                 <div className="dashboard-dpad">
                   <button
-                    className="dpad-btn dpad-up"
-                    onMouseDown={() => startHold(() => setVerticalThrust(1))}
-                    onMouseUp={() => { stopHold(); setVerticalThrust(0); }}
-                    onMouseLeave={stopHold}
-                  >▲</button>
-                  <button
                     className="dpad-btn dpad-left"
                     onMouseDown={() => startHold(() => setLateralThrust(1))}
                     onMouseUp={() => { stopHold(); setLateralThrust(0); }}
                     onMouseLeave={stopHold}
                   >◀</button>
-                  <div className="dpad-center" />
+                  <button
+                    className="dpad-btn dpad-up"
+                    onMouseDown={() => startHold(() => setVerticalThrust(1))}
+                    onMouseUp={() => { stopHold(); setVerticalThrust(0); }}
+                    onMouseLeave={stopHold}
+                  >▲</button>
                   <button
                     className="dpad-btn dpad-right"
                     onMouseDown={() => startHold(() => setLateralThrust(-1))}
