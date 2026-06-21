@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useHistoryStore } from '../../stores/historyStore';
-import { REAL_DATA, HINT_ORDER } from '../../engine/constants';
+import { REAL_DATA } from '../../engine/constants';
+import { BUILD_DATA } from '../../engine/buildData';
 import { calculateErrors } from '../../engine/scoring';
 import { scaleUp, scaleDown } from '../../engine/coordinateTransform';
-import VelocityInputForm from './VelocityInputForm';
 import type { CelestialBody } from '../../types';
 import './ControlPanel.css';
 
@@ -19,13 +19,6 @@ export default function ControlPanel() {
   const trailLength = useUIStore(s => s.trailLength);
 
   const [editingMass, setEditingMass] = useState<string>('');
-
-  const formatMass = (kg: number): string => {
-    if (kg >= 1e27) return `${(kg / 1e27).toFixed(2)} × 10²⁷ kg`;
-    if (kg >= 1e24) return `${(kg / 1e24).toFixed(2)} × 10²⁴ kg`;
-    if (kg >= 1e21) return `${(kg / 1e21).toFixed(2)} × 10²¹ kg`;
-    return `${kg.toExponential(2)} kg`;
-  };
 
   const formatTime = (ms: number): string => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -84,7 +77,7 @@ export default function ControlPanel() {
     : null;
 
   const errors = uiStore.supervisionMode
-    ? calculateErrors(buildStore.bodies)
+    ? calculateErrors(buildStore.bodies, BUILD_DATA)
     : null;
 
   const handleDeleteBody = () => {
@@ -128,94 +121,6 @@ export default function ControlPanel() {
           </div>
         </div>
       </div>
-
-      {uiStore.selectedToolId && !uiStore.isPlacing && (() => {
-        const toolData = REAL_DATA[uiStore.selectedToolId];
-        if (!toolData) return null;
-
-        return (
-          <div className="panel-section placement-info">
-            <div className="info-header" style={{ color: '#ffaa00' }}>
-              释放模式
-            </div>
-            <div className="info-row">
-              <span>天体</span>
-              <span style={{ color: '#fff' }}>{toolData.name}</span>
-            </div>
-            <div className="info-row">
-              <span>质量</span>
-              <span>{formatMass(toolData.mass)}</span>
-            </div>
-            <div className="info-row">
-              <span>鼠标位置</span>
-              <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#888' }}>
-                {uiStore.mousePhysicalPos
-                  ? `(${uiStore.mousePhysicalPos[0].toFixed(0)}, ${uiStore.mousePhysicalPos[1].toFixed(0)})`
-                  : '移动鼠标选择位置...'}
-              </span>
-            </div>
-            <div className="placement-hint">
-              在画布上点击放置天体
-            </div>
-          </div>
-        );
-      })()}
-
-      {uiStore.isPlacing && uiStore.selectedToolId && (() => {
-        const clickPos = uiStore.clickPosPhysical;
-        if (!clickPos) return null;
-
-        const handleConfirm = (speed: number, angleDeg: number) => {
-          const toolId = uiStore.selectedToolId!;
-          const angleRad = (angleDeg * Math.PI) / 180;
-          const px = clickPos[0];
-          const py = clickPos[1];
-          const pz = 0;
-          const dist = Math.sqrt(px * px + py * py);
-
-          let vel: [number, number, number] = [0, 0, 0];
-          if (speed > 0 && dist > 1) {
-            const tx = -py / dist;
-            const ty = px / dist;
-            const cosA = Math.cos(angleRad);
-            const sinA = Math.sin(angleRad);
-            vel = [
-              speed * (cosA * tx + sinA * px / dist),
-              speed * (cosA * ty + sinA * py / dist),
-              0,
-            ];
-          }
-
-          const data = REAL_DATA[toolId];
-          buildStore.placeBody(toolId, [px, py, pz], vel, data?.mass ?? 1e24);
-
-          if (!buildStore.isRunning) {
-            buildStore.startBuild();
-          }
-
-          if (uiStore.showHint) {
-            const hintedId = HINT_ORDER[uiStore.hintIndex % HINT_ORDER.length];
-            if (toolId === hintedId) uiStore.setHint(false);
-          }
-
-          uiStore.setSelectedTool(null);
-          uiStore.setIsPlacing(false);
-          uiStore.setClickPosPhysical(null);
-        };
-
-        const handleCancel = () => {
-          uiStore.setIsPlacing(false);
-          uiStore.setClickPosPhysical(null);
-        };
-
-        return (
-          <VelocityInputForm
-            templateId={uiStore.selectedToolId!}
-            onConfirm={handleConfirm}
-            onCancel={handleCancel}
-          />
-        );
-      })()}
 
       <div className="panel-section button-row">
         <button className="ctrl-btn primary" onClick={buildStore.isRunning ? buildStore.pauseBuild : buildStore.resumeBuild}>
@@ -298,16 +203,7 @@ export default function ControlPanel() {
         </label>
         {showTrails && (
           <div className="trail-length-row">
-            <span className="trail-length-label">轨迹长度 {trailLength.toFixed(1)}</span>
-            <input
-              type="range"
-              className="trail-length-slider"
-              min="0.1"
-              max="1.0"
-              step="0.1"
-              value={trailLength}
-              onChange={e => uiStore.setTrailLength(parseFloat(e.target.value))}
-            />
+            <span className="trail-length-label">轨迹长度 0.5</span>
           </div>
         )}
       </div>

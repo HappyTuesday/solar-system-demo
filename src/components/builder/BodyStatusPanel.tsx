@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
-import { CELESTIAL_TEMPLATES } from '../../engine/constants';
+import { BUILD_CELESTIAL_TEMPLATES } from '../../engine/constants';
 import type { CelestialBody } from '../../types';
 import './BodyStatusPanel.css';
 
@@ -18,7 +18,7 @@ const BODY_COLORS: Record<string, string> = {
 };
 
 const TEMPLATE_ORDER: Record<string, number> = {};
-CELESTIAL_TEMPLATES.forEach((t, i) => {
+BUILD_CELESTIAL_TEMPLATES.forEach((t, i) => {
   TEMPLATE_ORDER[t.id] = i;
 });
 
@@ -48,7 +48,7 @@ function formatSpeed(mps: number): string {
 function computeDisplayData(bodies: CelestialBody[]): BodyDisplayData[] {
   return bodies
     .map((body): BodyDisplayData => {
-      const template = CELESTIAL_TEMPLATES.find(t => t.id === body.templateId);
+      const template = BUILD_CELESTIAL_TEMPLATES.find(t => t.id === body.templateId);
       const isSun = body.templateId === 'sun';
       const parentId = template?.parentId ?? (isSun ? undefined : 'sun');
       const parent: CelestialBody | undefined = parentId
@@ -109,11 +109,14 @@ export default function BodyStatusPanel() {
     setDisplayData(computeDisplayData(bodies));
   }, [bodies, simulatedTime]);
 
+  const setPanToBodyId = useUIStore(s => s.setPanToBodyId);
+
   const handleClick = (id: string) => {
     if (selectedBodyIds.includes(id)) {
       setSelectedBodyIds([]);
     } else {
       setSelectedBodyIds([id]);
+      setPanToBodyId(id);
     }
   };
 

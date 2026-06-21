@@ -1,6 +1,7 @@
 import { useUIStore } from '../../stores/uiStore';
 import { useBuildStore } from '../../stores/buildStore';
 import { scoreBuild } from '../../engine/scoring';
+import { BUILD_DATA } from '../../engine/buildData';
 import './ScoreModal.css';
 
 export default function ScoreModal() {
@@ -12,7 +13,7 @@ export default function ScoreModal() {
 
   if (!showScoreModal) return null;
 
-  const result = scoreBuild(bodies);
+  const result = scoreBuild(bodies, BUILD_DATA);
 
   const scoreColor = result.totalScore >= 80 ? 'green' : result.totalScore >= 50 ? 'yellow' : 'red';
   const scoreEmoji = result.totalScore >= 90 ? '🌟' : result.totalScore >= 70 ? '👍' : result.totalScore >= 40 ? '💪' : '📚';
@@ -29,6 +30,7 @@ export default function ScoreModal() {
     <div className="score-overlay" onClick={handleClose}>
       <div className="score-card" onClick={e => e.stopPropagation()}>
         <h2>搭建完成！{scoreEmoji}</h2>
+        <p className="score-adjusted-note">※ 评分标准为校正后数据，与真实值有出入</p>
         <div className={`score-number score-${scoreColor}`}>
           {result.totalScore}
           <span className="score-unit">/100</span>
