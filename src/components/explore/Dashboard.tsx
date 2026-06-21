@@ -193,9 +193,9 @@ function Dashboard() {
               </div>
 
               {isOrbiting && (
-                <div style={{ marginTop: 2 }}>
-                  <div className="dashboard-section-label" style={{ color: '#00b8ff' }}>绕飞参数 · {nearestBodyName}</div>
-                  <div className="dashboard-stat-row" style={{ marginBottom: 3 }}>
+                <>
+                  <div className="dashboard-section-label" style={{ color: '#00b8ff', marginBottom: 0 }}>绕飞参数 · {nearestBodyName}</div>
+                  <div className="dashboard-orbital-grid">
                     <div className="dashboard-stat">
                       <div className="dashboard-stat-label">轨道速度</div>
                       <div className="dashboard-stat-value" style={{ color: '#00ff88', fontSize: 11 }}>
@@ -208,8 +208,6 @@ function Dashboard() {
                         {altitudeKm.toFixed(0)} <span style={{ fontSize: 7, color: '#445566' }}>km</span>
                       </div>
                     </div>
-                  </div>
-                  <div className="dashboard-stat-row" style={{ marginBottom: 3 }}>
                     <div className="dashboard-stat">
                       <div className="dashboard-stat-label">角速度</div>
                       <div className="dashboard-stat-value" style={{ color: '#ffcc00', fontSize: 11 }}>
@@ -222,8 +220,6 @@ function Dashboard() {
                         {orbitalPeriodMin.toFixed(1)} <span style={{ fontSize: 7, color: '#445566' }}>min</span>
                       </div>
                     </div>
-                  </div>
-                  <div className="dashboard-stat-row">
                     <div className="dashboard-stat">
                       <div className="dashboard-stat-label">船身·切线夹角</div>
                       <div className="dashboard-stat-value" style={{ color: headingAngleDeg > 5 ? '#ff8855' : '#aaddff', fontSize: 11 }}>
@@ -231,7 +227,7 @@ function Dashboard() {
                       </div>
                     </div>
                   </div>
-                </div>
+                </>
               )}
             </div>
 
