@@ -17,26 +17,6 @@ interface TrailEntry {
   baseColor: THREE.Color;
 }
 
-function isCollinear(
-  ax: number, ay: number, az: number,
-  bx: number, by: number, bz: number,
-  cx: number, cy: number, cz: number,
-): boolean {
-  const abx = bx - ax, aby = by - ay, abz = bz - az;
-  const lenAB = Math.sqrt(abx * abx + aby * aby + abz * abz);
-  if (lenAB < 1e-6) return false;
-
-  const bcx = cx - bx, bcy = cy - by, bcz = cz - bz;
-  const lenBC = Math.sqrt(bcx * bcx + bcy * bcy + bcz * bcz);
-  if (lenBC < 1e-6) return true;
-
-  const dot = abx * bcx + aby * bcy + abz * bcz;
-  if (dot <= 0) return false;
-
-  const cosA = dot / (lenAB * lenBC);
-  return cosA > 0.9999875;
-}
-
 export class TrailManager {
   private scene: THREE.Scene;
   private trails = new Map<string, TrailEntry>();
@@ -118,28 +98,7 @@ export class TrailManager {
       entry.framesSinceLastSample++;
       if (entry.framesSinceLastSample >= SAMPLE_INTERVAL_FRAMES) {
         const renderPos = physicalToRender(body.position);
-        if (entry.activeCount >= 2) {
-          const ring = entry.ringBuffer;
-          const lastIdx = ((entry.writeIndex - 1 + MAX_POINTS) % MAX_POINTS) * 3;
-          const secondLastIdx = ((entry.writeIndex - 2 + MAX_POINTS) % MAX_POINTS) * 3;
-
-          if (isCollinear(
-            ring[secondLastIdx], ring[secondLastIdx + 1], ring[secondLastIdx + 2],
-            ring[lastIdx], ring[lastIdx + 1], ring[lastIdx + 2],
-            renderPos[0], renderPos[1], renderPos[2],
-          )) {
-            ring[lastIdx] = renderPos[0];
-            ring[lastIdx + 1] = renderPos[1];
-            ring[lastIdx + 2] = renderPos[2];
-            entry.colorRing[lastIdx] = entry.baseColor.r;
-            entry.colorRing[lastIdx + 1] = entry.baseColor.g;
-            entry.colorRing[lastIdx + 2] = entry.baseColor.b;
-          } else {
-            this.appendSample(entry, renderPos);
-          }
-        } else {
-          this.appendSample(entry, renderPos);
-        }
+        this.appendSample(entry, renderPos);
         entry.framesSinceLastSample = 0;
       }
 
