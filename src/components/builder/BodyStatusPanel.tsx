@@ -110,6 +110,7 @@ export default function BodyStatusPanel() {
   }, [bodies, simulatedTime]);
 
   const setPanToBodyId = useUIStore(s => s.setPanToBodyId);
+  const removeBody = useBuildStore(s => s.removeBody);
 
   const handleClick = (id: string) => {
     if (selectedBodyIds.includes(id)) {
@@ -118,6 +119,12 @@ export default function BodyStatusPanel() {
       setSelectedBodyIds([id]);
       setPanToBodyId(id);
     }
+  };
+
+  const handleDelete = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    removeBody(id);
+    setSelectedBodyIds([]);
   };
 
   if (bodies.length === 0) {
@@ -144,6 +151,13 @@ export default function BodyStatusPanel() {
             <div className="body-status-item-header">
               <span className="body-status-dot" style={{ backgroundColor: item.color }} />
               <span className="body-status-name">{item.name}</span>
+              {isSelected && (
+                <button
+                  className="body-status-delete-btn"
+                  onClick={(e) => handleDelete(e, item.id)}
+                  title="删除天体"
+                >✕</button>
+              )}
             </div>
             <div className="body-status-data">
               {item.hasParent ? (
