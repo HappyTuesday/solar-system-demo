@@ -37,8 +37,6 @@ function Dashboard() {
   const setLateralThrust = useSpaceshipStore(s => s.setLateralThrust);
   const setVerticalThrust = useSpaceshipStore(s => s.setVerticalThrust);
   const setThrustMagnitude = useSpaceshipStore(s => s.setThrustMagnitude);
-  const isRunning = useSpaceshipStore(s => s.isRunning);
-  const toggleRunning = useSpaceshipStore(s => s.toggleRunning);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reset = useSpaceshipStore(s => s.reset);
 
@@ -273,9 +271,6 @@ function Dashboard() {
                   </button>
                 </div>
               </div>
-              <button className="dashboard-pause-btn" onClick={toggleRunning}>
-                {isRunning ? '⏸ 暂停' : '▶ 继续'}
-              </button>
             </div>
 
             <div className="dashboard-column">
