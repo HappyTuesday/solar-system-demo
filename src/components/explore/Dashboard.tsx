@@ -6,18 +6,25 @@ import MiniMap from './MiniMap';
 import './Dashboard.css';
 
 const SCALE = 1 / 1.496e11;
+const AU_TO_KM = 1.496e8;
+const ORBIT_THRESHOLD_AU = 0.005;
 
-function computeEarthPos(simulatedTime: number): [number, number, number] {
-  const jd = julianDate(simulatedTime);
-  const data = REAL_DATA.earth;
-  const o = data.orbital!;
-  const period = orbitalPeriod(data.semiMajorAxis!, MU_SUN);
+const ALL_IDS = ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
+
+function computeBodyStateFull(templateId: string, jd: number): { position: [number, number, number]; velocity: [number, number, number] } | null {
+  const data = REAL_DATA[templateId];
+  if (!data || !data.semiMajorAxis || !data.orbital) return null;
+  const o = data.orbital;
+  const period = orbitalPeriod(data.semiMajorAxis, MU_SUN);
   const M = meanAnomalyAtTime(o.meanAnomalyAtEpoch, period, o.epoch, jd);
   const Mmod = ((M % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
   const E = solveKepler(Mmod, o.eccentricity);
   const nu = trueAnomaly(E, o.eccentricity);
-  const sv = stateVectors(data.semiMajorAxis!, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN);
-  return [sv.position[0] * SCALE, sv.position[1] * SCALE, sv.position[2] * SCALE];
+  const sv = stateVectors(data.semiMajorAxis, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN);
+  return {
+    position: [sv.position[0] * SCALE, sv.position[1] * SCALE, sv.position[2] * SCALE],
+    velocity: [sv.velocity[0] * SCALE, sv.velocity[1] * SCALE, sv.velocity[2] * SCALE],
+  };
 }
 
 function Dashboard() {
@@ -39,13 +46,55 @@ function Dashboard() {
 
   const speedMs = Math.sqrt(
     velocity[0] ** 2 + velocity[1] ** 2 + velocity[2] ** 2
-  ) * 1.496e11 / 1000;
+  ) * AU_TO_KM;
 
-  const earthPos = computeEarthPos(simulatedTime);
-  const distEarthAU = Math.sqrt(
-    (position[0] - earthPos[0]) ** 2 + (position[1] - earthPos[1]) ** 2 + (position[2] - earthPos[2]) ** 2
-  );
-  const distEarthKm = distEarthAU * 1.496e11 / 1000;
+  const jd = julianDate(simulatedTime);
+
+  let nearestBodyId = '';
+  let nearestBodyName = '';
+  let nearestDistAU = Infinity;
+  let nearestBodyPos: [number, number, number] = [0, 0, 0];
+  let nearestBodyVel: [number, number, number] = [0, 0, 0];
+  let nearestBodyRadiusKm = 0;
+
+  for (const id of ALL_IDS) {
+    if (id === 'sun') {
+      const dx2 = position[0] ** 2 + position[1] ** 2 + position[2] ** 2;
+      const dist = Math.sqrt(dx2);
+      if (dist < nearestDistAU) { nearestDistAU = dist; nearestBodyId = id; nearestBodyName = '太阳'; nearestBodyPos = [0, 0, 0]; nearestBodyVel = [0, 0, 0]; nearestBodyRadiusKm = REAL_DATA.sun.radius / 1000; }
+    } else {
+      const state = computeBodyStateFull(id, jd);
+      if (!state) continue;
+      const dx = state.position[0] - position[0];
+      const dy = state.position[1] - position[1];
+      const dz = state.position[2] - position[2];
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (dist < nearestDistAU) {
+        nearestDistAU = dist; nearestBodyId = id; nearestBodyName = REAL_DATA[id].name;
+        nearestBodyPos = state.position; nearestBodyVel = state.velocity;
+        nearestBodyRadiusKm = REAL_DATA[id].radius / 1000;
+      }
+    }
+  }
+
+  const nearestDistKm = nearestDistAU * AU_TO_KM;
+  const isOrbiting = nearestDistAU < ORBIT_THRESHOLD_AU && nearestDistAU > 1e-12;
+
+  const relVelX = velocity[0] - nearestBodyVel[0];
+  const relVelY = velocity[1] - nearestBodyVel[1];
+  const relVelZ = velocity[2] - nearestBodyVel[2];
+  const relSpeedAU = Math.sqrt(relVelX ** 2 + relVelY ** 2 + relVelZ ** 2);
+  const relSpeedKms = relSpeedAU * AU_TO_KM;
+
+  const totalSpeedAU = Math.sqrt(velocity[0] ** 2 + velocity[1] ** 2 + velocity[2] ** 2);
+  const dotTotalRel = velocity[0] * relVelX + velocity[1] * relVelY + velocity[2] * relVelZ;
+  const headingAngleDeg = totalSpeedAU > 1e-15 && relSpeedAU > 1e-15
+    ? Math.acos(Math.max(-1, Math.min(1, dotTotalRel / (totalSpeedAU * relSpeedAU)))) * 180 / Math.PI
+    : 0;
+
+  const altitudeKm = nearestDistKm - nearestBodyRadiusKm;
+  const angularVelDegS = nearestDistAU > 1e-12 ? (relSpeedAU / nearestDistAU) * 180 / Math.PI : 0;
+  const orbitalPeriodMin = relSpeedKms > 1e-6 ? (2 * Math.PI * nearestDistKm / relSpeedKms) / 60 : 0;
 
   const startHold = useCallback((action: () => void) => {
     action();
@@ -134,14 +183,56 @@ function Dashboard() {
               </div>
               <div className="dashboard-stat-row">
                 <div className="dashboard-stat" style={{ background: 'rgba(204,170,136,0.06)', borderColor: 'rgba(204,170,136,0.15)' }}>
-                  <div className="dashboard-stat-label">距地球</div>
+                  <div className="dashboard-stat-label">距{nearestBodyName}</div>
                   <div className="dashboard-stat-value" style={{ color: '#ccaa88', fontSize: 11 }}>
-                    {distEarthAU < 0.1
-                      ? `${distEarthKm.toFixed(0)} km`
-                      : `${distEarthAU.toFixed(3)} AU`}
+                    {nearestDistAU < 0.1
+                      ? `${nearestDistKm.toFixed(0)} km`
+                      : `${nearestDistAU.toFixed(3)} AU`}
                   </div>
                 </div>
               </div>
+
+              {isOrbiting && (
+                <div style={{ marginTop: 2 }}>
+                  <div className="dashboard-section-label" style={{ color: '#00b8ff' }}>绕飞参数 · {nearestBodyName}</div>
+                  <div className="dashboard-stat-row" style={{ marginBottom: 3 }}>
+                    <div className="dashboard-stat">
+                      <div className="dashboard-stat-label">轨道速度</div>
+                      <div className="dashboard-stat-value" style={{ color: '#00ff88', fontSize: 11 }}>
+                        {relSpeedKms.toFixed(2)} <span style={{ fontSize: 7, color: '#445566' }}>km/s</span>
+                      </div>
+                    </div>
+                    <div className="dashboard-stat">
+                      <div className="dashboard-stat-label">轨道高度</div>
+                      <div className="dashboard-stat-value" style={{ color: '#88ccff', fontSize: 11 }}>
+                        {altitudeKm.toFixed(0)} <span style={{ fontSize: 7, color: '#445566' }}>km</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="dashboard-stat-row" style={{ marginBottom: 3 }}>
+                    <div className="dashboard-stat">
+                      <div className="dashboard-stat-label">角速度</div>
+                      <div className="dashboard-stat-value" style={{ color: '#ffcc00', fontSize: 11 }}>
+                        {angularVelDegS.toFixed(4)} <span style={{ fontSize: 7, color: '#445566' }}>°/s</span>
+                      </div>
+                    </div>
+                    <div className="dashboard-stat">
+                      <div className="dashboard-stat-label">轨道周期</div>
+                      <div className="dashboard-stat-value" style={{ color: '#ddaa88', fontSize: 11 }}>
+                        {orbitalPeriodMin.toFixed(1)} <span style={{ fontSize: 7, color: '#445566' }}>min</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="dashboard-stat-row">
+                    <div className="dashboard-stat">
+                      <div className="dashboard-stat-label">船身·切线夹角</div>
+                      <div className="dashboard-stat-value" style={{ color: headingAngleDeg > 5 ? '#ff8855' : '#aaddff', fontSize: 11 }}>
+                        {headingAngleDeg.toFixed(1)}°
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="dashboard-section-center">
