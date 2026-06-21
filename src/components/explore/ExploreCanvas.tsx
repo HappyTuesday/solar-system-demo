@@ -24,6 +24,27 @@ function computeBodyPosition(templateId: string, jd: number): [number, number, n
   return [sv.position[0] * SCALE, sv.position[1] * SCALE, sv.position[2] * SCALE];
 }
 
+interface BodyState {
+  position: [number, number, number];
+  velocity: [number, number, number];
+}
+
+function computeBodyState(templateId: string, jd: number): BodyState | null {
+  const data = REAL_DATA[templateId];
+  if (!data || !data.semiMajorAxis || !data.orbital || templateId === 'sun') return null;
+  const o = data.orbital;
+  const period = orbitalPeriod(data.semiMajorAxis, MU_SUN);
+  const M = meanAnomalyAtTime(o.meanAnomalyAtEpoch, period, o.epoch, jd);
+  const Mmod = ((M % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  const E = solveKepler(Mmod, o.eccentricity);
+  const nu = trueAnomaly(E, o.eccentricity);
+  const sv = stateVectors(data.semiMajorAxis, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN);
+  return {
+    position: [sv.position[0] * SCALE, sv.position[1] * SCALE, sv.position[2] * SCALE],
+    velocity: [sv.velocity[0] * SCALE, sv.velocity[1] * SCALE, sv.velocity[2] * SCALE],
+  };
+}
+
 function createOrbitLine(templateId: string, color: number): THREE.Line {
   const data = REAL_DATA[templateId];
   const points: THREE.Vector3[] = [];
@@ -174,6 +195,7 @@ function ExploreCanvas() {
         }
 
         const bodyInfos: BodyInfo[] = [];
+        let earthBodyIdx = -1;
         for (const id of allIds) {
           const mesh = bodyMeshes.get(id);
           const data = REAL_DATA[id];
@@ -183,6 +205,7 @@ function ExploreCanvas() {
             mass: data.mass,
             radius: data.radius * SCALE,
           });
+          if (id === 'earth') earthBodyIdx = bodyInfos.length - 1;
         }
 
         const worldThrust = applyThrustInBodyFrame(
@@ -202,11 +225,31 @@ function ExploreCanvas() {
           exploded: store.exploded,
         };
 
-        const simDelta = clampedDt * 86400;
-        const steps = Math.min(Math.max(1, Math.floor(simDelta / 0.016)), 200);
-        const subDt = simDelta / steps;
-        for (let s = 0; s < steps; s++) {
-          rk4StepSpaceship(shipState, bodyInfos, subDt);
+        // Interpolate earth position between frames for smoother physics
+        const earthState = computeBodyState('earth', jd);
+        if (earthState && earthBodyIdx >= 0) {
+          const simDelta = clampedDt * 86400;
+          const steps = Math.min(Math.max(1, Math.floor(simDelta / 0.016)), 200);
+          const subDt = simDelta / steps;
+          const earthVelPerSub = [
+            earthState.velocity[0] * subDt,
+            earthState.velocity[1] * subDt,
+            earthState.velocity[2] * subDt,
+          ];
+
+          for (let s = 0; s < steps; s++) {
+            rk4StepSpaceship(shipState, bodyInfos, subDt);
+            bodyInfos[earthBodyIdx].position[0] += earthVelPerSub[0];
+            bodyInfos[earthBodyIdx].position[1] += earthVelPerSub[1];
+            bodyInfos[earthBodyIdx].position[2] += earthVelPerSub[2];
+          }
+        } else {
+          const simDelta = clampedDt * 86400;
+          const steps = Math.min(Math.max(1, Math.floor(simDelta / 0.016)), 200);
+          const subDt = simDelta / steps;
+          for (let s = 0; s < steps; s++) {
+            rk4StepSpaceship(shipState, bodyInfos, subDt);
+          }
         }
 
         if (checkSpaceshipCollision(shipState, bodyInfos)) {
