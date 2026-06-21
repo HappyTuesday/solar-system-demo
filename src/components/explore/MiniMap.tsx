@@ -72,46 +72,44 @@ function drawSpaceship(ctx: CanvasRenderingContext2D, x: number, y: number, angl
   ctx.translate(x, y);
   ctx.rotate(angle);
 
-  // Fuselage body
-  ctx.beginPath();
-  ctx.moveTo(size, 0);
-  ctx.lineTo(size * 0.25, size * 0.3);
-  ctx.lineTo(-size * 0.15, size * 0.25);
-  ctx.lineTo(-size * 0.3, size * 0.4);
-  ctx.lineTo(-size * 0.45, size * 0.25);
-  ctx.lineTo(-size * 0.55, size * 0.08);
-  ctx.lineTo(-size * 0.55, -size * 0.08);
-  ctx.lineTo(-size * 0.45, -size * 0.25);
-  ctx.lineTo(-size * 0.3, -size * 0.4);
-  ctx.lineTo(-size * 0.15, -size * 0.25);
-  ctx.lineTo(size * 0.25, -size * 0.3);
-  ctx.closePath();
+  const s = size;
 
-  const grad = ctx.createLinearGradient(-size * 0.5, 0, size, 0);
-  grad.addColorStop(0, '#003366');
-  grad.addColorStop(0.4, '#0077bb');
-  grad.addColorStop(1, '#aaddff');
-  ctx.fillStyle = grad;
+  // Engine exhaust glow
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.5, -s * 0.15);
+  ctx.lineTo(-s * 1.2, 0);
+  ctx.lineTo(-s * 0.5, s * 0.15);
+  ctx.closePath();
+  const exhGrad = ctx.createLinearGradient(-s * 0.5, 0, -s * 1.2, 0);
+  exhGrad.addColorStop(0, 'rgba(0, 220, 180, 0.5)');
+  exhGrad.addColorStop(1, 'rgba(0, 220, 180, 0)');
+  ctx.fillStyle = exhGrad;
   ctx.fill();
 
-  ctx.strokeStyle = 'rgba(0, 200, 255, 0.5)';
-  ctx.lineWidth = 0.8;
+  // Main body: sharp delta shape
+  ctx.beginPath();
+  ctx.moveTo(s, 0);
+  ctx.lineTo(-s * 0.15, -s * 0.55);
+  ctx.lineTo(-s * 0.5, -s * 0.25);
+  ctx.lineTo(-s * 0.5, s * 0.25);
+  ctx.lineTo(-s * 0.15, s * 0.55);
+  ctx.closePath();
+
+  const bodyGrad = ctx.createLinearGradient(-s * 0.5, 0, s, 0);
+  bodyGrad.addColorStop(0, '#003355');
+  bodyGrad.addColorStop(0.5, '#0077bb');
+  bodyGrad.addColorStop(1, '#88ddff');
+  ctx.fillStyle = bodyGrad;
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(100, 220, 255, 0.6)';
+  ctx.lineWidth = 0.6;
   ctx.stroke();
 
-  // Cockpit
+  // Cockpit highlight
   ctx.beginPath();
-  ctx.ellipse(size * 0.35, 0, size * 0.2, size * 0.12, 0, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(180, 230, 255, 0.7)';
-  ctx.fill();
-
-  // Engine exhaust
-  ctx.beginPath();
-  ctx.moveTo(-size * 0.55, -size * 0.06);
-  ctx.lineTo(-size * 0.85, -size * 0.02);
-  ctx.lineTo(-size * 0.85, size * 0.02);
-  ctx.lineTo(-size * 0.55, size * 0.06);
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(0, 255, 128, 0.25)';
+  ctx.arc(s * 0.35, 0, s * 0.18, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(180, 240, 255, 0.8)';
   ctx.fill();
 
   ctx.restore();
