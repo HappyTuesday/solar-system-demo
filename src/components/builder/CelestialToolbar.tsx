@@ -4,6 +4,7 @@ import { useBuildStore } from '../../stores/buildStore';
 import { BUILD_CELESTIAL_TEMPLATES } from '../../engine/buildData';
 import type { CelestialBodyTemplate } from '../../types';
 import BodyCatalogModal from './BodyCatalogModal';
+import BodyStatusPanel from './BodyStatusPanel';
 import './CelestialToolbar.css';
 
 const DEFAULT_DOT_COLORS: Record<string, string> = {
@@ -77,27 +78,36 @@ export default function CelestialToolbar() {
   const hasSun = useBuildStore(s => s.bodies.some(b => b.templateId === 'sun'));
   const groups = groupTemplates();
   const [showCatalog, setShowCatalog] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <>
-    <div className="toolbar">
-      <div className="toolbar-header">天体工具栏</div>
-      <div className="toolbar-adjusted-tip">※ 数据已修正，便于搭建</div>
-      {groups.map(group => (
-        <div key={group.title} className="toolbar-group">
-          <div className="toolbar-group-title">{group.title}</div>
-          {group.items.map(item => (
-            <ToolbarItem
-              key={item.id}
-              template={item}
-              isMoon={item.type === 'moon'}
-              disabled={item.id !== 'sun' && !hasSun}
-            />
-          ))}
+    <div
+      className={`toolbar-overlay ${expanded ? 'expanded' : ''}`}
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+    >
+      <div className="toolbar-tab">天体</div>
+      <div className="toolbar">
+        <div className="toolbar-header">天体工具栏</div>
+        <div className="toolbar-adjusted-tip">※ 数据已修正，便于搭建</div>
+        {groups.map(group => (
+          <div key={group.title} className="toolbar-group">
+            <div className="toolbar-group-title">{group.title}</div>
+            {group.items.map(item => (
+              <ToolbarItem
+                key={item.id}
+                template={item}
+                isMoon={item.type === 'moon'}
+                disabled={item.id !== 'sun' && !hasSun}
+              />
+            ))}
+          </div>
+        ))}
+        <div className="toolbar-catalog-btn" onClick={() => setShowCatalog(true)}>
+          ? 天体数据对照表
         </div>
-      ))}
-      <div className="toolbar-catalog-btn" onClick={() => setShowCatalog(true)}>
-        ? 天体数据对照表
+        <BodyStatusPanel />
       </div>
     </div>
     {showCatalog && <BodyCatalogModal onClose={() => setShowCatalog(false)} />}

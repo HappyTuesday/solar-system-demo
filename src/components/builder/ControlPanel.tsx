@@ -19,6 +19,7 @@ export default function ControlPanel() {
   const trailLength = useUIStore(s => s.trailLength);
 
   const [editingMass, setEditingMass] = useState<string>('');
+  const [expanded, setExpanded] = useState(false);
 
   const formatTime = (ms: number): string => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -108,7 +109,14 @@ export default function ControlPanel() {
   };
 
   return (
-    <div className="control-panel">
+    <div
+      className={`control-overlay ${expanded ? 'expanded' : ''}`}
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+    >
+      <div className="panel-tab">控制</div>
+      <div className="control-panel-inner">
+        <div className="control-panel">
       <div className="panel-section">
         <div className="timer-row">
           <div className="timer-display">
@@ -267,6 +275,8 @@ export default function ControlPanel() {
           ))}
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }

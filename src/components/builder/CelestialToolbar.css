@@ -1,7 +1,51 @@
+.toolbar-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  display: flex;
+  transform: translateX(calc(-100% + 24px));
+  transition: transform 0.2s ease;
+}
+
+.toolbar-overlay.expanded {
+  transform: translateX(0);
+}
+
+.toolbar-tab {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  padding: 12px 4px;
+  writing-mode: vertical-rl;
+  background: #151530;
+  border: 1px solid #2a2a4a;
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  color: #8899bb;
+  font-size: 12px;
+  letter-spacing: 4px;
+  cursor: pointer;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.toolbar-overlay.expanded .toolbar-tab {
+  opacity: 0;
+}
+
 .toolbar {
+  width: 220px;
   padding: 12px;
-  flex: 1;
+  background: rgba(10, 10, 30, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-right: 1px solid #2a2a4a;
   overflow-y: auto;
+  flex-shrink: 0;
 }
 
 .toolbar-header {

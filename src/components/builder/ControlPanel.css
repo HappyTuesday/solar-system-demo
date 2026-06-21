@@ -1,3 +1,54 @@
+.control-overlay {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  display: flex;
+  transform: translateX(calc(100% - 24px));
+  transition: transform 0.2s ease;
+}
+
+.control-overlay.expanded {
+  transform: translateX(0);
+}
+
+.panel-tab {
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  padding: 12px 4px;
+  writing-mode: vertical-rl;
+  background: #151530;
+  border: 1px solid #2a2a4a;
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  color: #8899bb;
+  font-size: 12px;
+  letter-spacing: 4px;
+  cursor: pointer;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.control-overlay.expanded .panel-tab {
+  opacity: 0;
+}
+
+.control-panel-inner {
+  width: 280px;
+  background: rgba(10, 10, 30, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-left: 1px solid #2a2a4a;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
 .control-panel {
   padding: 12px;
   display: flex;
