@@ -87,42 +87,29 @@
 
 /* ---- Sections ---- */
 
-.dashboard-section-left {
-  display: flex;
+.dashboard-column {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dashboard-column-title {
+  font-size: 9px;
+  color: #556677;
 }
 
 .dashboard-orbital-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr 1fr;
   gap: 3px;
-  flex: 1;
 }
 
 .dashboard-orbital-grid .dashboard-stat {
   display: flex;
   flex-direction: column;
   justify-content: center;
-}
-
-.dashboard-section-center {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 150px;
-}
-
-.dashboard-section-right {
-  display: flex;
-  flex-direction: column;
-  min-width: 110px;
-}
-
-.dashboard-section-label {
-  font-size: 9px;
-  color: #556677;
-  margin-bottom: 3px;
 }
 
 /* ---- Position readouts ---- */
