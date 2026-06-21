@@ -136,14 +136,15 @@
 .dashboard-controls-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
   gap: 3px;
+  flex: 1;
 }
 
 .dashboard-ctrl-btn {
   background: rgba(0, 180, 255, 0.08);
   border: 1px solid rgba(0, 180, 255, 0.12);
   border-radius: 3px;
-  padding: 4px 0;
   text-align: center;
   font-size: 10px;
   color: #ccc;
@@ -151,6 +152,9 @@
   user-select: none;
   font-family: inherit;
   transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .dashboard-ctrl-btn:hover {
@@ -164,13 +168,13 @@
 .dashboard-thrust-row {
   display: flex;
   gap: 3px;
+  flex: 1;
 }
 
 .dashboard-accel-btn {
   flex: 1;
   border: 1px solid rgba(0, 255, 128, 0.15);
   border-radius: 3px;
-  padding: 4px 0;
   text-align: center;
   font-size: 10px;
   cursor: pointer;
@@ -178,6 +182,9 @@
   font-family: inherit;
   background: rgba(0, 255, 128, 0.08);
   color: #00ff88;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .dashboard-accel-btn:hover {
@@ -188,7 +195,6 @@
   flex: 1;
   border: 1px solid rgba(255, 80, 80, 0.15);
   border-radius: 3px;
-  padding: 4px 0;
   text-align: center;
   font-size: 10px;
   cursor: pointer;
@@ -196,6 +202,9 @@
   font-family: inherit;
   background: rgba(255, 80, 80, 0.08);
   color: #ff5555;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .dashboard-decel-btn:hover {
@@ -203,10 +212,9 @@
 }
 
 .dashboard-pause-btn {
-  width: 100%;
   border: none;
   border-radius: 3px;
-  padding: 4px 0;
+  padding: 6px 0;
   text-align: center;
   font-size: 10px;
   cursor: pointer;
