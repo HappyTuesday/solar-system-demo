@@ -13,7 +13,7 @@ export function useRestore() {
 
     buildStore.setAutoBuilding(true);
 
-    const plan = computeAutoBuildPlan(Date.now());
+    const plan = computeAutoBuildPlanForBuild();
 
     for (const step of plan) {
       buildStore.placeBody(
