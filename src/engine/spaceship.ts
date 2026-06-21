@@ -13,15 +13,11 @@ export function createSpaceshipState(): SpaceshipState {
   ];
 
   const earthOrbitalSpeedAU = (REAL_DATA.earth.orbitalSpeed ?? 29780) / AU_TO_M;
-  const orbitSpeed = Math.sqrt(
-    (G_AU * REAL_DATA.earth.mass) /
-    (EARTH_SO * AU_TO_M)
-  );
-  const orbitSpeedAU = orbitSpeed / AU_TO_M;
+  const orbitSpeedAroundEarth = Math.sqrt(G_AU * REAL_DATA.earth.mass / EARTH_SO);
 
   const vel: [number, number, number] = [
     0,
-    earthOrbitalSpeedAU + orbitSpeedAU,
+    earthOrbitalSpeedAU + orbitSpeedAroundEarth,
     0,
   ];
 
