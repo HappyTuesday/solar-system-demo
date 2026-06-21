@@ -23,27 +23,6 @@ export function createReferencePlane(scene: THREE.Scene, _width: number, _height
   plane.renderOrder = 1;
   group.add(plane);
 
-  const gridSize = Math.ceil(SPATIAL_TRANSFORM.maxOrbitRadius * 1.25);
-  const gridStep = 100;
-  const gridColor = 0x446688;
-  const gridMat = new THREE.LineBasicMaterial({ color: gridColor, transparent: true, opacity: 0.15, depthWrite: false });
-
-  for (let i = -gridSize; i <= gridSize; i += gridStep) {
-    const pointsH: THREE.Vector3[] = [
-      new THREE.Vector3(-gridSize, i, 0),
-      new THREE.Vector3(gridSize, i, 0),
-    ];
-    const geoH = new THREE.BufferGeometry().setFromPoints(pointsH);
-    group.add(new THREE.Line(geoH, gridMat));
-
-    const pointsV: THREE.Vector3[] = [
-      new THREE.Vector3(i, -gridSize, 0),
-      new THREE.Vector3(i, gridSize, 0),
-    ];
-    const geoV = new THREE.BufferGeometry().setFromPoints(pointsV);
-    group.add(new THREE.Line(geoV, gridMat));
-  }
-
   group.position.set(0, 0, -1);
   _refGroup = group;
   scene.add(group);
