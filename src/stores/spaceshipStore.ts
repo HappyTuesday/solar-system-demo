@@ -25,7 +25,7 @@ const initialSpaceship = createSpaceshipState();
 const initialState = {
   ...initialSpaceship,
   isRunning: true,
-  dashboardExpanded: false,
+  dashboardExpanded: true,
   simulatedTime: Date.now(),
 };
 
