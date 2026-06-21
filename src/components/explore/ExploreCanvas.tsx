@@ -57,7 +57,7 @@ function ExploreCanvas() {
   const rightCamRef = useRef<THREE.PerspectiveCamera | null>(null);
   const bodyMeshesRef = useRef<Map<string, THREE.Mesh>>(new Map());
   const allIdsRef = useRef<string[]>(['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune']);
-  const sizeRef = useRef({ w: 0, h: 0 });
+  const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
   const disposablesRef = useRef<{ geometries: THREE.BufferGeometry[]; materials: THREE.Material[]; textures: THREE.Texture[]; lines: THREE.Line[] }>({
     geometries: [], materials: [], textures: [], lines: [],
   });
@@ -68,7 +68,8 @@ function ExploreCanvas() {
     const rect = container.getBoundingClientRect();
     const w = rect.width;
     const h = rect.height;
-    sizeRef.current = { w, h };
+    const dpr = Math.min(window.devicePixelRatio, 2);
+    sizeRef.current = { w, h, dpr };
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x050510);
@@ -91,7 +92,7 @@ function ExploreCanvas() {
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(w, h);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(dpr);
     container.appendChild(renderer.domElement);
 
     scene.add(new THREE.AmbientLight(0x444466, 1.0));
@@ -234,7 +235,7 @@ function ExploreCanvas() {
       const leftDir = new THREE.Vector3(leftArr[0], leftArr[1], leftArr[2]);
       const rightDir = new THREE.Vector3(rightArr[0], rightArr[1], rightArr[2]);
 
-      const { w: rw, h: rh } = sizeRef.current;
+      const { w: rw, h: rh, dpr: rdpr } = sizeRef.current;
       if (rw <= 0 || rh <= 0) { animRef.current = requestAnimationFrame(animate); return; }
 
       // ---- Main view ----
@@ -246,21 +247,30 @@ function ExploreCanvas() {
       );
       camera.lookAt(animLookTarget);
 
-      renderer.setViewport(0, 0, rw, rh);
-      renderer.setScissor(0, 0, rw, rh);
+      renderer.setViewport(0, 0, Math.round(rw * rdpr), Math.round(rh * rdpr));
+      renderer.setScissor(0, 0, Math.round(rw * rdpr), Math.round(rh * rdpr));
       renderer.setScissorTest(false);
       renderer.render(scene, camera);
 
-      // ---- Mirror sizes ----
-      const rearW = Math.round(rw * 0.22);
-      const rearH = Math.round(rh * 0.18);
-      const sideW = Math.round(rw * 0.16);
-      const sideH = Math.round(rh * 0.25);
+      // ---- Mirror sizes (CSS pixels) ----
+      const rearWCss = Math.round(rw * 0.22);
+      const rearHCss = Math.round(rh * 0.18);
+      const sideWCss = Math.round(rw * 0.16);
+      const sideHCss = Math.round(rh * 0.25);
+
+      // Mirror sizes (drawing buffer pixels)
+      const rearW = Math.round(rearWCss * rdpr);
+      const rearH = Math.round(rearHCss * rdpr);
+      const sideW = Math.round(sideWCss * rdpr);
+      const sideH = Math.round(sideHCss * rdpr);
+
+      const bufW = Math.round(rw * rdpr);
+      const bufH = Math.round(rh * rdpr);
 
       // ---- Rear mirror (top center, flush with top edge) ----
-      const rearX = Math.round((rw - rearW) / 2);
-      const rearY = rh - rearH;
-      rearCam.aspect = rearW / Math.max(rearH, 1);
+      const rearX = Math.round((bufW - rearW) / 2);
+      const rearY = bufH - rearH;
+      rearCam.aspect = rearWCss / Math.max(rearHCss, 1);
       rearCam.updateProjectionMatrix();
       rearCam.position.copy(pos);
       animLookTarget.set(
@@ -276,8 +286,8 @@ function ExploreCanvas() {
 
       // ---- Left mirror (flush with left edge) ----
       const leftX = 0;
-      const leftY = Math.round((rh - sideH) / 2);
-      leftCam.aspect = sideW / Math.max(sideH, 1);
+      const leftY = Math.round((bufH - sideH) / 2);
+      leftCam.aspect = sideWCss / Math.max(sideHCss, 1);
       leftCam.updateProjectionMatrix();
       leftCam.position.copy(pos);
       animLookTarget.set(
@@ -292,9 +302,9 @@ function ExploreCanvas() {
       renderer.render(scene, leftCam);
 
       // ---- Right mirror (flush with right edge) ----
-      const rightX = rw - sideW;
-      const rightY = Math.round((rh - sideH) / 2);
-      rightCam.aspect = sideW / Math.max(sideH, 1);
+      const rightX = bufW - sideW;
+      const rightY = Math.round((bufH - sideH) / 2);
+      rightCam.aspect = sideWCss / Math.max(sideHCss, 1);
       rightCam.updateProjectionMatrix();
       rightCam.position.copy(pos);
       animLookTarget.set(
@@ -316,7 +326,8 @@ function ExploreCanvas() {
       const rw = container.clientWidth;
       const rh = container.clientHeight;
       if (rw <= 0 || rh <= 0) return;
-      sizeRef.current = { w: rw, h: rh };
+      const rdpr = Math.min(window.devicePixelRatio, 2);
+      sizeRef.current = { w: rw, h: rh, dpr: rdpr };
       camera.aspect = rw / rh;
       camera.updateProjectionMatrix();
       renderer.setSize(rw, rh);
