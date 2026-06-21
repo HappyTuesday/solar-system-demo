@@ -144,7 +144,7 @@ function Dashboard() {
         ) : (
           <div className="dashboard-panel-body">
             <div className="dashboard-column">
-              <div className="dashboard-column-title">位置 (AU)</div>
+              <div className="dashboard-column-title">基本参数</div>
               <div className="dashboard-position-row">
                 <div className="dashboard-readout">
                   <div className="dashboard-readout-label">X</div>
