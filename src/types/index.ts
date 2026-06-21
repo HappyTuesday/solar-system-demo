@@ -108,6 +108,8 @@ export interface UIState {
   trailLength: number;
 }
 
+// --- Spaceship State ---
+
 export interface SpaceshipState {
   position: [number, number, number];
   velocity: [number, number, number];
