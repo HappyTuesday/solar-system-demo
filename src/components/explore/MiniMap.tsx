@@ -9,6 +9,9 @@ const PADDING = 12;
 const VIEW_RANGE_AU = 0.1;
 const SCALE = 1 / 1.496e11;
 const SUN_RADIUS_PX = 4;
+const ZOOM_THRESHOLD_AU = 0.005;
+const ZOOM_BODY_RADIUS_PX = 8;
+const ZOOM_LERP = 0.08;
 
 const ALL_IDS = ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
 
@@ -114,6 +117,8 @@ function MiniMap() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    let smoothViewRange = VIEW_RANGE_AU;
+
     const draw = () => {
       ctx.save();
       ctx.scale(2, 2);
@@ -121,10 +126,37 @@ function MiniMap() {
       const jd = julianDate(sp.simulatedTime);
       const cx = CANVAS_W / 2;
       const cy = CANVAS_H / 2;
-      const usable = Math.min(CANVAS_W, CANVAS_H) - PADDING * 2;
-      const scale = usable / (2 * VIEW_RANGE_AU);
       const usableW = CANVAS_W - PADDING * 2;
       const usableH = CANVAS_H - PADDING * 2;
+      const usable = Math.min(usableW, usableH);
+
+      let nearestDistAU = Infinity;
+      let nearestId = '';
+      for (const id of ALL_IDS) {
+        if (id === 'sun') {
+          const dx2 = sp.position[0] ** 2 + sp.position[1] ** 2;
+          const dist = Math.sqrt(dx2);
+          if (dist < nearestDistAU) { nearestDistAU = dist; nearestId = id; }
+        } else {
+          const pos2d = computeBodyPos2D(id, jd);
+          if (!pos2d) continue;
+          const dx = pos2d.x - sp.position[0];
+          const dy = pos2d.y - sp.position[1];
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < nearestDistAU) { nearestDistAU = dist; nearestId = id; }
+        }
+      }
+
+      let targetViewRange = VIEW_RANGE_AU;
+      let isZoomed = false;
+      if (nearestDistAU < ZOOM_THRESHOLD_AU && nearestDistAU > 1e-12) {
+        targetViewRange = nearestDistAU * 2.5;
+        isZoomed = true;
+      }
+      smoothViewRange += (targetViewRange - smoothViewRange) * ZOOM_LERP;
+      const viewRange = smoothViewRange;
+
+      const scale = usable / (2 * viewRange);
 
       ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
       ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
@@ -133,7 +165,7 @@ function MiniMap() {
       // Grid lines
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
       ctx.lineWidth = 0.5;
-      const gridStep = scale * 0.02;
+      const gridStep = scale * viewRange * 0.2;
       for (let gx = cx % gridStep; gx < CANVAS_W; gx += gridStep) {
         ctx.beginPath();
         ctx.moveTo(gx, PADDING);
@@ -193,6 +225,14 @@ function MiniMap() {
           ctx.beginPath();
           ctx.arc(b.sx, b.sy, SUN_RADIUS_PX, 0, Math.PI * 2);
           ctx.fill();
+        } else if (isZoomed && b.id === nearestId) {
+          ctx.fillStyle = b.color;
+          ctx.beginPath();
+          ctx.arc(b.sx, b.sy, ZOOM_BODY_RADIUS_PX, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
         } else {
           ctx.fillStyle = b.color;
           ctx.beginPath();
@@ -211,35 +251,29 @@ function MiniMap() {
         const ndx = dx / dist;
         const ndy = dy / dist;
 
-        // Find intersection with usable rect boundary
         let edgeX = cx;
         let edgeY = cy;
         const hw = usableW / 2;
         const hh = usableH / 2;
 
         if (Math.abs(ndx) * hh > Math.abs(ndy) * hw) {
-          // Intersects left/right edge
           edgeX = ndx > 0 ? cx + hw : cx - hw;
           edgeY = cy + ndy * (hw / Math.abs(ndx));
         } else {
-          // Intersects top/bottom edge
           edgeY = ndy > 0 ? cy + hh : cy - hh;
           edgeX = cx + ndx * (hh / Math.abs(ndy));
         }
 
-        // Clamp
         edgeX = Math.max(PADDING, Math.min(CANVAS_W - PADDING, edgeX));
         edgeY = Math.max(PADDING, Math.min(CANVAS_H - PADDING, edgeY));
 
         const angle = Math.atan2(ndy, ndx);
 
-        // Draw edge dot
         ctx.fillStyle = b.color;
         ctx.beginPath();
         ctx.arc(edgeX, edgeY, 2.5, 0, Math.PI * 2);
         ctx.fill();
 
-        // Draw small arrow pointing inward
         ctx.fillStyle = b.color;
         ctx.globalAlpha = 0.6;
         drawDirectionArrow(ctx, edgeX, edgeY, angle, 4);
@@ -252,7 +286,7 @@ function MiniMap() {
       const shipAngle = Math.atan2(spdy, spdx);
 
       // Direction line
-      const dirLen = 14;
+      const dirLen = isZoomed ? 10 : 14;
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(cx + Math.cos(shipAngle) * dirLen, cy - Math.sin(shipAngle) * dirLen);
@@ -262,10 +296,10 @@ function MiniMap() {
 
       // Spaceship
       ctx.fillStyle = '#00b8ff';
-      drawSpaceship(ctx, cx, cy, shipAngle, 8);
+      drawSpaceship(ctx, cx, cy, shipAngle, isZoomed ? 6 : 8);
 
       // Scale indicator
-      const scaleBarAU = 0.02;
+      const scaleBarAU = viewRange * 0.2;
       const scaleBarPx = scaleBarAU * scale;
       const barX = CANVAS_W - PADDING - scaleBarPx;
       const barY = CANVAS_H - PADDING - 4;
@@ -284,7 +318,8 @@ function MiniMap() {
       ctx.fillStyle = '#556677';
       ctx.font = '8px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('0.02 AU', barX + scaleBarPx / 2, barY - 5);
+      const scaleTextAU = scaleBarAU.toFixed(4);
+      ctx.fillText(`${scaleTextAU} AU`, barX + scaleBarPx / 2, barY - 5);
 
       // Legend
       ctx.textAlign = 'left';
