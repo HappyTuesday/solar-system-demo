@@ -219,14 +219,12 @@ function Dashboard() {
               <div className="dashboard-column-title">飞行控制</div>
               <div className="dashboard-controls-wrap">
                 <div className="dashboard-dpad">
-                  <div className="dpad-placeholder" />
                   <button
                     className="dpad-btn dpad-up"
                     onMouseDown={() => startHold(() => setVerticalThrust(1))}
                     onMouseUp={() => { stopHold(); setVerticalThrust(0); }}
                     onMouseLeave={stopHold}
                   >▲</button>
-                  <div className="dpad-placeholder" />
                   <button
                     className="dpad-btn dpad-left"
                     onMouseDown={() => startHold(() => setLateralThrust(1))}
@@ -240,14 +238,12 @@ function Dashboard() {
                     onMouseUp={() => { stopHold(); setLateralThrust(0); }}
                     onMouseLeave={stopHold}
                   >▶</button>
-                  <div className="dpad-placeholder" />
                   <button
                     className="dpad-btn dpad-down"
                     onMouseDown={() => startHold(() => setVerticalThrust(-1))}
                     onMouseUp={() => { stopHold(); setVerticalThrust(0); }}
                     onMouseLeave={stopHold}
                   >▼</button>
-                  <div className="dpad-placeholder" />
                 </div>
                 <div className="dashboard-thrust-row">
                   <button

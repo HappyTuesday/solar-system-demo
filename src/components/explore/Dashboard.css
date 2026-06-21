@@ -142,6 +142,14 @@
   flex: 2;
 }
 
+.dpad-up {
+  grid-column: 1 / -1;
+}
+
+.dpad-down {
+  grid-column: 1 / -1;
+}
+
 .dpad-btn {
   background: rgba(0, 180, 255, 0.08);
   border: 1px solid rgba(0, 180, 255, 0.15);
@@ -174,10 +182,6 @@
   width: 60%;
   height: 60%;
   place-self: center;
-}
-
-.dpad-placeholder {
-  visibility: hidden;
 }
 
 .dashboard-thrust-row {
