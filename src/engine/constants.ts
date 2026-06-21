@@ -421,7 +421,7 @@ export const DRAG_CONFIG = {
 };
 
 export const SCORING_CONFIG: ScoringConfig = {
-  allowedErrorPercent: 5,
+  allowedErrorPercent: 25,
   orbitRadiusWeight: 0.3,
   massWeight: 0.25,
   velocityWeight: 0.25,

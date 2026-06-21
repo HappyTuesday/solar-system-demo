@@ -124,7 +124,8 @@ function EarthMoonCanvas() {
 
     const loader = new THREE.TextureLoader();
 
-    const earthGeom = new THREE.SphereGeometry(2, 64, 64);
+    const earthRadius = (REAL_DATA.earth?.radius ?? 6.371e6) * SCALE_EM;
+    const earthGeom = new THREE.SphereGeometry(earthRadius, 64, 64);
     const earthMat = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.1, color: 0x4488ff });
     loader.load('/textures/earth.jpg', (tex) => { earthMat.map = tex; earthMat.color = new THREE.Color(0xffffff); earthMat.needsUpdate = true; });
     const earth = new THREE.Mesh(earthGeom, earthMat);
@@ -133,7 +134,8 @@ function EarthMoonCanvas() {
     scene.add(earth);
     bodyRefsRef.current.push({ id: 'earth', name: '地球', mesh: earth });
 
-    const moonGeom = new THREE.SphereGeometry(0.55, 48, 48);
+    const moonRadius = (REAL_DATA.moon?.radius ?? 1.7374e6) * SCALE_EM;
+    const moonGeom = new THREE.SphereGeometry(moonRadius, 48, 48);
     const moonMat = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0.05, color: 0xcccccc });
     loader.load('/textures/moon.jpg', (tex) => { moonMat.map = tex; moonMat.color = new THREE.Color(0xffffff); moonMat.needsUpdate = true; });
     const moon = new THREE.Mesh(moonGeom, moonMat);

@@ -11,11 +11,6 @@ const ORBIT_LINE_POINTS = 256;
 const INITIAL_FRUSTUM = 35;
 const CAM_RADIUS = 5;
 
-const DISPLAY_RADII: Record<string, number> = {
-  sun: 0.30, jupiter: 0.65, saturn: 0.55, uranus: 0.45,
-  neptune: 0.4, earth: 0.18, venus: 0.18, mars: 0.15, mercury: 0.12,
-};
-
 function makeOrthoCamera(w: number, h: number, halfSize: number) {
   const aspect = Math.max(w, 1) / Math.max(h, 1);
   const halfH = halfSize;
@@ -138,7 +133,7 @@ function ExploreCanvas() {
     for (const id of allIds) {
       const data = REAL_DATA[id];
       if (!data) continue;
-      const r = DISPLAY_RADII[id] || 0.25;
+      const r = data.radius * SCALE;
       const geom = new THREE.SphereGeometry(r, 48, 48);
       const mat = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.1 });
       if (id === 'sun') {
