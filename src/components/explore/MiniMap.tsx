@@ -67,24 +67,43 @@ function drawDirectionArrow(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.restore();
 }
 
-function drawSpaceship(ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, size: number) {
+function drawSpaceship(ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, size: number, thrustPercent: number) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
 
   const s = size;
+  const flicker = thrustPercent > 0 ? 0.7 + 0.3 * Math.sin(performance.now() * 0.02) : 0;
+  const flameLen = thrustPercent / 100 * s * 1.8 * flicker;
 
-  // Engine exhaust glow
+  // Engine exhaust glow (always visible, subtle)
   ctx.beginPath();
   ctx.moveTo(-s * 0.5, -s * 0.15);
   ctx.lineTo(-s * 1.2, 0);
   ctx.lineTo(-s * 0.5, s * 0.15);
   ctx.closePath();
   const exhGrad = ctx.createLinearGradient(-s * 0.5, 0, -s * 1.2, 0);
-  exhGrad.addColorStop(0, 'rgba(0, 220, 180, 0.5)');
+  exhGrad.addColorStop(0, thrustPercent > 0 ? 'rgba(0, 240, 160, 0.6)' : 'rgba(0, 180, 140, 0.3)');
   exhGrad.addColorStop(1, 'rgba(0, 220, 180, 0)');
   ctx.fillStyle = exhGrad;
   ctx.fill();
+
+  // Two engine flames when thrusting
+  if (thrustPercent > 0 && flameLen > 0.1) {
+    for (const offsetY of [-s * 0.12, s * 0.12]) {
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.45, offsetY - s * 0.08);
+      ctx.lineTo(-s * 0.45 - flameLen, offsetY);
+      ctx.lineTo(-s * 0.45, offsetY + s * 0.08);
+      ctx.closePath();
+      const flameGrad = ctx.createLinearGradient(-s * 0.45, 0, -s * 0.45 - flameLen, 0);
+      flameGrad.addColorStop(0, '#ffaa33');
+      flameGrad.addColorStop(0.5, '#ff6600');
+      flameGrad.addColorStop(1, 'rgba(255, 50, 0, 0)');
+      ctx.fillStyle = flameGrad;
+      ctx.fill();
+    }
+  }
 
   // Main body: sharp delta shape
   ctx.beginPath();
@@ -326,7 +345,7 @@ function MiniMap() {
 
       // Spaceship
       ctx.fillStyle = '#00b8ff';
-      drawSpaceship(ctx, shipSx, shipSy, -shipAngle, isZoomed ? 6 : 8);
+      drawSpaceship(ctx, shipSx, shipSy, -shipAngle, isZoomed ? 6 : 8, sp.thrustMagnitude);
 
       // Scale indicator
       const scaleBarAU = viewRange * 0.2;
