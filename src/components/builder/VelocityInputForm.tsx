@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { REAL_DATA } from '../../engine/constants';
+import { BUILD_DATA } from '../../engine/buildData';
 import type { CelestialBodyId } from '../../types';
 import './VelocityInputForm.css';
 
@@ -16,10 +16,10 @@ export default function VelocityInputForm({
   onConfirm,
   onCancel,
 }: VelocityInputFormProps) {
-  const data = REAL_DATA[templateId];
-  const realOrbitalSpeed = data?.orbitalSpeed;
+  const data = BUILD_DATA[templateId];
+  const defaultOrbitalSpeed = data?.orbitalSpeed;
 
-  const defaultSpeed = realOrbitalSpeed ? (realOrbitalSpeed / 1000).toFixed(1) : '0';
+  const defaultSpeed = defaultOrbitalSpeed ? (defaultOrbitalSpeed / 1000).toFixed(1) : '0';
   const [speed, setSpeed] = useState<string>(defaultSpeed);
   const [angle, setAngle] = useState<string>('0');
 
@@ -81,9 +81,10 @@ export default function VelocityInputForm({
         <div className="form-hint">0° = 切线方向（逆时针绕行），90° = 径向向外</div>
       </div>
 
-      {realOrbitalSpeed !== undefined && (
+      {defaultOrbitalSpeed !== undefined && defaultOrbitalSpeed > 0 && (
         <div className="form-reference">
-          真实轨道速度参考：<span>{(realOrbitalSpeed / 1000).toFixed(1)} km/s</span>（0° 切线方向）
+          ※ 推荐初速度：<span>{(defaultOrbitalSpeed / 1000).toFixed(1)} km/s</span>（0° 切线方向）<br/>
+          <span className="form-reference-note">数据已校正，便于搭建</span>
         </div>
       )}
 
