@@ -83,23 +83,27 @@
 .dashboard-panel-body {
   display: flex;
   gap: 12px;
-  align-items: flex-start;
 }
 
 /* ---- Sections ---- */
 
 .dashboard-section-left {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 300px;
   flex: 1;
 }
 
 .dashboard-orbital-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
   gap: 3px;
+  flex: 1;
+}
+
+.dashboard-orbital-grid .dashboard-stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .dashboard-section-center {
