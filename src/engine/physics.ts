@@ -140,7 +140,7 @@ function mergeBodies(a: CelestialBody, b: CelestialBody, dimension: 2 | 3 = 3): 
 
   return {
     id: `merged-${Date.now()}`,
-    templateId: a.templateId,
+    templateId: a.mass >= b.mass ? a.templateId : b.templateId,
     position: [px, py, pz],
     velocity: [vx, vy, vz],
     mass: totalMass,
