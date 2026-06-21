@@ -86,11 +86,15 @@ function Dashboard() {
   const relSpeedAU = Math.sqrt(relVelX ** 2 + relVelY ** 2 + relVelZ ** 2);
   const relSpeedKms = relSpeedAU * AU_TO_KM;
 
-  const totalSpeedAU = Math.sqrt(velocity[0] ** 2 + velocity[1] ** 2 + velocity[2] ** 2);
-  const dotTotalRel = velocity[0] * relVelX + velocity[1] * relVelY + velocity[2] * relVelZ;
-  const headingAngleDeg = totalSpeedAU > 1e-15 && relSpeedAU > 1e-15
-    ? Math.acos(Math.max(-1, Math.min(1, dotTotalRel / (totalSpeedAU * relSpeedAU)))) * 180 / Math.PI
-    : 0;
+  const headingAngleDeg = nearestDistAU > 1e-12 ? (() => {
+    const rx = position[0] - nearestBodyPos[0];
+    const ry = position[1] - nearestBodyPos[1];
+    const rz = position[2] - nearestBodyPos[2];
+    const rLen = Math.sqrt(rx * rx + ry * ry + rz * rz);
+    if (rLen < 1e-15 || relSpeedAU < 1e-15) return 0;
+    const radialDotRel = Math.abs(rx * relVelX + ry * relVelY + rz * relVelZ) / (rLen * relSpeedAU);
+    return Math.asin(Math.min(1, radialDotRel)) * 180 / Math.PI;
+  })() : 0;
 
   const altitudeKm = nearestDistKm - nearestBodyRadiusKm;
   const angularVelDegS = nearestDistAU > 1e-12 ? (relSpeedAU / nearestDistAU) * 180 / Math.PI : 0;
