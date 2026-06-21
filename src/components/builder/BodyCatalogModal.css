@@ -1,0 +1,120 @@
+.catalog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.catalog-card {
+  background: #151530;
+  border-radius: 12px;
+  padding: 24px 28px;
+  min-width: 680px;
+  max-width: 800px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #2a2a4a;
+}
+
+.catalog-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.catalog-header h2 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.catalog-close-btn {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+}
+
+.catalog-close-btn:hover {
+  color: #ccc;
+}
+
+.catalog-note {
+  text-align: center;
+  font-size: 11px;
+  color: #999;
+  margin: 0 0 16px;
+}
+
+.catalog-table-wrap {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.catalog-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.catalog-table th {
+  padding: 8px 10px;
+  text-align: center;
+  color: #666;
+  border-bottom: 1px solid #2a2a4a;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.catalog-table td {
+  padding: 6px 10px;
+  text-align: center;
+  border-bottom: 1px solid #15153a;
+  color: #ccc;
+  white-space: nowrap;
+}
+
+.catalog-table .name-cell {
+  text-align: left;
+  font-weight: 500;
+  color: #4488ff;
+}
+
+.catalog-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.catalog-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+  flex-shrink: 0;
+}
+
+.catalog-btn {
+  padding: 8px 24px;
+  border-radius: 6px;
+  border: 1px solid #2a2a4a;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ccc;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+
+.catalog-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}

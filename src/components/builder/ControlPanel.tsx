@@ -7,6 +7,7 @@ import { BUILD_DATA } from '../../engine/buildData';
 import { calculateErrors } from '../../engine/scoring';
 import { scaleUp, scaleDown } from '../../engine/coordinateTransform';
 import type { CelestialBody } from '../../types';
+import BodyCatalogModal from './BodyCatalogModal';
 import './ControlPanel.css';
 
 export default function ControlPanel() {
@@ -19,6 +20,7 @@ export default function ControlPanel() {
   const trailLength = useUIStore(s => s.trailLength);
 
   const [editingMass, setEditingMass] = useState<string>('');
+  const [showCatalog, setShowCatalog] = useState(false);
 
   const formatTime = (ms: number): string => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -190,6 +192,7 @@ export default function ControlPanel() {
         >
           💡 提示
         </button>
+        <button className="ctrl-btn" onClick={() => setShowCatalog(true)}>? 帮助</button>
       </div>
 
       <div className="panel-section trail-controls">
@@ -271,6 +274,8 @@ export default function ControlPanel() {
           ))}
         </div>
       )}
+
+      {showCatalog && <BodyCatalogModal onClose={() => setShowCatalog(false)} />}
     </div>
   );
 }
