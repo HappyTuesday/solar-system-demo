@@ -57,13 +57,6 @@ function BuilderCanvas() {
 
     createReferencePlane(scene, canvas.clientWidth, canvas.clientHeight);
 
-    const ls = getLinearScale();
-    for (const [, data] of Object.entries(BUILD_DATA)) {
-      if (data.semiMajorAxis && data.semiMajorAxis > 0) {
-        addOrbitRing(scene, data.semiMajorAxis * ls, 0x334455);
-      }
-    }
-
     const tm = new TrailManager(scene);
     tm.setVisible(showTrails);
     trailManagerRef.current = tm;
@@ -110,6 +103,19 @@ function BuilderCanvas() {
   // --- Clear trails when scale changes ---
   useEffect(() => {
     trailManagerRef.current?.clearAll();
+  }, [linearScale]);
+
+  // --- Rebuild orbit rings when scale changes ---
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    clearOrbitRings(scene);
+    const ls = getLinearScale();
+    for (const [, data] of Object.entries(BUILD_DATA)) {
+      if (data.semiMajorAxis && data.semiMajorAxis > 0) {
+        addOrbitRing(scene, data.semiMajorAxis * ls, 0x334455);
+      }
+    }
   }, [linearScale]);
 
   // --- Rebuild meshes when scale changes ---
