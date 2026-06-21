@@ -46,6 +46,9 @@ function ExploreCanvas() {
   const allIdsRef = useRef<string[]>(['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune']);
   const frustumRef = useRef(new THREE.Frustum());
   const projMatrixRef = useRef(new THREE.Matrix4());
+  const disposablesRef = useRef<{ geometries: THREE.BufferGeometry[]; materials: THREE.Material[]; textures: THREE.Texture[]; lines: THREE.Line[] }>({
+    geometries: [], materials: [], textures: [], lines: [],
+  });
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -83,7 +86,9 @@ function ExploreCanvas() {
       if (!data) continue;
       const r = data.radius * SCALE;
       const geom = new THREE.SphereGeometry(r, 48, 48);
+      disposablesRef.current.geometries.push(geom);
       const mat = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.1 });
+      disposablesRef.current.materials.push(mat);
       if (id === 'sun') {
         mat.color = new THREE.Color(0xffcc00);
         mat.emissive = new THREE.Color(0xff6600);
@@ -100,11 +105,16 @@ function ExploreCanvas() {
           mat.map = tex;
           mat.color = new THREE.Color(0xffffff);
           mat.needsUpdate = true;
+          disposablesRef.current.textures.push(tex);
         },
         undefined, () => {});
 
       if (data.semiMajorAxis && data.orbital && id !== 'sun') {
-        scene.add(createOrbitLine(id, orbitColors[id] || 0x556688));
+        const line = createOrbitLine(id, orbitColors[id] || 0x556688);
+        scene.add(line);
+        disposablesRef.current.lines.push(line);
+        disposablesRef.current.geometries.push(line.geometry);
+        disposablesRef.current.materials.push(line.material as THREE.Material);
       }
     }
     bodyMeshesRef.current = bodyMeshes;
@@ -119,7 +129,8 @@ function ExploreCanvas() {
       const store = useSpaceshipStore.getState();
 
       if (store.isRunning && dt > 0 && !store.exploded) {
-        simulatedTime += dt * 86400 * 1000;
+        const clampedDt = Math.min(dt, 0.1);
+        simulatedTime += clampedDt * 86400 * 1000;
         store.setSimulatedTime(simulatedTime);
         const jd = julianDate(simulatedTime);
 
@@ -163,7 +174,7 @@ function ExploreCanvas() {
           exploded: store.exploded,
         };
 
-        const simDelta = dt * 86400;
+        const simDelta = clampedDt * 86400;
         const steps = Math.min(Math.max(1, Math.floor(simDelta / 0.016)), 200);
         const subDt = simDelta / steps;
         for (let s = 0; s < steps; s++) {
@@ -224,8 +235,18 @@ function ExploreCanvas() {
     return () => {
       cancelAnimationFrame(animRef.current);
       window.removeEventListener('resize', onResize);
+
+      const d = disposablesRef.current;
+      for (const line of d.lines) scene.remove(line);
+      for (const [, mesh] of bodyMeshes) scene.remove(mesh);
+      d.geometries.forEach(g => g.dispose());
+      d.materials.forEach(m => m.dispose());
+      d.textures.forEach(t => t.dispose());
+
       renderer.dispose();
-      container.removeChild(renderer.domElement);
+      if (renderer.domElement.parentNode === container) {
+        container.removeChild(renderer.domElement);
+      }
     };
   }, []);
 
