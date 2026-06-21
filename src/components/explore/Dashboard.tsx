@@ -1,7 +1,24 @@
 import { useCallback, useRef } from 'react';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
+import { REAL_DATA, MU_SUN } from '../../engine/constants';
+import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
 import MiniMap from './MiniMap';
 import './Dashboard.css';
+
+const SCALE = 1 / 1.496e11;
+
+function computeEarthPos(simulatedTime: number): [number, number, number] {
+  const jd = julianDate(simulatedTime);
+  const data = REAL_DATA.earth;
+  const o = data.orbital!;
+  const period = orbitalPeriod(data.semiMajorAxis!, MU_SUN);
+  const M = meanAnomalyAtTime(o.meanAnomalyAtEpoch, period, o.epoch, jd);
+  const Mmod = ((M % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  const E = solveKepler(Mmod, o.eccentricity);
+  const nu = trueAnomaly(E, o.eccentricity);
+  const sv = stateVectors(data.semiMajorAxis!, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN);
+  return [sv.position[0] * SCALE, sv.position[1] * SCALE, sv.position[2] * SCALE];
+}
 
 function Dashboard() {
   const expanded = useSpaceshipStore(s => s.dashboardExpanded);
@@ -10,6 +27,7 @@ function Dashboard() {
   const velocity = useSpaceshipStore(s => s.velocity);
   const thrustMagnitude = useSpaceshipStore(s => s.thrustMagnitude);
   const exploded = useSpaceshipStore(s => s.exploded);
+  const simulatedTime = useSpaceshipStore(s => s.simulatedTime);
   const setForwardThrust = useSpaceshipStore(s => s.setForwardThrust);
   const setLateralThrust = useSpaceshipStore(s => s.setLateralThrust);
   const setVerticalThrust = useSpaceshipStore(s => s.setVerticalThrust);
@@ -22,6 +40,12 @@ function Dashboard() {
   const speedMs = Math.sqrt(
     velocity[0] ** 2 + velocity[1] ** 2 + velocity[2] ** 2
   ) * 1.496e11 / 1000;
+
+  const earthPos = computeEarthPos(simulatedTime);
+  const distEarthAU = Math.sqrt(
+    (position[0] - earthPos[0]) ** 2 + (position[1] - earthPos[1]) ** 2 + (position[2] - earthPos[2]) ** 2
+  );
+  const distEarthKm = distEarthAU * 1.496e11 / 1000;
 
   const startHold = useCallback((action: () => void) => {
     action();
@@ -41,11 +65,25 @@ function Dashboard() {
       <div className="dashboard-container">
         <div className="dashboard-collapsed-bar" onClick={toggleDashboard}>
           {!exploded && (
-            <span className="dashboard-collapsed-speed">{speedMs.toFixed(1)} km/s</span>
+            <>
+              <span className="dashboard-collapsed-speed">{speedMs.toFixed(1)} km/s</span>
+              <span style={{ color: '#556677', fontSize: 9, margin: '0 2px' }}>|</span>
+              <span style={{ color: '#ccaa88', fontSize: 10 }}>距地球 {distEarthKm.toFixed(0)} km</span>
+            </>
           )}
           <span className="dashboard-collapsed-icon">▲</span>
-        </div>
-      </div>
+                </div>
+                <div className="dashboard-stat-row" style={{ marginBottom: 4 }}>
+                  <div className="dashboard-stat" style={{ background: 'rgba(204,170,136,0.06)', borderColor: 'rgba(204,170,136,0.15)' }}>
+                    <div className="dashboard-stat-label">距地球</div>
+                    <div className="dashboard-stat-value" style={{ color: '#ccaa88', fontSize: 11 }}>
+                      {distEarthAU < 0.1
+                        ? `${distEarthKm.toFixed(0)} km`
+                        : `${distEarthAU.toFixed(3)} AU`}
+                    </div>
+                  </div>
+                </div>
+              </div>
     );
   }
 
