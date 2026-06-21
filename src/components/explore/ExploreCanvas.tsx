@@ -93,8 +93,6 @@ function ExploreCanvas() {
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(w, h);
     renderer.setPixelRatio(dpr);
-    renderer.autoClear = false;
-    renderer.setScissorTest(false);
     container.appendChild(renderer.domElement);
 
     scene.add(new THREE.AmbientLight(0x444466, 1.0));
@@ -253,7 +251,8 @@ function ExploreCanvas() {
       camera.lookAt(animLookTarget);
 
       renderer.setViewport(0, 0, bufW, bufH);
-      renderer.clear(true, true, true);
+      renderer.setScissor(0, 0, bufW, bufH);
+      renderer.setScissorTest(false);
       renderer.render(scene, camera);
 
       // ---- Mirror sizes (CSS pixels) ----
@@ -273,8 +272,6 @@ function ExploreCanvas() {
       const rearY = bufH - rearH;
       rearCam.aspect = rearWCss / Math.max(rearHCss, 1);
       rearCam.updateProjectionMatrix();
-      renderer.setViewport(rearX, rearY, rearW, rearH);
-      renderer.clear(true, true, false);
       rearCam.position.copy(pos);
       animLookTarget.set(
         sp.position[0] - sp.direction[0] * 10,
@@ -282,6 +279,9 @@ function ExploreCanvas() {
         sp.position[2] - sp.direction[2] * 10,
       );
       rearCam.lookAt(animLookTarget);
+      renderer.setViewport(rearX, rearY, rearW, rearH);
+      renderer.setScissor(rearX, rearY, rearW, rearH);
+      renderer.setScissorTest(true);
       renderer.render(scene, rearCam);
 
       // ---- Left mirror (flush with left edge) ----
@@ -289,8 +289,6 @@ function ExploreCanvas() {
       const leftY = Math.round((bufH - sideH) / 2);
       leftCam.aspect = sideWCss / Math.max(sideHCss, 1);
       leftCam.updateProjectionMatrix();
-      renderer.setViewport(leftX, leftY, sideW, sideH);
-      renderer.clear(true, true, false);
       leftCam.position.copy(pos);
       animLookTarget.set(
         sp.position[0] + leftDir.x * 10,
@@ -298,6 +296,9 @@ function ExploreCanvas() {
         sp.position[2] + leftDir.z * 10,
       );
       leftCam.lookAt(animLookTarget);
+      renderer.setViewport(leftX, leftY, sideW, sideH);
+      renderer.setScissor(leftX, leftY, sideW, sideH);
+      renderer.setScissorTest(true);
       renderer.render(scene, leftCam);
 
       // ---- Right mirror (flush with right edge) ----
@@ -305,8 +306,6 @@ function ExploreCanvas() {
       const rightY = Math.round((bufH - sideH) / 2);
       rightCam.aspect = sideWCss / Math.max(sideHCss, 1);
       rightCam.updateProjectionMatrix();
-      renderer.setViewport(rightX, rightY, sideW, sideH);
-      renderer.clear(true, true, false);
       rightCam.position.copy(pos);
       animLookTarget.set(
         sp.position[0] + rightDir.x * 10,
@@ -314,6 +313,9 @@ function ExploreCanvas() {
         sp.position[2] + rightDir.z * 10,
       );
       rightCam.lookAt(animLookTarget);
+      renderer.setViewport(rightX, rightY, sideW, sideH);
+      renderer.setScissor(rightX, rightY, sideW, sideH);
+      renderer.setScissorTest(true);
       renderer.render(scene, rightCam);
 
       animRef.current = requestAnimationFrame(animate);
