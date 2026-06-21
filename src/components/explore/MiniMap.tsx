@@ -191,6 +191,20 @@ function MiniMap() {
       const anchorX = isZoomed ? nearestX : sp.position[0];
       const anchorY = isZoomed ? nearestY : sp.position[1];
 
+      // Adaptive grid & scale bar unit
+      const AU_TO_KM2 = 1.496e8;
+      const useKm = viewRange < 0.001;
+      const viewRangeDisplay = viewRange * (useKm ? AU_TO_KM2 : 1);
+
+      const niceSteps = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
+      const targetStepDisplay = viewRangeDisplay / 6;
+      let gridStepDisplay = niceSteps[niceSteps.length - 1];
+      for (const s of niceSteps) {
+        if (s >= targetStepDisplay) { gridStepDisplay = s; break; }
+      }
+      const gridStepAU = gridStepDisplay / (useKm ? AU_TO_KM2 : 1);
+      const gridStepPx = gridStepAU * scale;
+
       ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
       ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
@@ -198,7 +212,7 @@ function MiniMap() {
       // Grid lines
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
       ctx.lineWidth = 0.5;
-      const gridStep = scale * viewRange * 0.2;
+      const gridStep = gridStepPx;
       for (let gx = cx % gridStep; gx < CANVAS_W; gx += gridStep) {
         ctx.beginPath();
         ctx.moveTo(gx, PADDING);
@@ -348,8 +362,9 @@ function MiniMap() {
       drawSpaceship(ctx, shipSx, shipSy, -shipAngle, isZoomed ? 6 : 8, sp.thrustMagnitude);
 
       // Scale indicator
-      const scaleBarAU = viewRange * 0.2;
-      const scaleBarPx = scaleBarAU * scale;
+      const displayUnit = useKm ? 'km' : 'AU';
+      const scaleBarPx = gridStepPx;
+      const scaleBarDisplay = gridStepDisplay;
       const barX = CANVAS_W - PADDING - scaleBarPx;
       const barY = CANVAS_H - PADDING - 4;
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
@@ -367,8 +382,8 @@ function MiniMap() {
       ctx.fillStyle = '#556677';
       ctx.font = '8px monospace';
       ctx.textAlign = 'center';
-      const scaleTextAU = scaleBarAU.toFixed(4);
-      ctx.fillText(`${scaleTextAU} AU`, barX + scaleBarPx / 2, barY - 5);
+      const scaleText = useKm ? `${scaleBarDisplay} km` : `${scaleBarDisplay} AU`;
+      ctx.fillText(scaleText, barX + scaleBarPx / 2, barY - 5);
 
       // Legend
       ctx.textAlign = 'left';
