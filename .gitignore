@@ -25,3 +25,4 @@ dist-ssr
 
 # Test scripts
 test-*.mjs
+.superpowers/

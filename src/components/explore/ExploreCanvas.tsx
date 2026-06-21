@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
 import { REAL_DATA, MU_SUN } from '../../engine/constants';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
+import { useExploreStore } from '../../stores/exploreStore';
 import { rk4StepSpaceship, applyThrustInBodyFrame, checkSpaceshipCollision, type BodyInfo } from '../../engine/spaceship';
 import type { SpaceshipState } from '../../types';
 
@@ -156,8 +157,6 @@ function ExploreCanvas() {
 
     let lastTime = performance.now();
     let simulatedTime = useSpaceshipStore.getState().simulatedTime;
-    let frameCount = 0;
-    const earthTemplateId = 'earth';
 
     const animLookTarget = new THREE.Vector3();
 
@@ -187,29 +186,10 @@ function ExploreCanvas() {
           exploded: store.exploded,
         };
 
-        const simDelta = clampedDt * 86400;
+        const timeScale = useExploreStore.getState().timeScale;
+        const simDelta = clampedDt * timeScale;
         const steps = Math.min(Math.max(1, Math.floor(simDelta / 0.016)), 200);
         const subDt = simDelta / steps;
-
-        frameCount++;
-        if (frameCount <= 5 || frameCount % 30 === 0) {
-          const nowJd = julianDate(simulatedTime);
-          const earthPos = computeBodyPosition(earthTemplateId, nowJd);
-          if (earthPos) {
-            const relDistAU = Math.sqrt(
-              (store.position[0] - earthPos[0]) ** 2 +
-              (store.position[1] - earthPos[1]) ** 2 +
-              (store.position[2] - earthPos[2]) ** 2,
-            );
-            console.log(
-              `[Frame ${frameCount}] ` +
-              `simTime=${(simulatedTime/1000).toFixed(0)}s ` +
-              `relDist=${(relDistAU * 1.496e11 / 1000).toFixed(0)}km ` +
-              `shipSpeed=${(Math.sqrt(store.velocity[0]**2+store.velocity[1]**2+store.velocity[2]**2)*1.496e11/1000).toFixed(0)}km/s ` +
-              `subDt=${subDt.toFixed(2)}s`,
-            );
-          }
-        }
 
         for (let s = 0; s < steps; s++) {
           const subSimTime = simulatedTime + s * subDt * 1000;

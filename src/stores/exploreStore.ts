@@ -21,7 +21,7 @@ export interface ExploreState {
 
 const initialState = {
   simulatedTime: Date.now(),
-  timeScale: 86400,
+  timeScale: 100,
   isRunning: true,
   selectedBodyId: null,
   showTrails: true,

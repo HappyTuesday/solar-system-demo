@@ -86,11 +86,11 @@ export function createSpaceshipState(
     (bodyState.velocity[2] + rel.velocity[2]) * SCALE,
   ];
 
-  const speed = Math.sqrt(
+  const relSpeed = Math.sqrt(
     rel.velocity[0] ** 2 + rel.velocity[1] ** 2 + rel.velocity[2] ** 2,
   );
-  const direction: [number, number, number] = speed > 0
-    ? [rel.velocity[0] / speed, rel.velocity[1] / speed, rel.velocity[2] / speed]
+  const direction: [number, number, number] = relSpeed > 0
+    ? [rel.velocity[0] / relSpeed, rel.velocity[1] / relSpeed, rel.velocity[2] / relSpeed]
     : [0, 1, 0];
 
   return {
