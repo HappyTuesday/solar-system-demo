@@ -1,71 +1,74 @@
 .dashboard-container {
   position: fixed;
-  bottom: 16px;
-  right: 16px;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 100;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
+  align-items: center;
   font-family: 'Courier New', monospace;
 }
 
-.dashboard-speed-badge {
-  background: rgba(5, 10, 30, 0.8);
-  border: 1px solid rgba(0, 180, 255, 0.3);
-  border-radius: 4px;
-  padding: 2px 8px;
-  color: #00ff88;
-  font-size: 11px;
-  user-select: none;
-}
+/* ---- Collapsed ---- */
 
-.dashboard-collapse-btn {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: rgba(0, 180, 255, 0.15);
-  border: 2px solid rgba(0, 180, 255, 0.4);
+.dashboard-collapsed-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: #00b8ff;
-  font-size: 16px;
+  gap: 10px;
+  background: rgba(5, 10, 30, 0.85);
+  border: 1px solid rgba(0, 180, 255, 0.25);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 4px 16px 6px;
   cursor: pointer;
   user-select: none;
   transition: background 0.2s;
 }
 
-.dashboard-collapse-btn:hover {
-  background: rgba(0, 180, 255, 0.25);
+.dashboard-collapsed-bar:hover {
+  background: rgba(0, 180, 255, 0.12);
 }
 
+.dashboard-collapsed-speed {
+  color: #00ff88;
+  font-size: 11px;
+}
+
+.dashboard-collapsed-icon {
+  color: #00b8ff;
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+
+/* ---- Expanded Panel ---- */
+
 .dashboard-panel {
-  width: 240px;
+  width: 640px;
   background: rgba(5, 10, 30, 0.92);
   border: 1px solid rgba(0, 180, 255, 0.3);
-  border-radius: 8px;
-  padding: 14px;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 10px 14px 12px;
   color: #ccc;
-  position: relative;
 }
 
 .dashboard-panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .dashboard-panel-title {
   color: #00b8ff;
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 1px;
 }
 
 .dashboard-close-btn {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: rgba(0, 180, 255, 0.2);
   border: none;
@@ -73,28 +76,59 @@
   align-items: center;
   justify-content: center;
   color: #00b8ff;
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
 }
 
-.dashboard-section-label {
-  font-size: 10px;
-  color: #667788;
-  margin-bottom: 4px;
+.dashboard-panel-body {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
 }
 
-.dashboard-position-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+/* ---- Sections ---- */
+
+.dashboard-section-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 160px;
+}
+
+.dashboard-section-center {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 180px;
+}
+
+.dashboard-section-right {
+  display: flex;
+  flex-direction: column;
+  min-width: 110px;
+}
+
+.dashboard-section-label {
+  font-size: 9px;
+  color: #556677;
+  margin-bottom: 3px;
+}
+
+/* ---- Position readouts ---- */
+
+.dashboard-position-row {
+  display: flex;
   gap: 4px;
-  margin-bottom: 6px;
 }
 
 .dashboard-readout {
+  flex: 1;
   background: rgba(0, 180, 255, 0.05);
   border: 1px solid rgba(0, 180, 255, 0.12);
   border-radius: 3px;
   padding: 3px 6px;
+  text-align: center;
 }
 
 .dashboard-readout-label {
@@ -107,98 +141,133 @@
   font-size: 11px;
 }
 
-.dashboard-row {
+/* ---- Speed / Thrust row ---- */
+
+.dashboard-stat-row {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
-.dashboard-readout-half {
+.dashboard-stat {
   flex: 1;
-  background: rgba(0, 180, 255, 0.08);
-  border: 1px solid rgba(0, 180, 255, 0.15);
+  background: rgba(0, 180, 255, 0.06);
+  border: 1px solid rgba(0, 180, 255, 0.12);
   border-radius: 3px;
   padding: 3px 8px;
+  text-align: center;
 }
+
+.dashboard-stat-label {
+  font-size: 8px;
+  color: #445566;
+}
+
+.dashboard-stat-value {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+/* ---- Controls ---- */
 
 .dashboard-controls-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  margin-bottom: 4px;
+  gap: 3px;
 }
 
 .dashboard-ctrl-btn {
-  background: rgba(0, 180, 255, 0.1);
-  border: none;
+  background: rgba(0, 180, 255, 0.08);
+  border: 1px solid rgba(0, 180, 255, 0.12);
   border-radius: 3px;
   padding: 4px 0;
   text-align: center;
-  font-size: 11px;
+  font-size: 10px;
   color: #ccc;
   cursor: pointer;
   user-select: none;
   font-family: inherit;
+  transition: background 0.15s;
 }
 
 .dashboard-ctrl-btn:hover {
-  background: rgba(0, 180, 255, 0.2);
+  background: rgba(0, 180, 255, 0.18);
 }
 
 .dashboard-ctrl-btn:active {
-  background: rgba(0, 180, 255, 0.3);
+  background: rgba(0, 180, 255, 0.28);
 }
 
 .dashboard-thrust-row {
   display: flex;
-  gap: 4px;
-  margin-top: 4px;
-  margin-bottom: 10px;
+  gap: 3px;
 }
 
 .dashboard-accel-btn {
   flex: 1;
-  border: none;
+  border: 1px solid rgba(0, 255, 128, 0.15);
   border-radius: 3px;
   padding: 4px 0;
   text-align: center;
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
   user-select: none;
   font-family: inherit;
-  background: rgba(0, 255, 128, 0.12);
+  background: rgba(0, 255, 128, 0.08);
   color: #00ff88;
 }
 
 .dashboard-accel-btn:hover {
-  background: rgba(0, 255, 128, 0.2);
+  background: rgba(0, 255, 128, 0.16);
 }
 
 .dashboard-decel-btn {
   flex: 1;
-  border: none;
+  border: 1px solid rgba(255, 80, 80, 0.15);
   border-radius: 3px;
   padding: 4px 0;
   text-align: center;
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
   user-select: none;
   font-family: inherit;
-  background: rgba(255, 80, 80, 0.12);
+  background: rgba(255, 80, 80, 0.08);
   color: #ff5555;
 }
 
 .dashboard-decel-btn:hover {
-  background: rgba(255, 80, 80, 0.2);
+  background: rgba(255, 80, 80, 0.16);
 }
 
-.dashboard-section {
-  margin-bottom: 10px;
+.dashboard-pause-btn {
+  width: 100%;
+  border: none;
+  border-radius: 3px;
+  padding: 4px 0;
+  text-align: center;
+  font-size: 10px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ccc;
+  font-family: inherit;
 }
+
+.dashboard-pause-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ---- MiniMap container ---- */
+
+.dashboard-minimap-wrap {
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* ---- Exploded ---- */
 
 .dashboard-exploded {
   text-align: center;
   color: #ff5555;
-  padding: 10px 0;
-  font-size: 14px;
+  padding: 6px 0;
+  font-size: 13px;
   letter-spacing: 2px;
 }
