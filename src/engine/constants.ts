@@ -445,3 +445,9 @@ export const AUDIO_FILES = {
 };
 
 export const MU_SUN = PHYSICAL_CONSTANTS.G * PHYSICAL_CONSTANTS.sunMass;
+
+export const SPACESHIP = {
+  mass: 1,
+  collisionRadius: 0.001,
+  maxThrustAU: 1.5e-7,
+};

@@ -107,3 +107,12 @@ export interface UIState {
   showTrails: boolean;
   trailLength: number;
 }
+
+export interface SpaceshipState {
+  position: [number, number, number];
+  velocity: [number, number, number];
+  direction: [number, number, number];
+  thrust: [number, number, number];
+  thrustMagnitude: number;
+  exploded: boolean;
+}
