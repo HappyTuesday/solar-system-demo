@@ -113,7 +113,7 @@ function BuilderCanvas() {
     const ls = getLinearScale();
     for (const [, data] of Object.entries(BUILD_DATA)) {
       if (data.semiMajorAxis && data.semiMajorAxis > 0) {
-        addOrbitRing(scene, data.semiMajorAxis * ls, 0x334455);
+        addOrbitRing(scene, data.semiMajorAxis * ls, 0x5577aa);
       }
     }
   }, [linearScale]);

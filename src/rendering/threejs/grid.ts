@@ -56,7 +56,7 @@ export function createOrbitRing(scene: THREE.Scene, radius: number, color: numbe
     dashSize: 20,
     gapSize: 20,
     transparent: true,
-    opacity: 0.5,
+    opacity: 0.65,
     depthWrite: false,
   });
   const line = new THREE.Line(geometry, material);
