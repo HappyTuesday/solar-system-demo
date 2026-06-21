@@ -44,12 +44,12 @@
 /* ---- Expanded Panel ---- */
 
 .dashboard-panel {
-  width: 900px;
+  width: 960px;
   background: rgba(5, 10, 30, 0.92);
   border: 1px solid rgba(0, 180, 255, 0.3);
   border-bottom: none;
   border-radius: 8px 8px 0 0;
-  padding: 10px 14px 12px;
+  padding: 12px 18px 14px;
   color: #ccc;
 }
 
@@ -82,7 +82,7 @@
 
 .dashboard-panel-body {
   display: flex;
-  gap: 12px;
+  gap: 14px;
 }
 
 /* ---- Sections ---- */
@@ -92,7 +92,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .dashboard-column-title {
@@ -124,7 +124,7 @@
   background: rgba(0, 180, 255, 0.05);
   border: 1px solid rgba(0, 180, 255, 0.12);
   border-radius: 3px;
-  padding: 3px 6px;
+  padding: 5px 6px;
   text-align: center;
 }
 
@@ -150,7 +150,7 @@
   background: rgba(0, 180, 255, 0.06);
   border: 1px solid rgba(0, 180, 255, 0.12);
   border-radius: 3px;
-  padding: 3px 8px;
+  padding: 5px 8px;
   text-align: center;
 }
 
