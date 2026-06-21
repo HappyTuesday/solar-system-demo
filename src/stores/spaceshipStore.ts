@@ -45,7 +45,7 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
   reset: () => set({
     ...createSpaceshipState(),
     isRunning: true,
-    dashboardExpanded: false,
+  dashboardExpanded: true,
     simulatedTime: Date.now(),
   }),
 }));
