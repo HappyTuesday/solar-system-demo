@@ -446,6 +446,9 @@ export const AUDIO_FILES = {
 
 export const MU_SUN = PHYSICAL_CONSTANTS.G * PHYSICAL_CONSTANTS.sunMass;
 
+export const AU_TO_M = 1.496e11;
+export const G_AU = PHYSICAL_CONSTANTS.G / (AU_TO_M * AU_TO_M * AU_TO_M);
+
 export const SPACESHIP = {
   mass: 1,                    // kg (negligible, does not affect celestial bodies)
   collisionRadius: 0.001,     // AU (~150,000 km)

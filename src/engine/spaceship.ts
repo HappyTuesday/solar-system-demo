@@ -1,10 +1,10 @@
 import type { SpaceshipState } from '../types';
-import { SPACESHIP, PHYSICAL_CONSTANTS, REAL_DATA } from './constants';
+import { SPACESHIP, PHYSICAL_CONSTANTS, REAL_DATA, G_AU, AU_TO_M } from './constants';
+import { vec3Length } from './physics';
 
 const EARTH_SO = 0.003; // Earth sphere of influence in AU
 
 export function createSpaceshipState(): SpaceshipState {
-  // Start near Earth's orbit, close to Earth
   const earthOrbitAU = 1.0;
   const pos: [number, number, number] = [
     earthOrbitAU + EARTH_SO,
@@ -12,17 +12,16 @@ export function createSpaceshipState(): SpaceshipState {
     0,
   ];
 
-  // Earth's orbital speed ~29.8 km/s = 2.02e-7 AU/s
-  const earthOrbitalSpeed = 2.02e-7;
+  const earthOrbitalSpeedAU = (REAL_DATA.earth.orbitalSpeed ?? 29780) / AU_TO_M;
   const orbitSpeed = Math.sqrt(
-    (PHYSICAL_CONSTANTS.G * REAL_DATA.earth.mass) /
-    (EARTH_SO * 1.496e11)
+    (G_AU * REAL_DATA.earth.mass) /
+    (EARTH_SO * AU_TO_M)
   );
-  const orbitSpeedAU = orbitSpeed / 1.496e11;
+  const orbitSpeedAU = orbitSpeed / AU_TO_M;
 
   const vel: [number, number, number] = [
     0,
-    earthOrbitalSpeed + orbitSpeedAU,
+    earthOrbitalSpeedAU + orbitSpeedAU,
     0,
   ];
 
@@ -36,10 +35,6 @@ export function createSpaceshipState(): SpaceshipState {
     thrustMagnitude: 0,
     exploded: false,
   };
-}
-
-function vec3Length(v: [number, number, number]): number {
-  return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 }
 
 function vec3Normalize(v: [number, number, number]): [number, number, number] {
@@ -58,11 +53,14 @@ export function applyThrustInBodyFrame(
   if (magnitude <= 0) return [0, 0, 0];
 
   const dir = vec3Normalize(direction);
-  const worldUp: [number, number, number] = [0, 0, 1];
+
+  const refUp: [number, number, number] =
+    Math.abs(dir[2]) > 0.9999 ? [0, 1, 0] : [0, 0, 1];
+
   const right = vec3Normalize([
-    dir[1] * worldUp[2] - dir[2] * worldUp[1],
-    dir[2] * worldUp[0] - dir[0] * worldUp[2],
-    dir[0] * worldUp[1] - dir[1] * worldUp[0],
+    dir[1] * refUp[2] - dir[2] * refUp[1],
+    dir[2] * refUp[0] - dir[0] * refUp[2],
+    dir[0] * refUp[1] - dir[1] * refUp[0],
   ]);
   const up = vec3Normalize([
     right[1] * dir[2] - right[2] * dir[1],
@@ -70,16 +68,16 @@ export function applyThrustInBodyFrame(
     right[0] * dir[1] - right[1] * dir[0],
   ]);
 
-  const maxThrust = SPACESHIP.maxThrustAU * (magnitude / 100);
-  const tx = dir[0] * forwardBack * maxThrust +
-            right[0] * leftRight * maxThrust +
-            up[0] * upDown * maxThrust;
-  const ty = dir[1] * forwardBack * maxThrust +
-            right[1] * leftRight * maxThrust +
-            up[1] * upDown * maxThrust;
-  const tz = dir[2] * forwardBack * maxThrust +
-            right[2] * leftRight * maxThrust +
-            up[2] * upDown * maxThrust;
+  const thrustAccel = SPACESHIP.maxThrustAU * (magnitude / 100);
+  const tx = dir[0] * forwardBack * thrustAccel +
+            right[0] * leftRight * thrustAccel +
+            up[0] * upDown * thrustAccel;
+  const ty = dir[1] * forwardBack * thrustAccel +
+            right[1] * leftRight * thrustAccel +
+            up[1] * upDown * thrustAccel;
+  const tz = dir[2] * forwardBack * thrustAccel +
+            right[2] * leftRight * thrustAccel +
+            up[2] * upDown * thrustAccel;
 
   return [tx, ty, tz];
 }
@@ -104,7 +102,7 @@ export function computeSpaceshipAcceleration(
     const dz = sz - body.position[2];
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
     const distSoft = Math.sqrt(dist * dist + softening * softening);
-    const factor = PHYSICAL_CONSTANTS.G / (distSoft * distSoft * distSoft);
+    const factor = G_AU / (distSoft * distSoft * distSoft);
     ax -= factor * dx * body.mass;
     ay -= factor * dy * body.mass;
     az -= factor * dz * body.mass;

@@ -1,0 +1,95 @@
+<h2>仪表盘组件设计</h2>
+<p class="subtitle">竖版布局 · 交互状态 · 导航图细节</p>
+
+<div class="split">
+  <!-- 收缩状态 -->
+  <div class="mockup">
+    <div class="mockup-header">收缩态：右下角小圆圈</div>
+    <div class="mockup-body" style="background:#0a0a1a; padding:16px; position:relative; min-height:300px;">
+      <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#334; font-size:13px;">第一人称飞行画面</div>
+      <div style="position:absolute; bottom:12px; right:12px; display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+        <!-- 速度简明读数 -->
+        <div style="background:rgba(5,10,30,0.8); border:1px solid rgba(0,180,255,0.3); border-radius:4px; padding:2px 8px; color:#0f0; font-family:monospace; font-size:11px;">35.0 km/s</div>
+        <!-- 收缩圆圈 -->
+        <div style="width:42px; height:42px; border-radius:50%; background:rgba(0,180,255,0.15); border:2px solid rgba(0,180,255,0.4); display:flex; align-items:center; justify-content:center; color:#0bf; font-size:16px; cursor:pointer;" title="点击展开">✧</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 展开状态 -->
+  <div class="mockup">
+    <div class="mockup-header">展开态：完整仪表盘</div>
+    <div class="mockup-body" style="background:#0a0a1a; padding:14px; position:relative; min-height:300px;">
+      <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#334; font-size:13px;">第一人称飞行画面（仪表盘叠加在右下）</div>
+      <div style="position:absolute; bottom:12px; right:12px; width:240px; background:rgba(5,10,30,0.92); border:1px solid rgba(0,180,255,0.3); border-radius:8px; padding:14px; color:#ccc;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <span style="color:#0bf; font-size:12px; letter-spacing:1px;">飞船仪表</span>
+          <div style="width:20px; height:20px; border-radius:50%; background:rgba(0,180,255,0.2); display:flex; align-items:center; justify-content:center; color:#0bf; font-size:11px; cursor:pointer;">−</div>
+        </div>
+
+        <!-- 位置 + 速度 -->
+        <div style="margin-bottom:10px;">
+          <div style="font-size:10px; color:#667; margin-bottom:4px;">位置</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; margin-bottom:6px;">
+            <div style="background:rgba(0,180,255,0.05); border:1px solid rgba(0,180,255,0.12); border-radius:3px; padding:3px 6px;">
+              <div style="font-size:8px; color:#445;">X (AU)</div>
+              <div style="color:#0f0; font-family:monospace; font-size:11px;">0.723</div>
+            </div>
+            <div style="background:rgba(0,180,255,0.05); border:1px solid rgba(0,180,255,0.12); border-radius:3px; padding:3px 6px;">
+              <div style="font-size:8px; color:#445;">Y (AU)</div>
+              <div style="color:#0f0; font-family:monospace; font-size:11px;">0.011</div>
+            </div>
+            <div style="background:rgba(0,180,255,0.05); border:1px solid rgba(0,180,255,0.12); border-radius:3px; padding:3px 6px;">
+              <div style="font-size:8px; color:#445;">Z (AU)</div>
+              <div style="color:#0f0; font-family:monospace; font-size:11px;">0.004</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <div style="background:rgba(0,180,255,0.08); border:1px solid rgba(0,180,255,0.15); border-radius:3px; padding:3px 8px; flex:1;">
+              <div style="font-size:8px; color:#445;">飞行速度</div>
+              <div style="color:#ff0; font-family:monospace; font-size:12px;">35.0 <span style="font-size:9px; color:#667;">km/s</span></div>
+            </div>
+            <div style="background:rgba(0,180,255,0.08); border:1px solid rgba(0,180,255,0.15); border-radius:3px; padding:3px 8px; flex:1;">
+              <div style="font-size:8px; color:#445;">推力</div>
+              <div style="color:#0bf; font-family:monospace; font-size:12px;">60<span style="font-size:9px; color:#667;">%</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 飞行控制 -->
+        <div style="margin-bottom:10px;">
+          <div style="font-size:10px; color:#667; margin-bottom:4px;">飞行控制</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">
+            <div style="background:rgba(0,180,255,0.1); border-radius:3px; padding:4px 0; text-align:center; font-size:11px; user-select:none; cursor:pointer;">↑ 抬头</div>
+            <div style="background:rgba(0,180,255,0.1); border-radius:3px; padding:4px 0; text-align:center; font-size:11px; user-select:none; cursor:pointer;">↓ 俯冲</div>
+            <div style="background:rgba(0,180,255,0.1); border-radius:3px; padding:4px 0; text-align:center; font-size:11px; user-select:none; cursor:pointer;">← 左转</div>
+            <div style="background:rgba(0,180,255,0.1); border-radius:3px; padding:4px 0; text-align:center; font-size:11px; user-select:none; cursor:pointer;">→ 右转</div>
+          </div>
+          <div style="display:flex; gap:4px; margin-top:4px;">
+            <div style="background:rgba(0,255,128,0.12); border-radius:3px; padding:4px 0; flex:1; text-align:center; font-size:11px; color:#0f0; cursor:pointer;">+ 加速</div>
+            <div style="background:rgba(255,80,80,0.12); border-radius:3px; padding:4px 0; flex:1; text-align:center; font-size:11px; color:#f55; cursor:pointer;">− 减速</div>
+          </div>
+        </div>
+
+        <!-- 导航预览图 -->
+        <div>
+          <div style="font-size:10px; color:#667; margin-bottom:4px;">导航图</div>
+          <div style="background:rgba(0,0,0,0.5); border:1px solid rgba(0,180,255,0.2); border-radius:4px; width:212px; height:130px; position:relative; overflow:hidden;">
+            <!-- 3条轨道 -->
+            <div style="position:absolute; top:32%; left:30%; width:40px; height:40px; border-radius:50%; border:1px solid rgba(255,255,255,0.12);"></div>
+            <div style="position:absolute; top:24%; left:22%; width:56px; height:56px; border-radius:50%; border:1px solid rgba(255,255,255,0.10);"></div>
+            <div style="position:absolute; top:16%; left:14%; width:72px; height:72px; border-radius:50%; border:1px solid rgba(255,255,255,0.08);"></div>
+            <!-- 太阳 -->
+            <div style="position:absolute; top:49%; left:48%; width:8px; height:8px; border-radius:50%; background:radial-gradient(#ff0,#f80); margin:-4px;"></div>
+            <!-- 飞船三角 -->
+            <div style="position:absolute; top:62%; left:38%; width:7px; height:7px; background:#0bf; clip-path:polygon(50% 0%, 0% 100%, 100% 100%);"></div>
+            <!-- 方向线 -->
+            <div style="position:absolute; top:57%; left:40%; width:2px; height:12px; background:rgba(0,255,128,0.3); clip-path:polygon(50% 0%, 0% 100%, 100% 100%);"></div>
+            <!-- 图例 -->
+            <div style="position:absolute; bottom:3px; left:4px; font-size:7px; color:#445;">▲ 飞船 · 顶视图</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
