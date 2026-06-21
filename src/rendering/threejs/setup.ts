@@ -32,7 +32,7 @@ export function initScene(canvas: HTMLCanvasElement): SceneSetup {
   renderer.setSize(w, h);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 3);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 5);
   scene.add(ambientLight);
 
   return { scene, camera, renderer };

@@ -408,7 +408,7 @@ export const SPATIAL_TRANSFORM = {
   planetLogBase: 1e6,
   planetScaleFactor: 12,
   minRenderRadius: 5,
-  referencePlaneColor: 0x334466,
+  referencePlaneColor: 0x000000,
   referencePlaneOpacity: 0.3,
   maxOrbitRadius: 2000,
 };
