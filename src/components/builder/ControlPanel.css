@@ -19,6 +19,11 @@
   transition: opacity 0.15s ease;
 }
 
+.tab-arrow {
+  font-size: 10px;
+  color: #667788;
+}
+
 .panel-tab.hidden {
   opacity: 0;
   pointer-events: none;

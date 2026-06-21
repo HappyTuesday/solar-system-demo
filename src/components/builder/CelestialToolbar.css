@@ -19,6 +19,11 @@
   transition: opacity 0.15s ease;
 }
 
+.tab-arrow {
+  font-size: 10px;
+  color: #667788;
+}
+
 .toolbar-overlay {
   position: absolute;
   left: 0;

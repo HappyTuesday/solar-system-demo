@@ -111,7 +111,7 @@ export default function ControlPanel() {
 
   return (
     <>
-    <div className={`panel-tab ${expanded ? 'hidden' : ''}`} onMouseEnter={() => setExpanded(true)}>控制</div>
+    <div className={`panel-tab ${expanded ? 'hidden' : ''}`} onMouseEnter={() => setExpanded(true)}>控制 <span className="tab-arrow">◂</span></div>
     <div
       className={`control-overlay ${expanded ? 'expanded' : ''}`}
       onMouseLeave={() => setExpanded(false)}

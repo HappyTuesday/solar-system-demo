@@ -82,7 +82,7 @@ export default function CelestialToolbar() {
 
   return (
     <>
-    <div className={`toolbar-tab ${expanded ? 'hidden' : ''}`} onMouseEnter={() => setExpanded(true)}>天体</div>
+    <div className={`toolbar-tab ${expanded ? 'hidden' : ''}`} onMouseEnter={() => setExpanded(true)}>天体 <span className="tab-arrow">▸</span></div>
     <div
       className={`toolbar-overlay ${expanded ? 'expanded' : ''}`}
       onMouseLeave={() => setExpanded(false)}
