@@ -58,6 +58,7 @@ function ExploreCanvas() {
   const bodyMeshesRef = useRef<Map<string, THREE.Mesh>>(new Map());
   const allIdsRef = useRef<string[]>(['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune']);
   const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
+  const smoothDirRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 1, 0));
   const disposablesRef = useRef<{ geometries: THREE.BufferGeometry[]; materials: THREE.Material[]; textures: THREE.Texture[]; lines: THREE.Line[] }>({
     geometries: [], materials: [], textures: [], lines: [],
   });
@@ -256,10 +257,14 @@ function ExploreCanvas() {
 
       // ---- Main view ----
       camera.position.copy(pos);
+
+      const targetDir = new THREE.Vector3(sp.direction[0], sp.direction[1], sp.direction[2]);
+      smoothDirRef.current.lerp(targetDir, 0.08).normalize();
+
       animLookTarget.set(
-        sp.position[0] + sp.direction[0] * 10,
-        sp.position[1] + sp.direction[1] * 10,
-        sp.position[2] + sp.direction[2] * 10,
+        sp.position[0] + smoothDirRef.current.x * 10,
+        sp.position[1] + smoothDirRef.current.y * 10,
+        sp.position[2] + smoothDirRef.current.z * 10,
       );
       camera.lookAt(animLookTarget);
 
