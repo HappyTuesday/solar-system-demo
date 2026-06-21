@@ -46,6 +46,7 @@ export class TrailManager {
     });
 
     const line = new THREE.Line(geometry, material);
+    line.frustumCulled = false;
     line.visible = this.visible;
     line.renderOrder = 2;
     this.scene.add(line);
