@@ -1,23 +1,7 @@
-.control-overlay {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  z-index: 100;
-  display: flex;
-  transform: translateX(calc(100% - 24px));
-  transition: transform 0.2s ease;
-}
-
-.control-overlay.expanded {
-  transform: translateX(0);
-}
-
 .panel-tab {
   position: absolute;
-  right: 100%;
-  top: 50%;
-  transform: translateY(-50%);
+  right: 0;
+  top: 80px;
   width: 24px;
   padding: 12px 4px;
   writing-mode: vertical-rl;
@@ -29,12 +13,30 @@
   font-size: 12px;
   letter-spacing: 4px;
   cursor: pointer;
-  z-index: 10;
+  z-index: 101;
   white-space: nowrap;
+  user-select: none;
+  transition: opacity 0.15s ease;
 }
 
-.control-overlay.expanded .panel-tab {
+.panel-tab.hidden {
   opacity: 0;
+  pointer-events: none;
+}
+
+.control-overlay {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  display: flex;
+  transform: translateX(100%);
+  transition: transform 0.2s ease;
+}
+
+.control-overlay.expanded {
+  transform: translateX(0);
 }
 
 .control-panel-inner {

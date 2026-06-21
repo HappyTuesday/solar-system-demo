@@ -109,12 +109,12 @@ export default function ControlPanel() {
   };
 
   return (
+    <>
+    <div className={`panel-tab ${expanded ? 'hidden' : ''}`} onMouseEnter={() => setExpanded(true)}>控制</div>
     <div
       className={`control-overlay ${expanded ? 'expanded' : ''}`}
-      onMouseEnter={() => setExpanded(true)}
       onMouseLeave={() => setExpanded(false)}
     >
-      <div className="panel-tab">控制</div>
       <div className="control-panel-inner">
         <div className="control-panel">
       <div className="panel-section">
@@ -278,5 +278,6 @@ export default function ControlPanel() {
         </div>
       </div>
     </div>
+    </>
   );
 }
