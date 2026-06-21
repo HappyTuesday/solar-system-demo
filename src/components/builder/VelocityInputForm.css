@@ -1,8 +1,12 @@
 .velocity-input-form {
-  background: rgba(255, 170, 0, 0.06);
-  border: 1px solid rgba(255, 170, 0, 0.2);
-  border-radius: 6px;
+  background: rgba(10, 10, 30, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 170, 0, 0.3);
+  border-radius: 8px;
   padding: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  width: 220px;
+  pointer-events: auto;
 }
 
 .velocity-input-form .form-title {
@@ -111,4 +115,76 @@
 .velocity-input-form .form-btn.cancel:hover {
   background: #3a3a4a;
   color: #ccc;
+}
+
+.placement-preview-popup {
+  position: absolute;
+  z-index: 99;
+  pointer-events: none;
+  background: rgba(10, 10, 30, 0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 170, 0, 0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  width: 220px;
+  transition: opacity 0.15s ease;
+}
+
+.placement-confirm-popup {
+  position: absolute;
+  z-index: 100;
+  animation: popup-appear 0.2s ease-out;
+}
+
+@keyframes popup-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.placement-preview-popup .preview-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffaa00;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.placement-preview-popup .preview-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 3px 0;
+  font-size: 11px;
+}
+
+.placement-preview-popup .preview-row span:first-child {
+  color: #888;
+}
+
+.placement-preview-popup .preview-row span:last-child {
+  color: #fff;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.placement-preview-popup .preview-hint {
+  text-align: center;
+  font-size: 10px;
+  color: #666;
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.placement-preview-popup .preview-diagram {
+  display: block;
+  margin: 6px auto 0;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
 }

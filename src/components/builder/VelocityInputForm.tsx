@@ -16,11 +16,12 @@ export default function VelocityInputForm({
   onConfirm,
   onCancel,
 }: VelocityInputFormProps) {
-  const [speed, setSpeed] = useState<string>('0');
-  const [angle, setAngle] = useState<string>('0');
-
   const data = REAL_DATA[templateId];
   const realOrbitalSpeed = data?.orbitalSpeed;
+
+  const defaultSpeed = realOrbitalSpeed ? (realOrbitalSpeed / 1000).toFixed(1) : '0';
+  const [speed, setSpeed] = useState<string>(defaultSpeed);
+  const [angle, setAngle] = useState<string>('0');
 
   const speedNum = parseFloat(speed);
   const angleNum = parseFloat(angle);

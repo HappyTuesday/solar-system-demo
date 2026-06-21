@@ -45,12 +45,12 @@ export function computeAccelerations(
       const distSoft = Math.sqrt(dist * dist + softening * softening);
       const factor = PHYSICAL_CONSTANTS.G / (distSoft * distSoft * distSoft);
 
-      const fx = -factor * bodies[j].mass * dx;
-      const fy = -factor * bodies[j].mass * dy;
-      const fz = dimension === 2 ? 0 : -factor * bodies[j].mass * dz;
+      const fx = -factor * dx;
+      const fy = -factor * dy;
+      const fz = dimension === 2 ? 0 : -factor * dz;
 
-      acc[i] = [acc[i][0] + fx, acc[i][1] + fy, acc[i][2] + fz];
-      acc[j] = [acc[j][0] - fx, acc[j][1] - fy, acc[j][2] - fz];
+      acc[i] = [acc[i][0] + fx * bodies[j].mass, acc[i][1] + fy * bodies[j].mass, acc[i][2] + fz * bodies[j].mass];
+      acc[j] = [acc[j][0] - fx * bodies[i].mass, acc[j][1] - fy * bodies[i].mass, acc[j][2] - fz * bodies[i].mass];
     }
   }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
-import { BUILD_CELESTIAL_TEMPLATES } from '../../engine/constants';
+import { BUILD_CELESTIAL_TEMPLATES } from '../../engine/buildData';
 import type { CelestialBody } from '../../types';
 import './BodyStatusPanel.css';
 

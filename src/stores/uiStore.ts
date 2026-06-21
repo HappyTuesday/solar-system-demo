@@ -4,6 +4,7 @@ import { setLinearScale, getLinearScale, getSizeMultiplier, setSizeMultiplier } 
 
 interface UIStore extends UIState {
   clickPosPhysical: [number, number] | null;
+  clickPosScreen: [number, number] | null;
   setSelectedTool: (id: string | null) => void;
   setSelectedBodyIds: (ids: string[]) => void;
   toggleSupervision: () => void;
@@ -15,12 +16,15 @@ interface UIStore extends UIState {
   setPreviewSpeed: (speed: number) => void;
   setMousePositions: (pos: [number, number] | null) => void;
   setClickPosPhysical: (pos: [number, number] | null) => void;
+  setClickPosScreen: (pos: [number, number] | null) => void;
   setShowTrails: (show: boolean) => void;
   setTrailLength: (len: number) => void;
   linearScale: number;
   setLinearScaleValue: (v: number) => void;
   sizeMultiplier: number;
   setSizeMultiplierValue: (v: number) => void;
+  panToBodyId: string | null;
+  setPanToBodyId: (id: string | null) => void;
   resetUI: () => void;
 }
 
@@ -38,8 +42,10 @@ export const useUIStore = create<UIStore>((set) => ({
   trailLength: 0.5,
   linearScale: getLinearScale(),
   sizeMultiplier: getSizeMultiplier(),
+  panToBodyId: null,
   mousePhysicalPos: null,
   clickPosPhysical: null,
+  clickPosScreen: null,
 
   setSelectedTool: (id) => set({ selectedToolId: id, previewPosition: null, previewSpeed: 0 }),
   setSelectedBodyIds: (ids) => set({ selectedBodyIds: ids }),
@@ -60,7 +66,9 @@ export const useUIStore = create<UIStore>((set) => ({
     setSizeMultiplier(v);
     set({ sizeMultiplier: v });
   },
+  setPanToBodyId: (id) => set({ panToBodyId: id }),
   setClickPosPhysical: (pos) => set({ clickPosPhysical: pos }),
+  setClickPosScreen: (pos) => set({ clickPosScreen: pos }),
   setMousePositions: (pos) => set({ mousePhysicalPos: pos }),
   resetUI: () => {
     set({
@@ -75,6 +83,7 @@ export const useUIStore = create<UIStore>((set) => ({
       previewSpeed: 0,
       mousePhysicalPos: null,
       clickPosPhysical: null,
+      clickPosScreen: null,
     });
   },
 }));

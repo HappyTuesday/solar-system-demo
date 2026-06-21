@@ -445,5 +445,3 @@ export const AUDIO_FILES = {
 };
 
 export const MU_SUN = PHYSICAL_CONSTANTS.G * PHYSICAL_CONSTANTS.sunMass;
-
-export { BUILD_CELESTIAL_TEMPLATES } from './buildData';

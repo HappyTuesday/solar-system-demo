@@ -17,7 +17,7 @@ import { SIMPLIFIED_RADII } from './constants';
 const M_SUN = 1.989e30;
 const MASS_RENDER_SCALE = 10000 / M_SUN;
 
-let _linearScale = 1e-7;
+let _linearScale = 1e-8;
 export function getLinearScale(): number { return _linearScale; }
 export function setLinearScale(v: number): void { _linearScale = v; }
 

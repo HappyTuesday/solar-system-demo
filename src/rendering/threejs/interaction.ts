@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { bodyMeshMap } from './bodies';
 import { physicalVelocityToRender } from '../../engine/coordinateTransform';
 import { DRAG_CONFIG } from '../../engine/constants';
 
@@ -20,19 +19,6 @@ export function getPlacementPoint(
   const target = new THREE.Vector3();
   const intersection = raycaster.ray.intersectPlane(referencePlane, target);
   return intersection;
-}
-
-export function setBodyHighlight(ids: string[], highlighted: boolean): void {
-  for (const [id, bm] of bodyMeshMap) {
-    const material = bm.mesh.material as THREE.MeshStandardMaterial;
-    if (ids.includes(id) && highlighted) {
-      material.emissive?.set(0x444444);
-      material.emissiveIntensity = 1;
-    } else {
-      material.emissive?.set(0x000000);
-      material.emissiveIntensity = 0;
-    }
-  }
 }
 
 // ===== Preview & Gizmos =====

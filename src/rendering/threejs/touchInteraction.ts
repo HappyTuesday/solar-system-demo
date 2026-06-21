@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import {
-  getSharedCamera, getZoom, getCurrentLookAt, setCurrentLookAt, setObservationTargetId,
+  getSharedCamera, getZoom, setCurrentLookAt, setObservationTargetId,
 } from './cameraRef';
 import {
-  setZoomDirect, panCamera, rotateCameraHorizontal, rotateCameraVertical,
+  setZoomDirect, panCamera,
 } from './setup';
 import { bodyMeshMap } from './bodies';
 import { useUIStore } from '../../stores/uiStore';
@@ -85,13 +85,7 @@ function handleTouchStart(e: TouchEvent): void {
   }
 
   if (e.touches.length === 1) {
-    const selectedTool = useUIStore.getState().selectedToolId;
-    if (!selectedTool) {
-      e.preventDefault();
-      lastRotationX = e.touches[0].clientX;
-      lastRotationY = e.touches[0].clientY;
-      rotationActive = true;
-    }
+    e.preventDefault();
   } else if (e.touches.length === 2) {
     e.preventDefault();
     rotationActive = false;
@@ -112,21 +106,8 @@ function handleTouchMove(e: TouchEvent): void {
     activeTouches.set(t.identifier, { x: t.clientX, y: t.clientY });
   }
 
-  if (rotationActive && e.touches.length === 1) {
+  if (e.touches.length === 1) {
     e.preventDefault();
-    const t = e.touches[0];
-    const dx = t.clientX - lastRotationX;
-    const dy = t.clientY - lastRotationY;
-    lastRotationX = t.clientX;
-    lastRotationY = t.clientY;
-
-    const camera = getSharedCamera();
-    if (camera) {
-      const [lx, ly, lz] = getCurrentLookAt();
-      const target = new THREE.Vector3(lx, ly, lz);
-      rotateCameraHorizontal(camera, -dx * ROTATE_SENSITIVITY, target);
-      rotateCameraVertical(camera, -dy * ROTATE_SENSITIVITY, target);
-    }
   } else if (pinchActive && e.touches.length === 2) {
     e.preventDefault();
     const t0 = e.touches[0];
@@ -187,7 +168,7 @@ function handleWheel(e: WheelEvent): void {
     const dx = e.deltaX * WHEEL_PAN_SENSITIVITY;
     const dy = e.deltaY * WHEEL_PAN_SENSITIVITY;
     if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
-      panCamera(-dx, -dy);
+      panCamera(dx, dy);
     }
   }
 }
@@ -305,14 +286,6 @@ function handleMouseMoveForRotation(e: MouseEvent): void {
   }
   mouseRotateStartX = e.clientX;
   mouseRotateStartY = e.clientY;
-
-  const camera = getSharedCamera();
-  if (camera) {
-    const [lx, ly, lz] = getCurrentLookAt();
-    const target = new THREE.Vector3(lx, ly, lz);
-    rotateCameraHorizontal(camera, -dx * ROTATE_SENSITIVITY, target);
-    rotateCameraVertical(camera, -dy * ROTATE_SENSITIVITY, target);
-  }
 }
 
 function handleMouseUpForRotation(e: MouseEvent): void {

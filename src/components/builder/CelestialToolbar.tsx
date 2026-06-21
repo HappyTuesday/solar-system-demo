@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { useUIStore } from '../../stores/uiStore';
 import { useBuildStore } from '../../stores/buildStore';
-import { BUILD_CELESTIAL_TEMPLATES } from '../../engine/constants';
+import { BUILD_CELESTIAL_TEMPLATES } from '../../engine/buildData';
 import type { CelestialBodyTemplate } from '../../types';
 import './CelestialToolbar.css';
 

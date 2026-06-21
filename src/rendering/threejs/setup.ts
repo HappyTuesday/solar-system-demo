@@ -32,13 +32,8 @@ export function initScene(canvas: HTMLCanvasElement): SceneSetup {
   renderer.setSize(w, h);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-  const ambientLight = new THREE.AmbientLight(0x444466, 2.5);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 3);
   scene.add(ambientLight);
-
-  const sunLight = new THREE.PointLight(0xffeedd, 4, 0);
-  sunLight.decay = 0;
-  sunLight.position.set(0, 0, 0);
-  scene.add(sunLight);
 
   return { scene, camera, renderer };
 }

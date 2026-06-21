@@ -1,27 +1,11 @@
 import * as THREE from 'three';
 import type { CelestialBody, TrailDebugInfo } from '../../types';
 import { physicalToRender } from '../../engine/coordinateTransform';
+import { DEFAULT_COLORS } from './bodies';
 
 const MAX_POINTS = 500;
 const MIN_VISIBLE_POINTS = 8;
-const MAX_TRAIL_PROPORTION = 0.9;
 const SAMPLE_INTERVAL_FRAMES = 3;
-
-const PLANET_IDS = [
-  'mercury', 'venus', 'earth', 'mars',
-  'jupiter', 'saturn', 'uranus', 'neptune',
-];
-
-const TRAIL_COLORS: Record<string, number> = {
-  mercury: 0xcccccc,
-  venus: 0xffcc88,
-  earth: 0x4488ff,
-  mars: 0xff6644,
-  jupiter: 0xffcc88,
-  saturn: 0xffeecc,
-  uranus: 0x88ccff,
-  neptune: 0x4488ff,
-};
 
 interface TrailEntry {
   line: THREE.Line;
@@ -46,15 +30,17 @@ function isCollinear(
   const lenBC = Math.sqrt(bcx * bcx + bcy * bcy + bcz * bcz);
   if (lenBC < 1e-6) return true;
 
-  const cosA = Math.abs(abx * bcx + aby * bcy + abz * bcz) / (lenAB * lenBC);
-  return cosA > 0.9999875; // cos(0.005)
+  const dot = abx * bcx + aby * bcy + abz * bcz;
+  if (dot <= 0) return false;
+
+  const cosA = dot / (lenAB * lenBC);
+  return cosA > 0.9999875;
 }
 
 export class TrailManager {
   private scene: THREE.Scene;
   private trails = new Map<string, TrailEntry>();
   private visible = true;
-  private lengthProportion = 0.5;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -117,25 +103,13 @@ export class TrailManager {
     }
   }
 
-  setLengthProportion(proportion: number): void {
-    this.lengthProportion = proportion;
-    const effectiveProportion = Math.min(proportion, MAX_TRAIL_PROPORTION);
-    for (const [, entry] of this.trails.entries()) {
-      const targetActive = Math.floor(MAX_POINTS * effectiveProportion);
-      if (targetActive < entry.activeCount) {
-        entry.activeCount = Math.max(1, targetActive);
-        this.copyRingToGeometry(entry);
-      }
-    }
-  }
-
   updateTrails(bodies: CelestialBody[]): void {
     for (const body of bodies) {
-      if (!PLANET_IDS.includes(body.templateId)) continue;
+      if (body.templateId === 'sun') continue;
 
       let entry = this.trails.get(body.id);
       if (!entry) {
-        const color = TRAIL_COLORS[body.templateId] ?? 0x888888;
+        const color = DEFAULT_COLORS[body.templateId] ?? 0x888888;
         this.addTrail(body.id, color);
         entry = this.trails.get(body.id);
         if (!entry) continue;
@@ -176,7 +150,7 @@ export class TrailManager {
   getDebugInfos(bodies: CelestialBody[]): TrailDebugInfo[] {
     const infos: TrailDebugInfo[] = [];
     for (const body of bodies) {
-      if (!PLANET_IDS.includes(body.templateId)) continue;
+      if (body.templateId === 'sun') continue;
       const entry = this.trails.get(body.id);
       if (!entry) continue;
 
