@@ -63,12 +63,20 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 3px;
+  flex: 1;
 }
 
 .dashboard-orbital-grid .dashboard-stat {
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+
+.dashboard-controls-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 /* ---- Position readouts ---- */

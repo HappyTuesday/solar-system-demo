@@ -219,7 +219,7 @@ function Dashboard() {
 
             <div className="dashboard-column">
               <div className="dashboard-column-title">飞行控制</div>
-              <div>
+              <div className="dashboard-controls-wrap">
                 <div className="dashboard-controls-grid">
                   <button
                     className="dashboard-ctrl-btn"
