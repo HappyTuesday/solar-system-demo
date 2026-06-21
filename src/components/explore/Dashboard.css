@@ -133,36 +133,50 @@
 
 /* ---- Controls ---- */
 
-.dashboard-controls-grid {
+.dashboard-dpad {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: 3px;
-  flex: 1;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  gap: 2px;
+  flex: 2;
 }
 
-.dashboard-ctrl-btn {
+.dpad-btn {
   background: rgba(0, 180, 255, 0.08);
-  border: 1px solid rgba(0, 180, 255, 0.12);
+  border: 1px solid rgba(0, 180, 255, 0.15);
   border-radius: 3px;
-  text-align: center;
-  font-size: 10px;
-  color: #ccc;
+  font-size: 14px;
+  color: #8899bb;
   cursor: pointer;
   user-select: none;
   font-family: inherit;
-  transition: background 0.15s;
+  transition: all 0.12s;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
 }
 
-.dashboard-ctrl-btn:hover {
-  background: rgba(0, 180, 255, 0.18);
+.dpad-btn:hover {
+  background: rgba(0, 180, 255, 0.2);
+  color: #aaddff;
 }
 
-.dashboard-ctrl-btn:active {
-  background: rgba(0, 180, 255, 0.28);
+.dpad-btn:active {
+  background: rgba(0, 180, 255, 0.35);
+  color: #ffffff;
+}
+
+.dpad-center {
+  background: rgba(0, 180, 255, 0.03);
+  border-radius: 50%;
+  width: 60%;
+  height: 60%;
+  place-self: center;
+}
+
+.dpad-placeholder {
+  visibility: hidden;
 }
 
 .dashboard-thrust-row {

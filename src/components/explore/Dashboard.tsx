@@ -220,39 +220,36 @@ function Dashboard() {
             <div className="dashboard-column">
               <div className="dashboard-column-title">飞行控制</div>
               <div className="dashboard-controls-wrap">
-                <div className="dashboard-controls-grid">
+                <div className="dashboard-dpad">
+                  <div className="dpad-placeholder" />
                   <button
-                    className="dashboard-ctrl-btn"
+                    className="dpad-btn dpad-up"
                     onMouseDown={() => startHold(() => setVerticalThrust(1))}
                     onMouseUp={() => { stopHold(); setVerticalThrust(0); }}
                     onMouseLeave={stopHold}
-                  >
-                    ↑ 抬头
-                  </button>
+                  >▲</button>
+                  <div className="dpad-placeholder" />
                   <button
-                    className="dashboard-ctrl-btn"
-                    onMouseDown={() => startHold(() => setVerticalThrust(-1))}
-                    onMouseUp={() => { stopHold(); setVerticalThrust(0); }}
-                    onMouseLeave={stopHold}
-                  >
-                    ↓ 俯冲
-                  </button>
-                  <button
-                    className="dashboard-ctrl-btn"
+                    className="dpad-btn dpad-left"
                     onMouseDown={() => startHold(() => setLateralThrust(1))}
                     onMouseUp={() => { stopHold(); setLateralThrust(0); }}
                     onMouseLeave={stopHold}
-                  >
-                    ← 左转
-                  </button>
+                  >◀</button>
+                  <div className="dpad-center" />
                   <button
-                    className="dashboard-ctrl-btn"
+                    className="dpad-btn dpad-right"
                     onMouseDown={() => startHold(() => setLateralThrust(-1))}
                     onMouseUp={() => { stopHold(); setLateralThrust(0); }}
                     onMouseLeave={stopHold}
-                  >
-                    → 右转
-                  </button>
+                  >▶</button>
+                  <div className="dpad-placeholder" />
+                  <button
+                    className="dpad-btn dpad-down"
+                    onMouseDown={() => startHold(() => setVerticalThrust(-1))}
+                    onMouseUp={() => { stopHold(); setVerticalThrust(0); }}
+                    onMouseLeave={stopHold}
+                  >▼</button>
+                  <div className="dpad-placeholder" />
                 </div>
                 <div className="dashboard-thrust-row">
                   <button
