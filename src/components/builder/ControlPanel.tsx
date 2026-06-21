@@ -204,11 +204,7 @@ export default function ControlPanel() {
           />
           <span>显示轨迹</span>
         </label>
-        {showTrails && (
-          <div className="trail-length-row">
-            <span className="trail-length-label">轨迹长度 0.5</span>
-          </div>
-        )}
+
       </div>
 
       <div className="panel-section button-row">
