@@ -35,7 +35,7 @@
   border: 1px solid rgba(0, 180, 255, 0.3);
   border-bottom: none;
   border-radius: 8px 8px 0 0;
-  padding: 12px 18px 14px;
+  padding: 14px 18px 16px;
   color: #ccc;
 }
 
@@ -83,7 +83,7 @@
   background: rgba(0, 180, 255, 0.05);
   border: 1px solid rgba(0, 180, 255, 0.12);
   border-radius: 3px;
-  padding: 5px 6px;
+  padding: 7px 6px;
   text-align: center;
 }
 
@@ -109,7 +109,7 @@
   background: rgba(0, 180, 255, 0.06);
   border: 1px solid rgba(0, 180, 255, 0.12);
   border-radius: 3px;
-  padding: 5px 8px;
+  padding: 7px 8px;
   text-align: center;
 }
 
