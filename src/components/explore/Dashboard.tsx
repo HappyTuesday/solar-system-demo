@@ -144,91 +144,95 @@ function Dashboard() {
         ) : (
           <div className="dashboard-panel-body">
             <div className="dashboard-section-left">
-              <div>
-                <div className="dashboard-section-label">位置 (AU)</div>
-                <div className="dashboard-position-row">
-                  <div className="dashboard-readout">
-                    <div className="dashboard-readout-label">X</div>
-                    <div className="dashboard-readout-value" style={{ color: '#00ff88' }}>
-                      {position[0].toFixed(4)}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 150 }}>
+                  <div>
+                    <div className="dashboard-section-label">位置 (AU)</div>
+                    <div className="dashboard-position-row">
+                      <div className="dashboard-readout">
+                        <div className="dashboard-readout-label">X</div>
+                        <div className="dashboard-readout-value" style={{ color: '#00ff88' }}>
+                          {position[0].toFixed(4)}
+                        </div>
+                      </div>
+                      <div className="dashboard-readout">
+                        <div className="dashboard-readout-label">Y</div>
+                        <div className="dashboard-readout-value" style={{ color: '#00ff88' }}>
+                          {position[1].toFixed(4)}
+                        </div>
+                      </div>
+                      <div className="dashboard-readout">
+                        <div className="dashboard-readout-label">Z</div>
+                        <div className="dashboard-readout-value" style={{ color: '#00ff88' }}>
+                          {position[2].toFixed(4)}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="dashboard-readout">
-                    <div className="dashboard-readout-label">Y</div>
-                    <div className="dashboard-readout-value" style={{ color: '#00ff88' }}>
-                      {position[1].toFixed(4)}
+                  <div className="dashboard-stat-row">
+                    <div className="dashboard-stat">
+                      <div className="dashboard-stat-label">飞行速度</div>
+                      <div className="dashboard-stat-value" style={{ color: '#ffff00' }}>
+                        {speedMs.toFixed(1)} <span style={{ fontSize: 8, color: '#556677' }}>km/s</span>
+                      </div>
+                    </div>
+                    <div className="dashboard-stat">
+                      <div className="dashboard-stat-label">推力</div>
+                      <div className="dashboard-stat-value" style={{ color: '#00b8ff' }}>
+                        {thrustMagnitude} <span style={{ fontSize: 8, color: '#556677' }}>%</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="dashboard-readout">
-                    <div className="dashboard-readout-label">Z</div>
-                    <div className="dashboard-readout-value" style={{ color: '#00ff88' }}>
-                      {position[2].toFixed(4)}
+                  <div className="dashboard-stat-row">
+                    <div className="dashboard-stat" style={{ background: 'rgba(204,170,136,0.06)', borderColor: 'rgba(204,170,136,0.15)' }}>
+                      <div className="dashboard-stat-label">距{nearestBodyName}</div>
+                      <div className="dashboard-stat-value" style={{ color: '#ccaa88', fontSize: 11 }}>
+                        {nearestDistAU < 0.1
+                          ? `${nearestDistKm.toFixed(0)} km`
+                          : `${nearestDistAU.toFixed(3)} AU`}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-              <div className="dashboard-stat-row">
-                <div className="dashboard-stat">
-                  <div className="dashboard-stat-label">飞行速度</div>
-                  <div className="dashboard-stat-value" style={{ color: '#ffff00' }}>
-                    {speedMs.toFixed(1)} <span style={{ fontSize: 8, color: '#556677' }}>km/s</span>
-                  </div>
-                </div>
-                <div className="dashboard-stat">
-                  <div className="dashboard-stat-label">推力</div>
-                  <div className="dashboard-stat-value" style={{ color: '#00b8ff' }}>
-                    {thrustMagnitude} <span style={{ fontSize: 8, color: '#556677' }}>%</span>
-                  </div>
-                </div>
-              </div>
-              <div className="dashboard-stat-row">
-                <div className="dashboard-stat" style={{ background: 'rgba(204,170,136,0.06)', borderColor: 'rgba(204,170,136,0.15)' }}>
-                  <div className="dashboard-stat-label">距{nearestBodyName}</div>
-                  <div className="dashboard-stat-value" style={{ color: '#ccaa88', fontSize: 11 }}>
-                    {nearestDistAU < 0.1
-                      ? `${nearestDistKm.toFixed(0)} km`
-                      : `${nearestDistAU.toFixed(3)} AU`}
-                  </div>
-                </div>
-              </div>
 
-              {isOrbiting && (
-                <>
-                  <div className="dashboard-section-label" style={{ color: '#00b8ff', marginBottom: 0 }}>绕飞参数 · {nearestBodyName}</div>
-                  <div className="dashboard-orbital-grid">
-                    <div className="dashboard-stat">
-                      <div className="dashboard-stat-label">轨道速度</div>
-                      <div className="dashboard-stat-value" style={{ color: '#00ff88', fontSize: 11 }}>
-                        {relSpeedKms.toFixed(2)} <span style={{ fontSize: 7, color: '#445566' }}>km/s</span>
+                {isOrbiting && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                    <div className="dashboard-section-label" style={{ color: '#00b8ff' }}>绕飞参数 · {nearestBodyName}</div>
+                    <div className="dashboard-orbital-grid">
+                      <div className="dashboard-stat">
+                        <div className="dashboard-stat-label">轨道速度</div>
+                        <div className="dashboard-stat-value" style={{ color: '#00ff88', fontSize: 11 }}>
+                          {relSpeedKms.toFixed(2)} <span style={{ fontSize: 7, color: '#445566' }}>km/s</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="dashboard-stat">
-                      <div className="dashboard-stat-label">轨道高度</div>
-                      <div className="dashboard-stat-value" style={{ color: '#88ccff', fontSize: 11 }}>
-                        {altitudeKm.toFixed(0)} <span style={{ fontSize: 7, color: '#445566' }}>km</span>
+                      <div className="dashboard-stat">
+                        <div className="dashboard-stat-label">轨道高度</div>
+                        <div className="dashboard-stat-value" style={{ color: '#88ccff', fontSize: 11 }}>
+                          {altitudeKm.toFixed(0)} <span style={{ fontSize: 7, color: '#445566' }}>km</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="dashboard-stat">
-                      <div className="dashboard-stat-label">角速度</div>
-                      <div className="dashboard-stat-value" style={{ color: '#ffcc00', fontSize: 11 }}>
-                        {angularVelDegS.toFixed(4)} <span style={{ fontSize: 7, color: '#445566' }}>°/s</span>
+                      <div className="dashboard-stat">
+                        <div className="dashboard-stat-label">角速度</div>
+                        <div className="dashboard-stat-value" style={{ color: '#ffcc00', fontSize: 11 }}>
+                          {angularVelDegS.toFixed(4)} <span style={{ fontSize: 7, color: '#445566' }}>°/s</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="dashboard-stat">
-                      <div className="dashboard-stat-label">轨道周期</div>
-                      <div className="dashboard-stat-value" style={{ color: '#ddaa88', fontSize: 11 }}>
-                        {orbitalPeriodMin.toFixed(1)} <span style={{ fontSize: 7, color: '#445566' }}>min</span>
+                      <div className="dashboard-stat">
+                        <div className="dashboard-stat-label">轨道周期</div>
+                        <div className="dashboard-stat-value" style={{ color: '#ddaa88', fontSize: 11 }}>
+                          {orbitalPeriodMin.toFixed(1)} <span style={{ fontSize: 7, color: '#445566' }}>min</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="dashboard-stat">
-                      <div className="dashboard-stat-label">船身·切线夹角</div>
-                      <div className="dashboard-stat-value" style={{ color: headingAngleDeg > 5 ? '#ff8855' : '#aaddff', fontSize: 11 }}>
-                        {headingAngleDeg.toFixed(1)}°
+                      <div className="dashboard-stat">
+                        <div className="dashboard-stat-label">船身·切线夹角</div>
+                        <div className="dashboard-stat-value" style={{ color: headingAngleDeg > 5 ? '#ff8855' : '#aaddff', fontSize: 11 }}>
+                          {headingAngleDeg.toFixed(1)}°
+                        </div>
                       </div>
                     </div>
                   </div>
-                </>
-              )}
+                )}
+              </div>
             </div>
 
             <div className="dashboard-section-center">
