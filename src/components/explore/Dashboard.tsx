@@ -28,8 +28,6 @@ function computeBodyStateFull(templateId: string, jd: number): { position: [numb
 }
 
 function Dashboard() {
-  const expanded = useSpaceshipStore(s => s.dashboardExpanded);
-  const toggleDashboard = useSpaceshipStore(s => s.toggleDashboard);
   const position = useSpaceshipStore(s => s.position);
   const velocity = useSpaceshipStore(s => s.velocity);
   const thrustMagnitude = useSpaceshipStore(s => s.thrustMagnitude);
@@ -113,26 +111,10 @@ function Dashboard() {
     }
   }, []);
 
-  if (!expanded) {
-    return (
-      <div className="dashboard-container">
-        <div className="dashboard-collapsed-bar" onClick={toggleDashboard}>
-          {!exploded && (
-            <span className="dashboard-collapsed-speed">{speedMs.toFixed(1)} km/s</span>
-          )}
-          <span className="dashboard-collapsed-icon">▲</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="dashboard-container">
+      <div className="dashboard-tab">飞船仪表</div>
       <div className="dashboard-panel">
-        <div className="dashboard-panel-header">
-          <span className="dashboard-panel-title">飞船仪表</span>
-          <button className="dashboard-close-btn" onClick={toggleDashboard}>▼</button>
-        </div>
 
         {exploded ? (
           <div className="dashboard-exploded">
