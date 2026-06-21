@@ -1,24 +1,50 @@
 import type { SpaceshipState } from '../types';
-import { SPACESHIP, PHYSICAL_CONSTANTS, REAL_DATA, G_AU, AU_TO_M } from './constants';
+import { SPACESHIP, REAL_DATA, G_AU, AU_TO_M } from './constants';
 import { vec3Length } from './physics';
+import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from './orbital';
+import { MU_SUN } from './constants';
 
-const EARTH_SO = 0.003; // Earth sphere of influence in AU
+const ORBIT_RADIUS_AU = 0.002;
+const SCALE = 1 / AU_TO_M;
+
+function computeEarthState(now: number): {
+  position: [number, number, number];
+  velocity: [number, number, number];
+} {
+  const jd = julianDate(now);
+  const data = REAL_DATA.earth;
+  const o = data.orbital!;
+  const period = orbitalPeriod(data.semiMajorAxis!, MU_SUN);
+  const M = meanAnomalyAtTime(o.meanAnomalyAtEpoch, period, o.epoch, jd);
+  const Mmod = ((M % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  const E = solveKepler(Mmod, o.eccentricity);
+  const nu = trueAnomaly(E, o.eccentricity);
+  const sv = stateVectors(
+    data.semiMajorAxis!, o.eccentricity, o.inclination,
+    o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN,
+  );
+
+  return {
+    position: [sv.position[0] * SCALE, sv.position[1] * SCALE, sv.position[2] * SCALE],
+    velocity: [sv.velocity[0] * SCALE, sv.velocity[1] * SCALE, sv.velocity[2] * SCALE],
+  };
+}
 
 export function createSpaceshipState(): SpaceshipState {
-  const earthOrbitAU = 1.0;
+  const earth = computeEarthState(Date.now());
+
+  const orbitSpeed = Math.sqrt(G_AU * REAL_DATA.earth.mass / ORBIT_RADIUS_AU);
+
   const pos: [number, number, number] = [
-    earthOrbitAU + EARTH_SO,
-    0,
-    0,
+    earth.position[0] + ORBIT_RADIUS_AU,
+    earth.position[1],
+    earth.position[2],
   ];
 
-  const earthOrbitalSpeedAU = (REAL_DATA.earth.orbitalSpeed ?? 29780) / AU_TO_M;
-  const orbitSpeedAroundEarth = Math.sqrt(G_AU * REAL_DATA.earth.mass / EARTH_SO);
-
   const vel: [number, number, number] = [
-    0,
-    earthOrbitalSpeedAU + orbitSpeedAroundEarth,
-    0,
+    earth.velocity[0],
+    earth.velocity[1] + orbitSpeed,
+    earth.velocity[2],
   ];
 
   const dir: [number, number, number] = [0, 1, 0];
@@ -87,7 +113,7 @@ export interface BodyInfo {
 export function computeSpaceshipAcceleration(
   spaceship: SpaceshipState,
   bodies: BodyInfo[],
-  softening: number = PHYSICAL_CONSTANTS.softeningFactor,
+  softening: number = 1e6,
 ): [number, number, number] {
   let ax = 0, ay = 0, az = 0;
   const [sx, sy, sz] = spaceship.position;
@@ -117,13 +143,11 @@ export function rk4StepSpaceship(
   bodies: BodyInfo[],
   dt: number,
 ): void {
-  const softening = PHYSICAL_CONSTANTS.softeningFactor;
+  const softening = 1e6;
 
-  // k1
   const k1v = computeSpaceshipAcceleration(spaceship, bodies, softening);
   const k1r: [number, number, number] = [spaceship.velocity[0], spaceship.velocity[1], spaceship.velocity[2]];
 
-  // k2
   const midPos1: [number, number, number] = [
     spaceship.position[0] + k1r[0] * dt / 2,
     spaceship.position[1] + k1r[1] * dt / 2,
@@ -138,7 +162,6 @@ export function rk4StepSpaceship(
   const k2v = computeSpaceshipAcceleration(midShip1, bodies, softening);
   const k2r: [number, number, number] = [midVel1[0], midVel1[1], midVel1[2]];
 
-  // k3
   const midPos2: [number, number, number] = [
     spaceship.position[0] + k2r[0] * dt / 2,
     spaceship.position[1] + k2r[1] * dt / 2,
@@ -153,7 +176,6 @@ export function rk4StepSpaceship(
   const k3v = computeSpaceshipAcceleration(midShip2, bodies, softening);
   const k3r: [number, number, number] = [midVel2[0], midVel2[1], midVel2[2]];
 
-  // k4
   const endPos: [number, number, number] = [
     spaceship.position[0] + k3r[0] * dt,
     spaceship.position[1] + k3r[1] * dt,
@@ -168,7 +190,6 @@ export function rk4StepSpaceship(
   const k4v = computeSpaceshipAcceleration(endShip, bodies, softening);
   const k4r: [number, number, number] = [endVel[0], endVel[1], endVel[2]];
 
-  // Combine
   spaceship.position[0] += (k1r[0] + 2 * k2r[0] + 2 * k3r[0] + k4r[0]) * dt / 6;
   spaceship.position[1] += (k1r[1] + 2 * k2r[1] + 2 * k3r[1] + k4r[1]) * dt / 6;
   spaceship.position[2] += (k1r[2] + 2 * k2r[2] + 2 * k3r[2] + k4r[2]) * dt / 6;
