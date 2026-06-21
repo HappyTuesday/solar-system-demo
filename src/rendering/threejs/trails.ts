@@ -3,9 +3,9 @@ import type { CelestialBody, TrailDebugInfo } from '../../types';
 import { physicalToRender } from '../../engine/coordinateTransform';
 import { DEFAULT_COLORS } from './bodies';
 
-const MAX_POINTS = 500;
+const MAX_POINTS = 1000;
 const MIN_VISIBLE_POINTS = 8;
-const SAMPLE_INTERVAL_FRAMES = 3;
+const SAMPLE_INTERVAL_FRAMES = 10;
 
 interface TrailEntry {
   line: THREE.Line;
