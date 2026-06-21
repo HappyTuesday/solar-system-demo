@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useBuildStore } from '../stores/buildStore';
 import { useUIStore } from '../stores/uiStore';
-import { computeAutoBuildPlan } from '../engine/autoBuild';
+import { computeAutoBuildPlanForBuild } from '../engine/autoBuild';
 
 export function useRestore() {
   const startRestore = useCallback(() => {

@@ -1,4 +1,5 @@
 import { REAL_DATA, MU_SUN } from './constants';
+import { BUILD_DATA } from './buildData';
 import {
   julianDate,
   solveKepler,
@@ -74,6 +75,47 @@ export function computeAutoBuildPlan(timestamp?: number): AutoBuildStep[] {
       rotationPhase: computeRotationPhase(
         o.rotationPhaseAtEpoch, o.rotationPeriod, o.epoch, jd,
       ),
+    });
+  }
+
+  return plan;
+}
+
+export function computeAutoBuildPlanForBuild(): AutoBuildStep[] {
+  const plan: AutoBuildStep[] = [];
+
+  const sunData = BUILD_DATA.sun;
+  plan.push({
+    templateId: 'sun',
+    position: [0, 0, 0],
+    velocity: [0, 0, 0],
+    mass: sunData.mass,
+    rotationSpeed: 0,
+    rotationPhase: 0,
+  });
+
+  const planetIds = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
+
+  for (let i = 0; i < planetIds.length; i++) {
+    const id = planetIds[i];
+    const data = BUILD_DATA[id];
+    if (!data || data.semiMajorAxis <= 0) continue;
+
+    const angle = (i / planetIds.length) * Math.PI * 2;
+    const x = data.semiMajorAxis * Math.cos(angle);
+    const y = data.semiMajorAxis * Math.sin(angle);
+
+    const tangentAngle = angle + Math.PI / 2;
+    const vx = data.orbitalSpeed * Math.cos(tangentAngle);
+    const vy = data.orbitalSpeed * Math.sin(tangentAngle);
+
+    plan.push({
+      templateId: id,
+      position: [x, y, 0],
+      velocity: [vx, vy, 0],
+      mass: data.mass,
+      rotationSpeed: 0,
+      rotationPhase: 0,
     });
   }
 
