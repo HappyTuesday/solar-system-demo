@@ -4,7 +4,7 @@ import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
 import { detectCollisions } from '../../engine/physics';
 import { renderToPhysical, physicalToRender, physicalRadiusToRender, getLinearScale } from '../../engine/coordinateTransform';
-import { HINT_ORDER, PHYSICAL_CONSTANTS } from '../../engine/constants';
+import { HINT_ORDER, PHYSICAL_CONSTANTS, REAL_DATA } from '../../engine/constants';
 import { BUILD_DATA } from '../../engine/buildData';
 import { initScene, handleResize } from '../../rendering/threejs/setup';
 import { createBodyMesh, updateBodyMeshes, removeBodyMesh, clearAllMeshes, bodyMeshMap, DEFAULT_COLORS } from '../../rendering/threejs/bodies';
@@ -248,8 +248,11 @@ function BuilderCanvas() {
     }
 
     const data = BUILD_DATA[toolId];
+    const realData = REAL_DATA[toolId];
+    const rotPeriod = realData?.orbital?.rotationPeriod;
+    const rotSpeed = rotPeriod ? 86164 / Math.abs(rotPeriod) : 0;
     const buildState = useBuildStore.getState();
-    buildState.placeBody(toolId, [px, py, pz], vel, data?.mass ?? 1e24);
+    buildState.placeBody(toolId, [px, py, pz], vel, data?.mass ?? 1e24, rotSpeed);
 
     if (!buildState.isRunning) {
       buildState.startBuild();

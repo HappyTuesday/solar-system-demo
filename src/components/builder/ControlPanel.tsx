@@ -104,6 +104,7 @@ export default function ControlPanel() {
     // Re-place sun after reset
     useBuildStore.getState().placeBody(
       'sun', [0, 0, 0], [0, 0, 0], REAL_DATA.sun.mass,
+      86164 / Math.abs(REAL_DATA.sun.orbital?.rotationPeriod ?? 1),
     );
     useBuildStore.getState().startBuild();
   };

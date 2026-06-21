@@ -90,7 +90,7 @@ export function computeAutoBuildPlanForBuild(): AutoBuildStep[] {
     position: [0, 0, 0],
     velocity: [0, 0, 0],
     mass: sunData.mass,
-    rotationSpeed: 0,
+    rotationSpeed: computeRotationSpeed(REAL_DATA.sun.orbital?.rotationPeriod),
     rotationPhase: 0,
   });
 
@@ -114,7 +114,7 @@ export function computeAutoBuildPlanForBuild(): AutoBuildStep[] {
       position: [x, y, 0],
       velocity: [vx, vy, 0],
       mass: data.mass,
-      rotationSpeed: 0,
+      rotationSpeed: computeRotationSpeed(REAL_DATA[id]?.orbital?.rotationPeriod),
       rotationPhase: 0,
     });
   }
