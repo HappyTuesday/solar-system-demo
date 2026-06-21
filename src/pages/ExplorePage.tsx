@@ -1,6 +1,5 @@
 import ExploreCanvas from '../components/explore/ExploreCanvas';
-import BodyInfoPanel from '../components/explore/BodyInfoPanel';
-import TimeSlider from '../components/explore/TimeSlider';
+import Dashboard from '../components/explore/Dashboard';
 import './ExplorePage.css';
 
 function ExplorePage() {
@@ -8,9 +7,8 @@ function ExplorePage() {
     <div className="explore-page">
       <div className="explore-canvas-area">
         <ExploreCanvas />
-        <BodyInfoPanel />
       </div>
-      <TimeSlider />
+      <Dashboard />
     </div>
   );
 }
