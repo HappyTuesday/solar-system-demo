@@ -1,63 +1,6 @@
 import type { SpaceshipState } from '../types';
-import { SPACESHIP, REAL_DATA, G_AU, AU_TO_M } from './constants';
+import { SPACECRAFT_CONFIG, G_AU } from './constants';
 import { vec3Length } from './physics';
-import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from './orbital';
-import { MU_SUN } from './constants';
-
-const ORBIT_RADIUS_AU = 0.0003;
-const SCALE = 1 / AU_TO_M;
-
-function computeEarthState(now: number): {
-  position: [number, number, number];
-  velocity: [number, number, number];
-} {
-  const jd = julianDate(now);
-  const data = REAL_DATA.earth;
-  const o = data.orbital!;
-  const period = orbitalPeriod(data.semiMajorAxis!, MU_SUN);
-  const M = meanAnomalyAtTime(o.meanAnomalyAtEpoch, period, o.epoch, jd);
-  const Mmod = ((M % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-  const E = solveKepler(Mmod, o.eccentricity);
-  const nu = trueAnomaly(E, o.eccentricity);
-  const sv = stateVectors(
-    data.semiMajorAxis!, o.eccentricity, o.inclination,
-    o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN,
-  );
-
-  return {
-    position: [sv.position[0] * SCALE, sv.position[1] * SCALE, sv.position[2] * SCALE],
-    velocity: [sv.velocity[0] * SCALE, sv.velocity[1] * SCALE, sv.velocity[2] * SCALE],
-  };
-}
-
-export function createSpaceshipState(now: number = Date.now()): SpaceshipState {
-  const earth = computeEarthState(now);
-
-  const orbitSpeed = Math.sqrt(G_AU * REAL_DATA.earth.mass / ORBIT_RADIUS_AU);
-
-  const pos: [number, number, number] = [
-    earth.position[0] + ORBIT_RADIUS_AU,
-    earth.position[1],
-    earth.position[2],
-  ];
-
-  const vel: [number, number, number] = [
-    earth.velocity[0],
-    earth.velocity[1] + orbitSpeed,
-    earth.velocity[2],
-  ];
-
-  const dir: [number, number, number] = [0, 1, 0];
-
-  return {
-    position: pos,
-    velocity: vel,
-    direction: dir,
-    thrust: [0, 0, 0],
-    thrustMagnitude: 0,
-    exploded: false,
-  };
-}
 
 function vec3Normalize(v: [number, number, number]): [number, number, number] {
   const len = vec3Length(v);
@@ -90,7 +33,7 @@ export function applyThrustInBodyFrame(
     right[0] * dir[1] - right[1] * dir[0],
   ]);
 
-  const thrustAccel = SPACESHIP.maxThrustAU * (magnitude / 100);
+  const thrustAccel = SPACECRAFT_CONFIG.maxThrustAU * (magnitude / 100);
   const tx = dir[0] * forwardBack * thrustAccel +
             right[0] * leftRight * thrustAccel +
             up[0] * upDown * thrustAccel;
@@ -131,9 +74,9 @@ export function computeSpaceshipAcceleration(
   }
 
   const thrustWorld = spaceship.thrust;
-  ax += thrustWorld[0] / SPACESHIP.mass;
-  ay += thrustWorld[1] / SPACESHIP.mass;
-  az += thrustWorld[2] / SPACESHIP.mass;
+  ax += thrustWorld[0] / SPACECRAFT_CONFIG.mass;
+  ay += thrustWorld[1] / SPACECRAFT_CONFIG.mass;
+  az += thrustWorld[2] / SPACECRAFT_CONFIG.mass;
 
   return [ax, ay, az];
 }
@@ -207,7 +150,7 @@ export function checkSpaceshipCollision(
     const dy = spaceship.position[1] - body.position[1];
     const dz = spaceship.position[2] - body.position[2];
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    if (dist <= SPACESHIP.collisionRadius + body.radius) {
+    if (dist <= SPACECRAFT_CONFIG.collisionRadiusAU + body.radius) {
       return true;
     }
   }

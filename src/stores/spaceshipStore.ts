@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { SpaceshipState } from '../types';
-import { createSpaceshipState } from '../engine/spaceship';
+import { createSpaceshipState } from '../engine/orbitalInjection';
 
 export interface SpaceshipStore extends SpaceshipState {
   isRunning: boolean;
@@ -21,7 +21,7 @@ export interface SpaceshipStore extends SpaceshipState {
 }
 
 const now = Date.now();
-const initialSpaceship = createSpaceshipState(now);
+const initialSpaceship = createSpaceshipState('earth', undefined, now);
 
 const initialState = {
   ...initialSpaceship,
@@ -44,7 +44,7 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
   updatePhysics: (pos, vel) => set({ position: pos, velocity: vel }),
   setSimulatedTime: (t) => set({ simulatedTime: t }),
   reset: () => set(() => ({
-    ...createSpaceshipState(Date.now()),
+    ...createSpaceshipState('earth', undefined, Date.now()),
     isRunning: true,
     dashboardExpanded: true,
     simulatedTime: Date.now(),

@@ -449,8 +449,21 @@ export const MU_SUN = PHYSICAL_CONSTANTS.G * PHYSICAL_CONSTANTS.sunMass;
 export const AU_TO_M = 1.496e11;
 export const G_AU = PHYSICAL_CONSTANTS.G / (AU_TO_M * AU_TO_M * AU_TO_M);
 
-export const SPACESHIP = {
-  mass: 1,                    // kg (negligible, does not affect celestial bodies)
-  collisionRadius: 0.00001,   // AU (~1,500 km)
-  maxThrustAU: 1.5e-7,        // AU/s^2 (~22.4 m/s^2 ≈ 2.3g)
+export const SPACECRAFT_DRAGON2 = {
+  name: 'Crew Dragon 2',
+  mass: 10500,
+  length: 8.1,
+  diameter: 4.0,
+  collisionRadiusAU: 5.4e-8,
+  maxThrustAU: 1.5e-7,
+  defaultOrbit: {
+    semiMajorAxis: 6.771e6,
+    eccentricity: 0,
+    inclination: 0.9006,
+    raan: 0,
+    argPeriapsis: 0,
+    trueAnomaly: 0,
+  },
 };
+
+export const SPACECRAFT_CONFIG = SPACECRAFT_DRAGON2;
