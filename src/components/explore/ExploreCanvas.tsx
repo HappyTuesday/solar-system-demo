@@ -257,9 +257,9 @@ function ExploreCanvas() {
       const sideW = Math.round(rw * 0.16);
       const sideH = Math.round(rh * 0.25);
 
-      // ---- Rear mirror (top center) ----
+      // ---- Rear mirror (top center, flush with top edge) ----
       const rearX = Math.round((rw - rearW) / 2);
-      const rearY = rh - 12 - rearH;
+      const rearY = rh - rearH;
       rearCam.aspect = rearW / Math.max(rearH, 1);
       rearCam.updateProjectionMatrix();
       rearCam.position.copy(pos);
@@ -274,8 +274,8 @@ function ExploreCanvas() {
       renderer.setScissorTest(true);
       renderer.render(scene, rearCam);
 
-      // ---- Left mirror ----
-      const leftX = 12;
+      // ---- Left mirror (flush with left edge) ----
+      const leftX = 0;
       const leftY = Math.round((rh - sideH) / 2);
       leftCam.aspect = sideW / Math.max(sideH, 1);
       leftCam.updateProjectionMatrix();
@@ -291,8 +291,8 @@ function ExploreCanvas() {
       renderer.setScissorTest(true);
       renderer.render(scene, leftCam);
 
-      // ---- Right mirror ----
-      const rightX = rw - 12 - sideW;
+      // ---- Right mirror (flush with right edge) ----
+      const rightX = rw - sideW;
       const rightY = Math.round((rh - sideH) / 2);
       rightCam.aspect = sideW / Math.max(sideH, 1);
       rightCam.updateProjectionMatrix();
