@@ -3,7 +3,7 @@
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 170, 0, 0.3);
   border-radius: 8px;
-  padding: 12px;
+  padding: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   width: 220px;
   pointer-events: auto;
@@ -13,11 +13,11 @@
   font-size: 13px;
   font-weight: 600;
   color: #ffaa00;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 
 .velocity-input-form .form-field {
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .velocity-input-form .form-label {
@@ -78,12 +78,12 @@
 .velocity-input-form .form-actions {
   display: flex;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 8px;
 }
 
 .velocity-input-form .form-btn {
   flex: 1;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-radius: 4px;
   border: none;
   font-size: 13px;

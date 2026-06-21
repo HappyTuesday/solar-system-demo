@@ -61,7 +61,6 @@ export default function VelocityInputForm({
           />
           <span className="form-unit">km/s</span>
         </div>
-        <div className="form-hint">上限 {MAX_SPEED.toLocaleString()} km/s</div>
       </div>
 
       <div className="form-field">
@@ -78,15 +77,7 @@ export default function VelocityInputForm({
           />
           <span className="form-unit">°</span>
         </div>
-        <div className="form-hint">0° = 切线方向（逆时针绕行），90° = 径向向外</div>
       </div>
-
-      {defaultOrbitalSpeed !== undefined && defaultOrbitalSpeed > 0 && (
-        <div className="form-reference">
-          ※ 推荐初速度：<span>{(defaultOrbitalSpeed / 1000).toFixed(1)} km/s</span>（0° 切线方向）<br/>
-          <span className="form-reference-note">数据已修正，便于搭建</span>
-        </div>
-      )}
 
       <div className="form-actions">
         <button className="form-btn cancel" onClick={onCancel}>
