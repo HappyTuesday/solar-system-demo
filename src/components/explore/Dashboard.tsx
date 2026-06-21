@@ -150,13 +150,20 @@ function Dashboard() {
               <div className="dashboard-thrust-row">
                 <button
                   className="dashboard-accel-btn"
-                  onClick={() => setThrustMagnitude(Math.min(100, thrustMagnitude + 10))}
+                  onClick={() => {
+                    setForwardThrust(1);
+                    setThrustMagnitude(Math.min(100, thrustMagnitude + 10));
+                  }}
                 >
                   + 加速
                 </button>
                 <button
                   className="dashboard-decel-btn"
-                  onClick={() => setThrustMagnitude(Math.max(0, thrustMagnitude - 10))}
+                  onClick={() => {
+                    const newMag = Math.max(0, thrustMagnitude - 10);
+                    setThrustMagnitude(newMag);
+                    setForwardThrust(newMag > 0 ? 1 : 0);
+                  }}
                 >
                   − 减速
                 </button>

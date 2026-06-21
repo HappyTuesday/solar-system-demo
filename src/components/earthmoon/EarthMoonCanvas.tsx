@@ -4,8 +4,8 @@ import { useEarthMoonStore } from '../../stores/earthMoonStore';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
 import { REAL_DATA } from '../../engine/constants';
 import { getMoonPhase, getEclipseType, predictEclipses } from '../../engine/eclipse';
-import { computeOffScreenBodies, type OffScreenEntry } from '../explore/OffScreenIndicator';
-import OffScreenIndicator from '../explore/OffScreenIndicator';
+import { computeOffScreenBodies, type OffScreenEntry } from './OffScreenIndicator';
+import OffScreenIndicator from './OffScreenIndicator';
 
 const MU_SUN = 1.32712440018e20;
 const MU_EARTH = 3.986004418e14;

@@ -19,7 +19,7 @@ function computeBodyPosition(templateId: string, jd: number): [number, number, n
   const E = solveKepler(Mmod, o.eccentricity);
   const nu = trueAnomaly(E, o.eccentricity);
   const sv = stateVectors(data.semiMajorAxis, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN);
-  return [sv.position[0] * SCALE, sv.position[2] * SCALE, -sv.position[1] * SCALE];
+  return [sv.position[0] * SCALE, sv.position[1] * SCALE, sv.position[2] * SCALE];
 }
 
 function createOrbitLine(templateId: string, color: number): THREE.Line {
@@ -32,7 +32,7 @@ function createOrbitLine(templateId: string, color: number): THREE.Line {
       data.orbital!.longitudeAscendingNode, data.orbital!.argumentOfPeriapsis,
       nu, MU_SUN,
     );
-    points.push(new THREE.Vector3(sv.position[0] * SCALE, sv.position[2] * SCALE, -sv.position[1] * SCALE));
+    points.push(new THREE.Vector3(sv.position[0] * SCALE, sv.position[1] * SCALE, sv.position[2] * SCALE));
   }
   const geom = new THREE.BufferGeometry().setFromPoints(points);
   return new THREE.Line(geom, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55 }));
