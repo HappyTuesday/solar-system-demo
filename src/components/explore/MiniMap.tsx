@@ -328,7 +328,7 @@ function MiniMap() {
 
       // Spaceship
       ctx.fillStyle = '#00b8ff';
-      drawSpaceship(ctx, shipSx, shipSy, shipAngle, isZoomed ? 6 : 8);
+      drawSpaceship(ctx, shipSx, shipSy, -shipAngle, isZoomed ? 6 : 8);
 
       // Scale indicator
       const scaleBarAU = viewRange * 0.2;
