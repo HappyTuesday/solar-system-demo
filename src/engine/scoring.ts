@@ -10,13 +10,17 @@ function orbitRadius(body: CelestialBody, sunPosition?: [number, number, number]
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-export function scoreBuild(bodies: CelestialBody[]): ScoringResult {
+export function scoreBuild(
+  bodies: CelestialBody[],
+  referenceData?: Record<string, { mass: number; semiMajorAxis?: number; orbitalSpeed?: number; name: string; type: string }>,
+): ScoringResult {
+  const refData = referenceData ?? REAL_DATA;
   const config = SCORING_CONFIG;
   const sun = bodies.find(b => b.templateId === 'sun');
   const sunPos = sun?.position;
 
   const planetBodies = bodies.filter(b => {
-    const data = REAL_DATA[b.templateId];
+    const data = refData[b.templateId];
     return data && data.type === 'planet';
   });
 
@@ -25,8 +29,8 @@ export function scoreBuild(bodies: CelestialBody[]): ScoringResult {
   );
 
   const refPlanets = PLANET_ORDER
-    .filter(id => id !== 'sun' && REAL_DATA[id]?.type === 'planet')
-    .map(id => REAL_DATA[id]);
+    .filter(id => id !== 'sun' && refData[id]?.type === 'planet')
+    .map(id => refData[id]);
 
   const planetScores: Record<string, SingleScore> = {};
   let totalWeightedSum = 0;
@@ -35,7 +39,7 @@ export function scoreBuild(bodies: CelestialBody[]): ScoringResult {
   for (let i = 0; i < Math.min(sortedPlaced.length, refPlanets.length); i++) {
     const placed = sortedPlaced[i];
     const ref = refPlanets[i];
-    const data = REAL_DATA[placed.templateId];
+    const data = refData[placed.templateId];
 
     const actualR = orbitRadius(placed, sunPos);
     let orbitRadiusScore = 0;
@@ -87,18 +91,22 @@ export function scoreBuild(bodies: CelestialBody[]): ScoringResult {
   return { totalScore, planetScores };
 }
 
-export function calculateErrors(bodies: CelestialBody[]): Record<string, {
+export function calculateErrors(
+  bodies: CelestialBody[],
+  referenceData?: Record<string, { mass: number; semiMajorAxis?: number; orbitalSpeed?: number; name: string; type: string }>,
+): Record<string, {
   name: string;
   orbitRadiusError: number;
   massError: number;
   speedError: number;
 }> {
+  const refData = referenceData ?? REAL_DATA;
   const sun = bodies.find(b => b.templateId === 'sun');
   const sunPos = sun?.position;
   const errors: Record<string, ReturnType<typeof calculateErrors>[string]> = {};
 
   for (const body of bodies) {
-    const data = REAL_DATA[body.templateId];
+    const data = refData[body.templateId];
     if (!data || data.type === 'star') continue;
 
     const actualR = orbitRadius(body, sunPos);
