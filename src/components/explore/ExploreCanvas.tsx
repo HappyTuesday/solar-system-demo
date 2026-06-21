@@ -24,27 +24,6 @@ function computeBodyPosition(templateId: string, jd: number): [number, number, n
   return [sv.position[0] * SCALE, sv.position[1] * SCALE, sv.position[2] * SCALE];
 }
 
-interface BodyState {
-  position: [number, number, number];
-  velocity: [number, number, number];
-}
-
-function computeBodyState(templateId: string, jd: number): BodyState | null {
-  const data = REAL_DATA[templateId];
-  if (!data || !data.semiMajorAxis || !data.orbital || templateId === 'sun') return null;
-  const o = data.orbital;
-  const period = orbitalPeriod(data.semiMajorAxis, MU_SUN);
-  const M = meanAnomalyAtTime(o.meanAnomalyAtEpoch, period, o.epoch, jd);
-  const Mmod = ((M % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-  const E = solveKepler(Mmod, o.eccentricity);
-  const nu = trueAnomaly(E, o.eccentricity);
-  const sv = stateVectors(data.semiMajorAxis, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN);
-  return {
-    position: [sv.position[0] * SCALE, sv.position[1] * SCALE, sv.position[2] * SCALE],
-    velocity: [sv.velocity[0] * SCALE, sv.velocity[1] * SCALE, sv.velocity[2] * SCALE],
-  };
-}
-
 function createOrbitLine(templateId: string, color: number): THREE.Line {
   const data = REAL_DATA[templateId];
   const points: THREE.Vector3[] = [];
@@ -179,34 +158,6 @@ function ExploreCanvas() {
 
       if (store.isRunning && dt > 0 && !store.exploded) {
         const clampedDt = Math.min(dt, 0.1);
-        simulatedTime += clampedDt * 86400 * 1000;
-        store.setSimulatedTime(simulatedTime);
-        const jd = julianDate(simulatedTime);
-
-        for (const id of allIds) {
-          const mesh = bodyMeshes.get(id);
-          if (!mesh) continue;
-          if (id === 'sun') {
-            mesh.position.set(0, 0, 0);
-          } else {
-            const pos = computeBodyPosition(id, jd);
-            if (pos) mesh.position.set(pos[0], pos[1], pos[2]);
-          }
-        }
-
-        const bodyInfos: BodyInfo[] = [];
-        let earthBodyIdx = -1;
-        for (const id of allIds) {
-          const mesh = bodyMeshes.get(id);
-          const data = REAL_DATA[id];
-          if (!mesh || !data) continue;
-          bodyInfos.push({
-            position: [mesh.position.x, mesh.position.y, mesh.position.z],
-            mass: data.mass,
-            radius: data.radius * SCALE,
-          });
-          if (id === 'earth') earthBodyIdx = bodyInfos.length - 1;
-        }
 
         const worldThrust = applyThrustInBodyFrame(
           store.thrust[0],
@@ -225,31 +176,50 @@ function ExploreCanvas() {
           exploded: store.exploded,
         };
 
-        // Interpolate earth position between frames for smoother physics
-        const earthState = computeBodyState('earth', jd);
-        if (earthState && earthBodyIdx >= 0) {
-          const simDelta = clampedDt * 86400;
-          const steps = Math.min(Math.max(1, Math.floor(simDelta / 0.016)), 200);
-          const subDt = simDelta / steps;
-          const earthVelPerSub = [
-            earthState.velocity[0] * subDt,
-            earthState.velocity[1] * subDt,
-            earthState.velocity[2] * subDt,
-          ];
+        const simDelta = clampedDt * 86400;
+        const steps = Math.min(Math.max(1, Math.floor(simDelta / 0.016)), 200);
+        const subDt = simDelta / steps;
 
-          for (let s = 0; s < steps; s++) {
-            rk4StepSpaceship(shipState, bodyInfos, subDt);
-            bodyInfos[earthBodyIdx].position[0] += earthVelPerSub[0];
-            bodyInfos[earthBodyIdx].position[1] += earthVelPerSub[1];
-            bodyInfos[earthBodyIdx].position[2] += earthVelPerSub[2];
+        for (let s = 0; s < steps; s++) {
+          const subSimTime = simulatedTime + (s + 1) * subDt * 1000;
+          const subJd = julianDate(subSimTime);
+
+          for (const id of allIds) {
+            if (id === 'sun') continue;
+            const mesh = bodyMeshes.get(id);
+            if (!mesh) continue;
+            const pos = computeBodyPosition(id, subJd);
+            if (pos) mesh.position.set(pos[0], pos[1], pos[2]);
           }
-        } else {
-          const simDelta = clampedDt * 86400;
-          const steps = Math.min(Math.max(1, Math.floor(simDelta / 0.016)), 200);
-          const subDt = simDelta / steps;
-          for (let s = 0; s < steps; s++) {
-            rk4StepSpaceship(shipState, bodyInfos, subDt);
+
+          const bodyInfos: BodyInfo[] = [];
+          for (const id of allIds) {
+            const mesh = bodyMeshes.get(id);
+            const data = REAL_DATA[id];
+            if (!mesh || !data) continue;
+            bodyInfos.push({
+              position: [mesh.position.x, mesh.position.y, mesh.position.z],
+              mass: data.mass,
+              radius: data.radius * SCALE,
+            });
           }
+
+          rk4StepSpaceship(shipState, bodyInfos, subDt);
+        }
+
+        simulatedTime += simDelta * 1000;
+        store.setSimulatedTime(simulatedTime);
+
+        const bodyInfos: BodyInfo[] = [];
+        for (const id of allIds) {
+          const mesh = bodyMeshes.get(id);
+          const data = REAL_DATA[id];
+          if (!mesh || !data) continue;
+          bodyInfos.push({
+            position: [mesh.position.x, mesh.position.y, mesh.position.z],
+            mass: data.mass,
+            radius: data.radius * SCALE,
+          });
         }
 
         if (checkSpaceshipCollision(shipState, bodyInfos)) {
