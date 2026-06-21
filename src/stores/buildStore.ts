@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { BuildState, CelestialBody } from '../types';
 import { scoreBuild } from '../engine/scoring';
+import { BUILD_DATA } from '../engine/buildData';
 import { advanceSimulation as engineAdvanceSimulation } from '../engine/physics';
 import { PHYSICAL_CONSTANTS } from '../engine/constants';
 
@@ -82,7 +83,7 @@ export const useBuildStore = create<BuildStore>((set, get) => ({
 
     const completedAt = Date.now();
     const buildElapsedMs = completedAt - state.startedAt;
-    const result = scoreBuild(state.bodies);
+    const result = scoreBuild(state.bodies, BUILD_DATA);
 
     set({ completedAt, buildElapsedMs, isRunning: false });
     return { score: result.totalScore, planetScores: result.planetScores };

@@ -3,7 +3,7 @@ import type { CelestialBody } from '../../types';
 import { REAL_DATA } from '../../engine/constants';
 import { physicalToRender, physicalRadiusToRender } from '../../engine/coordinateTransform';
 
-const DEFAULT_COLORS: Record<string, number> = {
+export const DEFAULT_COLORS: Record<string, number> = {
   sun: 0xffdd00,
   mercury: 0xcccccc,
   venus: 0xffcc88,
@@ -78,39 +78,24 @@ export function setBodyOutline(bodyId: string, visible: boolean): void {
 
 export function createBodyMesh(
   body: CelestialBody,
-  scene: THREE.Scene
+  scene: THREE.Scene,
+  overrideRadius?: number,
 ): BodyMesh | null {
   const data = REAL_DATA[body.templateId];
   if (!data) return null;
 
   const isSun = body.templateId === 'sun';
-  const renderRadius = physicalRadiusToRender(data.radius);
+  const renderRadius = overrideRadius ?? physicalRadiusToRender(data.radius);
 
   const geometry = new THREE.SphereGeometry(renderRadius, isSun ? 64 : 32, isSun ? 64 : 32);
 
-  let material: THREE.Material;
+  const color = isSun ? 0xff6600 : (DEFAULT_COLORS[body.templateId] ?? 0x888888);
+  const material = new THREE.MeshBasicMaterial({ color });
 
-  if (isSun) {
-    material = new THREE.MeshBasicMaterial({ color: 0xff6600 });
-    const texture = loadTexture(`/textures/${body.templateId}.jpg`);
-    if (texture) {
-      (material as THREE.MeshBasicMaterial).map = texture;
-      (material as THREE.MeshBasicMaterial).color.set(0xffffff);
-    }
-  } else {
-    const color = DEFAULT_COLORS[body.templateId] ?? 0x888888;
-    material = new THREE.MeshStandardMaterial({
-      color,
-      roughness: 0.8,
-      metalness: 0.1,
-    });
-
-    const textureUrl = `/textures/${body.templateId}.jpg`;
-    const texture = loadTexture(textureUrl);
-    if (texture) {
-      (material as THREE.MeshStandardMaterial).map = texture;
-      (material as THREE.MeshStandardMaterial).color.set(0xffffff);
-    }
+  const texture = loadTexture(`/textures/${body.templateId}.jpg`);
+  if (texture) {
+    (material as THREE.MeshBasicMaterial).map = texture;
+    (material as THREE.MeshBasicMaterial).color.set(0xffffff);
   }
 
   const mesh = new THREE.Mesh(geometry, material);
