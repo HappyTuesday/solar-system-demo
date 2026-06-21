@@ -451,6 +451,6 @@ export const G_AU = PHYSICAL_CONSTANTS.G / (AU_TO_M * AU_TO_M * AU_TO_M);
 
 export const SPACESHIP = {
   mass: 1,                    // kg (negligible, does not affect celestial bodies)
-  collisionRadius: 0.001,     // AU (~150,000 km)
+  collisionRadius: 0.00001,   // AU (~1,500 km)
   maxThrustAU: 1.5e-7,        // AU/s^2 (~22.4 m/s^2 ≈ 2.3g)
 };

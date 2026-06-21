@@ -4,7 +4,7 @@ import { vec3Length } from './physics';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from './orbital';
 import { MU_SUN } from './constants';
 
-const ORBIT_RADIUS_AU = 0.002;
+const ORBIT_RADIUS_AU = 0.0003;
 const SCALE = 1 / AU_TO_M;
 
 function computeEarthState(now: number): {
