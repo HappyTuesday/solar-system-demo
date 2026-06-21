@@ -65,6 +65,8 @@ function MiniMap() {
     if (!ctx) return;
 
     const draw = () => {
+      ctx.save();
+      ctx.scale(2, 2);
       const sp = useSpaceshipStore.getState();
       const jd = julianDate(sp.simulatedTime);
       const cx = CANVAS_W / 2;
@@ -239,6 +241,7 @@ function MiniMap() {
       ctx.fillStyle = '#334455';
       ctx.fillText('▲ 飞船 · 俯视图', 4, CANVAS_H - 4);
 
+      ctx.restore();
       rafRef.current = requestAnimationFrame(draw);
     };
 
