@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { useUIStore } from '../../stores/uiStore';
 import { useBuildStore } from '../../stores/buildStore';
-import { CELESTIAL_TEMPLATES } from '../../engine/constants';
+import { BUILD_CELESTIAL_TEMPLATES } from '../../engine/constants';
 import type { CelestialBodyTemplate } from '../../types';
 import './CelestialToolbar.css';
 
@@ -42,14 +42,15 @@ const ToolbarItem = memo(function ToolbarItem({ template, isMoon, disabled, disa
     >
       <span className="color-dot" style={{ background: DEFAULT_DOT_COLORS[template.id] ?? '#888' }} />
       <span className="item-name">{template.name}</span>
+      <span className="item-adjusted-note">※校正</span>
     </div>
   );
 });
 
 function groupTemplates(): { title: string; items: CelestialBodyTemplate[] }[] {
-  const star = CELESTIAL_TEMPLATES.filter(t => t.type === 'star');
-  const planets = CELESTIAL_TEMPLATES.filter(t => t.type === 'planet');
-  const moons = CELESTIAL_TEMPLATES.filter(t => t.type === 'moon');
+  const star = BUILD_CELESTIAL_TEMPLATES.filter(t => t.type === 'star');
+  const planets = BUILD_CELESTIAL_TEMPLATES.filter(t => t.type === 'planet');
+  const moons = BUILD_CELESTIAL_TEMPLATES.filter(t => t.type === 'moon');
 
   const moonGroups: Record<string, CelestialBodyTemplate[]> = {};
   for (const m of moons) {
@@ -64,7 +65,7 @@ function groupTemplates(): { title: string; items: CelestialBodyTemplate[] }[] {
   ];
 
   for (const [parentId, items] of Object.entries(moonGroups)) {
-    const parentName = CELESTIAL_TEMPLATES.find(t => t.id === parentId)?.name ?? parentId;
+    const parentName = BUILD_CELESTIAL_TEMPLATES.find(t => t.id === parentId)?.name ?? parentId;
     groups.push({ title: `${parentName} 的卫星`, items });
   }
 
@@ -78,6 +79,7 @@ export default function CelestialToolbar() {
   return (
     <div className="toolbar">
       <div className="toolbar-header">天体工具栏</div>
+      <div className="toolbar-adjusted-tip">※ 数据已校正，便于搭建</div>
       {groups.map(group => (
         <div key={group.title} className="toolbar-group">
           <div className="toolbar-group-title">{group.title}</div>

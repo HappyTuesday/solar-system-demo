@@ -64,3 +64,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.toolbar-adjusted-tip {
+  font-size: 10px;
+  color: #888;
+  padding: 4px 8px 6px;
+  text-align: center;
+}
+
+.item-adjusted-note {
+  font-size: 9px;
+  color: #999;
+  margin-left: auto;
+}
