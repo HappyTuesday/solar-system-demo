@@ -71,8 +71,11 @@ function BuilderCanvas() {
     initTouchInteraction(canvas);
 
     const existingBodies = useBuildStore.getState().bodies;
+    const lsInit = getLinearScale();
     for (const body of existingBodies) {
-      createBodyMesh(body, scene, BUILD_DATA[body.templateId]?.displayRadius);
+      const bd = BUILD_DATA[body.templateId];
+      const r = bd ? Math.max(bd.radius * lsInit, 10) : undefined;
+      createBodyMesh(body, scene, r);
     }
 
     const observer = new ResizeObserver(() => {
@@ -109,6 +112,22 @@ function BuilderCanvas() {
     trailManagerRef.current?.clearAll();
   }, [linearScale]);
 
+  // --- Rebuild meshes when scale changes ---
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const currentBodies = useBuildStore.getState().bodies;
+    for (const [id] of bodyMeshMap) {
+      removeBodyMesh(id, scene);
+    }
+    bodyMeshMap.clear();
+    for (const body of currentBodies) {
+      const bd = BUILD_DATA[body.templateId];
+      const r = bd ? Math.max(bd.radius * getLinearScale(), 10) : undefined;
+      createBodyMesh(body, scene, r);
+    }
+  }, [linearScale]);
+
   // --- Pan to body ---
   useEffect(() => {
     if (!panToBodyId) return;
@@ -141,7 +160,9 @@ function BuilderCanvas() {
 
     for (const body of bodies) {
       if (!currentMeshIds.has(body.id)) {
-        createBodyMesh(body, scene, BUILD_DATA[body.templateId]?.displayRadius);
+        const bd = BUILD_DATA[body.templateId];
+        const r = bd ? Math.max(bd.radius * getLinearScale(), 10) : undefined;
+        createBodyMesh(body, scene, r);
       }
     }
   }, [bodies]);
@@ -332,7 +353,7 @@ function BuilderCanvas() {
             const scene = sceneRef.current;
             const data = selectedToolId ? BUILD_DATA[selectedToolId] : null;
             if (scene && data) {
-              const renderRadius = data.displayRadius;
+              const renderRadius = Math.max(data.radius * getLinearScale(), 10);
               const color = DEFAULT_COLORS[selectedToolId] ?? 0x888888;
               createFloatingPreview(scene, point, renderRadius, color, selectedToolId);
             }
