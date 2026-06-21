@@ -22,6 +22,11 @@ const BODY_COLORS: Record<string, string> = {
 };
 
 function computeBodyPos2D(templateId: string, jd: number): { x: number; y: number } | null {
+  const state = computeBodyState2D(templateId, jd);
+  return state ? { x: state.x, y: state.y } : null;
+}
+
+function computeBodyState2D(templateId: string, jd: number): { x: number; y: number; vx: number; vy: number } | null {
   const data = REAL_DATA[templateId];
   if (!data || !data.semiMajorAxis || !data.orbital) return null;
   const o = data.orbital;
@@ -31,7 +36,12 @@ function computeBodyPos2D(templateId: string, jd: number): { x: number; y: numbe
   const E = solveKepler(Mmod, o.eccentricity);
   const nu = trueAnomaly(E, o.eccentricity);
   const sv = stateVectors(data.semiMajorAxis, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN);
-  return { x: sv.position[0] * SCALE, y: sv.position[1] * SCALE };
+  return {
+    x: sv.position[0] * SCALE,
+    y: sv.position[1] * SCALE,
+    vx: sv.velocity[0] * SCALE,
+    vy: sv.velocity[1] * SCALE,
+  };
 }
 
 interface BodyDrawInfo {
@@ -132,18 +142,20 @@ function MiniMap() {
 
       let nearestDistAU = Infinity;
       let nearestId = '';
+      let nearestVx = 0;
+      let nearestVy = 0;
       for (const id of ALL_IDS) {
         if (id === 'sun') {
           const dx2 = sp.position[0] ** 2 + sp.position[1] ** 2;
           const dist = Math.sqrt(dx2);
-          if (dist < nearestDistAU) { nearestDistAU = dist; nearestId = id; }
+          if (dist < nearestDistAU) { nearestDistAU = dist; nearestId = id; nearestVx = 0; nearestVy = 0; }
         } else {
-          const pos2d = computeBodyPos2D(id, jd);
-          if (!pos2d) continue;
-          const dx = pos2d.x - sp.position[0];
-          const dy = pos2d.y - sp.position[1];
+          const state2d = computeBodyState2D(id, jd);
+          if (!state2d) continue;
+          const dx = state2d.x - sp.position[0];
+          const dy = state2d.y - sp.position[1];
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < nearestDistAU) { nearestDistAU = dist; nearestId = id; }
+          if (dist < nearestDistAU) { nearestDistAU = dist; nearestId = id; nearestVx = state2d.vx; nearestVy = state2d.vy; }
         }
       }
 
@@ -280,10 +292,13 @@ function MiniMap() {
         ctx.globalAlpha = 1;
       }
 
-      // Spaceship at center
-      const spdx = sp.direction[0];
-      const spdy = sp.direction[1];
-      const shipAngle = Math.atan2(spdy, spdx);
+      // Spaceship at center — use relative velocity direction to nearest body
+      const relVx = sp.velocity[0] - nearestVx;
+      const relVy = sp.velocity[1] - nearestVy;
+      const relSpeed = Math.sqrt(relVx * relVx + relVy * relVy);
+      const shipAngle = relSpeed > 1e-12
+        ? Math.atan2(relVy, relVx)
+        : Math.atan2(sp.direction[1], sp.direction[0]);
 
       // Direction line
       const dirLen = isZoomed ? 10 : 14;
