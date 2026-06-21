@@ -9,6 +9,8 @@ import type { SpaceshipState } from '../../types';
 const SCALE = 1 / 1.496e11;
 const ORBIT_LINE_POINTS = 256;
 
+const MIRROR_FOV = 85;
+
 function computeBodyPosition(templateId: string, jd: number): [number, number, number] | null {
   const data = REAL_DATA[templateId];
   if (!data || !data.semiMajorAxis || !data.orbital || templateId === 'sun') return null;
@@ -38,14 +40,24 @@ function createOrbitLine(templateId: string, color: number): THREE.Line {
   return new THREE.Line(geom, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55 }));
 }
 
+function rotateDirLeft(dir: [number, number, number]): [number, number, number] {
+  return [-dir[1], dir[0], dir[2]];
+}
+
+function rotateDirRight(dir: [number, number, number]): [number, number, number] {
+  return [dir[1], -dir[0], dir[2]];
+}
+
 function ExploreCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const rearCamRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const leftCamRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const rightCamRef = useRef<THREE.PerspectiveCamera | null>(null);
   const bodyMeshesRef = useRef<Map<string, THREE.Mesh>>(new Map());
   const allIdsRef = useRef<string[]>(['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune']);
-  const frustumRef = useRef(new THREE.Frustum());
-  const projMatrixRef = useRef(new THREE.Matrix4());
+  const sizeRef = useRef({ w: 0, h: 0 });
   const disposablesRef = useRef<{ geometries: THREE.BufferGeometry[]; materials: THREE.Material[]; textures: THREE.Texture[]; lines: THREE.Line[] }>({
     geometries: [], materials: [], textures: [], lines: [],
   });
@@ -56,6 +68,7 @@ function ExploreCanvas() {
     const rect = container.getBoundingClientRect();
     const w = rect.width;
     const h = rect.height;
+    sizeRef.current = { w, h };
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x050510);
@@ -63,6 +76,18 @@ function ExploreCanvas() {
     const camera = new THREE.PerspectiveCamera(75, w / Math.max(h, 1), 0.001, 500);
     camera.up.set(0, 0, 1);
     cameraRef.current = camera;
+
+    const rearCam = new THREE.PerspectiveCamera(MIRROR_FOV, 1, 0.001, 500);
+    rearCam.up.set(0, 0, 1);
+    rearCamRef.current = rearCam;
+
+    const leftCam = new THREE.PerspectiveCamera(MIRROR_FOV, 1, 0.001, 500);
+    leftCam.up.set(0, 0, 1);
+    leftCamRef.current = leftCam;
+
+    const rightCam = new THREE.PerspectiveCamera(MIRROR_FOV, 1, 0.001, 500);
+    rightCam.up.set(0, 0, 1);
+    rightCamRef.current = rightCam;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(w, h);
@@ -121,6 +146,8 @@ function ExploreCanvas() {
 
     let lastTime = performance.now();
     let simulatedTime = Date.now();
+
+    const animLookTarget = new THREE.Vector3();
 
     const animate = (time: number) => {
       const dt = (time - lastTime) / 1000;
@@ -199,25 +226,88 @@ function ExploreCanvas() {
         }
       }
 
-      const cam = cameraRef.current!;
       const sp = useSpaceshipStore.getState();
-      cam.position.set(sp.position[0], sp.position[1], sp.position[2]);
+      const pos = new THREE.Vector3(sp.position[0], sp.position[1], sp.position[2]);
+      const dir = new THREE.Vector3(sp.direction[0], sp.direction[1], sp.direction[2]);
+      const leftArr = rotateDirLeft(sp.direction);
+      const rightArr = rotateDirRight(sp.direction);
+      const leftDir = new THREE.Vector3(leftArr[0], leftArr[1], leftArr[2]);
+      const rightDir = new THREE.Vector3(rightArr[0], rightArr[1], rightArr[2]);
 
-      const lookTarget = new THREE.Vector3(
+      const { w: rw, h: rh } = sizeRef.current;
+      if (rw <= 0 || rh <= 0) { animRef.current = requestAnimationFrame(animate); return; }
+
+      // ---- Main view ----
+      camera.position.copy(pos);
+      animLookTarget.set(
         sp.position[0] + sp.direction[0] * 10,
         sp.position[1] + sp.direction[1] * 10,
         sp.position[2] + sp.direction[2] * 10,
       );
-      cam.lookAt(lookTarget);
+      camera.lookAt(animLookTarget);
 
-      projMatrixRef.current.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
-      frustumRef.current.setFromProjectionMatrix(projMatrixRef.current);
+      renderer.setViewport(0, 0, rw, rh);
+      renderer.setScissor(0, 0, rw, rh);
+      renderer.setScissorTest(false);
+      renderer.render(scene, camera);
 
-      for (const [, mesh] of bodyMeshes) {
-        mesh.visible = frustumRef.current.containsPoint(mesh.position);
-      }
+      // ---- Mirror sizes ----
+      const rearW = Math.round(rw * 0.22);
+      const rearH = Math.round(rh * 0.18);
+      const sideW = Math.round(rw * 0.16);
+      const sideH = Math.round(rh * 0.25);
 
-      renderer.render(scene, cam);
+      // ---- Rear mirror (top center) ----
+      const rearX = Math.round((rw - rearW) / 2);
+      const rearY = rh - 12 - rearH;
+      rearCam.aspect = rearW / Math.max(rearH, 1);
+      rearCam.updateProjectionMatrix();
+      rearCam.position.copy(pos);
+      animLookTarget.set(
+        sp.position[0] - sp.direction[0] * 10,
+        sp.position[1] - sp.direction[1] * 10,
+        sp.position[2] - sp.direction[2] * 10,
+      );
+      rearCam.lookAt(animLookTarget);
+      renderer.setViewport(rearX, rearY, rearW, rearH);
+      renderer.setScissor(rearX, rearY, rearW, rearH);
+      renderer.setScissorTest(true);
+      renderer.render(scene, rearCam);
+
+      // ---- Left mirror ----
+      const leftX = 12;
+      const leftY = Math.round((rh - sideH) / 2);
+      leftCam.aspect = sideW / Math.max(sideH, 1);
+      leftCam.updateProjectionMatrix();
+      leftCam.position.copy(pos);
+      animLookTarget.set(
+        sp.position[0] + leftDir.x * 10,
+        sp.position[1] + leftDir.y * 10,
+        sp.position[2] + leftDir.z * 10,
+      );
+      leftCam.lookAt(animLookTarget);
+      renderer.setViewport(leftX, leftY, sideW, sideH);
+      renderer.setScissor(leftX, leftY, sideW, sideH);
+      renderer.setScissorTest(true);
+      renderer.render(scene, leftCam);
+
+      // ---- Right mirror ----
+      const rightX = rw - 12 - sideW;
+      const rightY = Math.round((rh - sideH) / 2);
+      rightCam.aspect = sideW / Math.max(sideH, 1);
+      rightCam.updateProjectionMatrix();
+      rightCam.position.copy(pos);
+      animLookTarget.set(
+        sp.position[0] + rightDir.x * 10,
+        sp.position[1] + rightDir.y * 10,
+        sp.position[2] + rightDir.z * 10,
+      );
+      rightCam.lookAt(animLookTarget);
+      renderer.setViewport(rightX, rightY, sideW, sideH);
+      renderer.setScissor(rightX, rightY, sideW, sideH);
+      renderer.setScissorTest(true);
+      renderer.render(scene, rightCam);
+
       animRef.current = requestAnimationFrame(animate);
     };
     animRef.current = requestAnimationFrame(animate);
@@ -226,6 +316,7 @@ function ExploreCanvas() {
       const rw = container.clientWidth;
       const rh = container.clientHeight;
       if (rw <= 0 || rh <= 0) return;
+      sizeRef.current = { w: rw, h: rh };
       camera.aspect = rw / rh;
       camera.updateProjectionMatrix();
       renderer.setSize(rw, rh);
@@ -251,7 +342,62 @@ function ExploreCanvas() {
   }, []);
 
   return (
-    <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }} />
+    <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+      {/* Rear mirror frame */}
+      <div style={{
+        position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+        width: '22%', height: '18%', maxWidth: 280, minWidth: 120,
+        border: '2px solid rgba(180,210,255,0.3)',
+        borderTop: 'none',
+        borderRadius: '0 0 6px 6px',
+        boxShadow: 'inset 0 0 12px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.4)',
+        pointerEvents: 'none',
+        zIndex: 10,
+      }}>
+        <div style={{
+          position: 'absolute', bottom: 2, left: '50%', transform: 'translateX(-50%)',
+          color: 'rgba(255,255,255,0.2)', fontSize: 8, fontFamily: 'monospace', userSelect: 'none',
+        }}>
+          后视镜
+        </div>
+      </div>
+      {/* Left mirror frame */}
+      <div style={{
+        position: 'absolute', top: '50%', left: 0, transform: 'translateY(-50%)',
+        width: '16%', height: '25%', maxWidth: 200, minWidth: 80, minHeight: 100,
+        border: '2px solid rgba(180,210,255,0.3)',
+        borderLeft: 'none',
+        borderRadius: '0 6px 6px 0',
+        boxShadow: 'inset 0 0 12px rgba(0,0,0,0.5), 2px 0 8px rgba(0,0,0,0.4)',
+        pointerEvents: 'none',
+        zIndex: 10,
+      }}>
+        <div style={{
+          position: 'absolute', bottom: 2, left: '50%', transform: 'translateX(-50%)',
+          color: 'rgba(255,255,255,0.2)', fontSize: 8, fontFamily: 'monospace', userSelect: 'none',
+        }}>
+          左
+        </div>
+      </div>
+      {/* Right mirror frame */}
+      <div style={{
+        position: 'absolute', top: '50%', right: 0, transform: 'translateY(-50%)',
+        width: '16%', height: '25%', maxWidth: 200, minWidth: 80, minHeight: 100,
+        border: '2px solid rgba(180,210,255,0.3)',
+        borderRight: 'none',
+        borderRadius: '6px 0 0 6px',
+        boxShadow: 'inset 0 0 12px rgba(0,0,0,0.5), -2px 0 8px rgba(0,0,0,0.4)',
+        pointerEvents: 'none',
+        zIndex: 10,
+      }}>
+        <div style={{
+          position: 'absolute', bottom: 2, left: '50%', transform: 'translateX(-50%)',
+          color: 'rgba(255,255,255,0.2)', fontSize: 8, fontFamily: 'monospace', userSelect: 'none',
+        }}>
+          右
+        </div>
+      </div>
+    </div>
   );
 }
 
