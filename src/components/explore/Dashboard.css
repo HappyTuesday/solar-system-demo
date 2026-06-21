@@ -51,7 +51,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
 }
 
 .dashboard-column-title {
@@ -62,7 +62,7 @@
 .dashboard-orbital-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 3px;
+  gap: 5px;
   flex: 1;
 }
 
@@ -83,7 +83,7 @@
 
 .dashboard-position-row {
   display: flex;
-  gap: 4px;
+  gap: 5px;
 }
 
 .dashboard-readout {
@@ -109,7 +109,7 @@
 
 .dashboard-stat-row {
   display: flex;
-  gap: 6px;
+  gap: 5px;
 }
 
 .dashboard-stat {
