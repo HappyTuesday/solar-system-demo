@@ -65,25 +65,11 @@ function Dashboard() {
       <div className="dashboard-container">
         <div className="dashboard-collapsed-bar" onClick={toggleDashboard}>
           {!exploded && (
-            <>
-              <span className="dashboard-collapsed-speed">{speedMs.toFixed(1)} km/s</span>
-              <span style={{ color: '#556677', fontSize: 9, margin: '0 2px' }}>|</span>
-              <span style={{ color: '#ccaa88', fontSize: 10 }}>距地球 {distEarthKm.toFixed(0)} km</span>
-            </>
+            <span className="dashboard-collapsed-speed">{speedMs.toFixed(1)} km/s</span>
           )}
           <span className="dashboard-collapsed-icon">▲</span>
-                </div>
-                <div className="dashboard-stat-row" style={{ marginBottom: 4 }}>
-                  <div className="dashboard-stat" style={{ background: 'rgba(204,170,136,0.06)', borderColor: 'rgba(204,170,136,0.15)' }}>
-                    <div className="dashboard-stat-label">距地球</div>
-                    <div className="dashboard-stat-value" style={{ color: '#ccaa88', fontSize: 11 }}>
-                      {distEarthAU < 0.1
-                        ? `${distEarthKm.toFixed(0)} km`
-                        : `${distEarthAU.toFixed(3)} AU`}
-                    </div>
-                  </div>
-                </div>
-              </div>
+        </div>
+      </div>
     );
   }
 
@@ -143,6 +129,16 @@ function Dashboard() {
                   <div className="dashboard-stat-label">推力</div>
                   <div className="dashboard-stat-value" style={{ color: '#00b8ff' }}>
                     {thrustMagnitude} <span style={{ fontSize: 8, color: '#556677' }}>%</span>
+                  </div>
+                </div>
+              </div>
+              <div className="dashboard-stat-row">
+                <div className="dashboard-stat" style={{ background: 'rgba(204,170,136,0.06)', borderColor: 'rgba(204,170,136,0.15)' }}>
+                  <div className="dashboard-stat-label">距地球</div>
+                  <div className="dashboard-stat-value" style={{ color: '#ccaa88', fontSize: 11 }}>
+                    {distEarthAU < 0.1
+                      ? `${distEarthKm.toFixed(0)} km`
+                      : `${distEarthAU.toFixed(3)} AU`}
                   </div>
                 </div>
               </div>
