@@ -81,14 +81,15 @@ export function computeSpaceshipAcceleration(
   return [ax, ay, az];
 }
 
-export function rk4StepSpaceship(
+export function rk4StepSpaceshipWithMovingBodies(
   spaceship: SpaceshipState,
-  bodies: BodyInfo[],
+  getBodies: (timeOffset: number) => BodyInfo[],
   dt: number,
 ): void {
   const softening = 1e-7;
 
-  const k1v = computeSpaceshipAcceleration(spaceship, bodies, softening);
+  const bodies0 = getBodies(0);
+  const k1v = computeSpaceshipAcceleration(spaceship, bodies0, softening);
   const k1r: [number, number, number] = [spaceship.velocity[0], spaceship.velocity[1], spaceship.velocity[2]];
 
   const midPos1: [number, number, number] = [
@@ -102,7 +103,8 @@ export function rk4StepSpaceship(
     spaceship.velocity[2] + k1v[2] * dt / 2,
   ];
   const midShip1: SpaceshipState = { ...spaceship, position: midPos1, velocity: midVel1 };
-  const k2v = computeSpaceshipAcceleration(midShip1, bodies, softening);
+  const bodiesMid = getBodies(dt / 2);
+  const k2v = computeSpaceshipAcceleration(midShip1, bodiesMid, softening);
   const k2r: [number, number, number] = [midVel1[0], midVel1[1], midVel1[2]];
 
   const midPos2: [number, number, number] = [
@@ -116,7 +118,7 @@ export function rk4StepSpaceship(
     spaceship.velocity[2] + k2v[2] * dt / 2,
   ];
   const midShip2: SpaceshipState = { ...spaceship, position: midPos2, velocity: midVel2 };
-  const k3v = computeSpaceshipAcceleration(midShip2, bodies, softening);
+  const k3v = computeSpaceshipAcceleration(midShip2, bodiesMid, softening);
   const k3r: [number, number, number] = [midVel2[0], midVel2[1], midVel2[2]];
 
   const endPos: [number, number, number] = [
@@ -130,7 +132,8 @@ export function rk4StepSpaceship(
     spaceship.velocity[2] + k3v[2] * dt,
   ];
   const endShip: SpaceshipState = { ...spaceship, position: endPos, velocity: endVel };
-  const k4v = computeSpaceshipAcceleration(endShip, bodies, softening);
+  const bodiesEnd = getBodies(dt);
+  const k4v = computeSpaceshipAcceleration(endShip, bodiesEnd, softening);
   const k4r: [number, number, number] = [endVel[0], endVel[1], endVel[2]];
 
   spaceship.position[0] += (k1r[0] + 2 * k2r[0] + 2 * k3r[0] + k4r[0]) * dt / 6;
@@ -140,6 +143,8 @@ export function rk4StepSpaceship(
   spaceship.velocity[1] += (k1v[1] + 2 * k2v[1] + 2 * k3v[1] + k4v[1]) * dt / 6;
   spaceship.velocity[2] += (k1v[2] + 2 * k2v[2] + 2 * k3v[2] + k4v[2]) * dt / 6;
 }
+
+export { rk4StepSpaceshipWithMovingBodies as rk4StepSpaceship };
 
 export function checkSpaceshipCollision(
   spaceship: SpaceshipState,
