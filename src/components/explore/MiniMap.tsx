@@ -6,7 +6,7 @@ import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, mean
 const CANVAS_W = 212;
 const CANVAS_H = 130;
 const PADDING = 12;
-const VIEW_RANGE_AU = 1.5;
+const VIEW_RANGE_AU = 0.1;
 const SCALE = 1 / 1.496e11;
 const SUN_RADIUS_PX = 4;
 
@@ -133,7 +133,7 @@ function MiniMap() {
       // Grid lines
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
       ctx.lineWidth = 0.5;
-      const gridStep = scale * 0.5;
+      const gridStep = scale * 0.02;
       for (let gx = cx % gridStep; gx < CANVAS_W; gx += gridStep) {
         ctx.beginPath();
         ctx.moveTo(gx, PADDING);
@@ -265,7 +265,7 @@ function MiniMap() {
       drawSpaceship(ctx, cx, cy, shipAngle, 8);
 
       // Scale indicator
-      const scaleBarAU = 0.5;
+      const scaleBarAU = 0.02;
       const scaleBarPx = scaleBarAU * scale;
       const barX = CANVAS_W - PADDING - scaleBarPx;
       const barY = CANVAS_H - PADDING - 4;
@@ -284,7 +284,7 @@ function MiniMap() {
       ctx.fillStyle = '#556677';
       ctx.font = '8px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('0.5 AU', barX + scaleBarPx / 2, barY - 5);
+      ctx.fillText('0.02 AU', barX + scaleBarPx / 2, barY - 5);
 
       // Legend
       ctx.textAlign = 'left';
