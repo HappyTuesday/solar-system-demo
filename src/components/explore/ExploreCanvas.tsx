@@ -74,7 +74,7 @@ function ExploreCanvas() {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x050510);
 
-    const camera = new THREE.PerspectiveCamera(75, w / Math.max(h, 1), 0.001, 500);
+    const camera = new THREE.PerspectiveCamera(90, w / Math.max(h, 1), 0.001, 500);
     camera.up.set(0, 0, 1);
     cameraRef.current = camera;
 
