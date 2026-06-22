@@ -234,6 +234,76 @@
   background: rgba(255, 80, 80, 0.16);
 }
 
+/* ---- Rotation ---- */
+
+.dashboard-rotation-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.dashboard-rotation-label {
+  font-size: 7px;
+  color: #445566;
+  text-align: center;
+}
+
+.dashboard-rotation-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 2px;
+  flex: 1;
+}
+
+.dashboard-rot-btn {
+  background: rgba(0, 180, 255, 0.08);
+  border: 1px solid rgba(0, 180, 255, 0.15);
+  border-radius: 3px;
+  font-size: 9px;
+  color: #667788;
+  cursor: pointer;
+  user-select: none;
+  font-family: inherit;
+  padding: 4px 0;
+  transition: all 0.12s;
+}
+
+.dashboard-rot-btn:hover {
+  background: rgba(0, 180, 255, 0.2);
+  color: #88ccff;
+}
+
+.dashboard-rot-btn:active {
+  background: rgba(0, 180, 255, 0.35);
+  color: #ffffff;
+}
+
+.dashboard-prograde-btn {
+  width: 100%;
+  background: rgba(0, 255, 128, 0.1);
+  border: 1px solid rgba(0, 255, 128, 0.25);
+  border-radius: 3px;
+  font-size: 9px;
+  color: #00ff88;
+  cursor: pointer;
+  user-select: none;
+  font-family: inherit;
+  padding: 5px 0;
+  transition: all 0.12s;
+  margin-top: 3px;
+}
+
+.dashboard-prograde-btn:hover {
+  background: rgba(0, 255, 128, 0.2);
+  color: #44ffaa;
+}
+
+.dashboard-prograde-btn:active {
+  background: rgba(0, 255, 128, 0.35);
+  color: #ffffff;
+}
+
 /* ---- MiniMap container ---- */
 
 .dashboard-minimap-wrap {
@@ -249,4 +319,61 @@
   padding: 6px 0;
   font-size: 13px;
   letter-spacing: 2px;
+}
+
+/* ---- Attitude Mode Button Group ---- */
+
+.dashboard-mode-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.dashboard-mode-label {
+  font-size: 7px;
+  color: #445566;
+  text-align: center;
+}
+
+.dashboard-mode-group {
+  display: flex;
+  gap: 0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.dashboard-mode-btn {
+  flex: 1;
+  background: rgba(0, 180, 255, 0.06);
+  border: 1px solid rgba(0, 180, 255, 0.12);
+  border-right: none;
+  font-size: 9px;
+  color: #556677;
+  cursor: pointer;
+  user-select: none;
+  font-family: inherit;
+  padding: 4px 2px;
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.dashboard-mode-btn:last-child {
+  border-right: 1px solid rgba(0, 180, 255, 0.12);
+}
+
+.dashboard-mode-btn:hover {
+  background: rgba(0, 180, 255, 0.15);
+  color: #8899bb;
+}
+
+.dashboard-mode-btn.active {
+  background: rgba(0, 255, 128, 0.18);
+  border-color: rgba(0, 255, 128, 0.35);
+  color: #00ff88;
+  font-weight: bold;
+}
+
+.dashboard-mode-btn.active + .dashboard-mode-btn {
+  border-left: none;
 }
