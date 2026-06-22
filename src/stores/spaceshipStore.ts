@@ -21,7 +21,6 @@ export interface SpaceshipStore extends SpaceshipState {
   reset: () => void;
   yaw: (angle: number) => void;
   pitch: (angle: number) => void;
-  setToPrograde: () => void;
   setAttitudeMode: (mode: AttitudeMode) => void;
 }
 
@@ -92,6 +91,5 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
   })),
   yaw: (angle) => set(s => ({ direction: rotateYaw(s.direction, angle), attitudeMode: 'inertial' as AttitudeMode })),
   pitch: (angle) => set(s => ({ direction: rotatePitch(s.direction, angle), attitudeMode: 'inertial' as AttitudeMode })),
-  setToPrograde: () => set({ attitudeMode: 'prograde' as AttitudeMode }),
   setAttitudeMode: (mode) => set({ attitudeMode: mode }),
 }));
