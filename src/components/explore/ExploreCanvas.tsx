@@ -5,7 +5,7 @@ import { REAL_DATA, MU_SUN } from '../../engine/constants';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { useExploreStore } from '../../stores/exploreStore';
 import { rk4StepSpaceship, applyThrustInBodyFrame, checkSpaceshipCollision, type BodyInfo } from '../../engine/spaceship';
-import type { SpaceshipState, AttitudeMode } from '../../types';
+import type { SpaceshipState } from '../../types';
 
 const SCALE = 1 / 1.496e11;
 const ORBIT_LINE_POINTS = 256;

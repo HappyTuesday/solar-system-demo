@@ -53,10 +53,8 @@ function Dashboard() {
 
   const jd = julianDate(simulatedTime);
 
-  let nearestBodyId = '';
   let nearestBodyName = '';
   let nearestDistAU = Infinity;
-  let nearestBodyPos: [number, number, number] = [0, 0, 0];
   let nearestBodyVel: [number, number, number] = [0, 0, 0];
   let nearestBodyRadiusKm = 0;
 
@@ -64,7 +62,7 @@ function Dashboard() {
     if (id === 'sun') {
       const dx2 = position[0] ** 2 + position[1] ** 2 + position[2] ** 2;
       const dist = Math.sqrt(dx2);
-      if (dist < nearestDistAU) { nearestDistAU = dist; nearestBodyId = id; nearestBodyName = '太阳'; nearestBodyPos = [0, 0, 0]; nearestBodyVel = [0, 0, 0]; nearestBodyRadiusKm = REAL_DATA.sun.radius / 1000; }
+      if (dist < nearestDistAU) { nearestDistAU = dist; nearestBodyName = '太阳'; nearestBodyVel = [0, 0, 0]; nearestBodyRadiusKm = REAL_DATA.sun.radius / 1000; }
     } else {
       const state = computeBodyStateFull(id, jd);
       if (!state) continue;
@@ -73,8 +71,8 @@ function Dashboard() {
       const dz = state.position[2] - position[2];
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
       if (dist < nearestDistAU) {
-        nearestDistAU = dist; nearestBodyId = id; nearestBodyName = REAL_DATA[id].name;
-        nearestBodyPos = state.position; nearestBodyVel = state.velocity;
+        nearestDistAU = dist; nearestBodyName = REAL_DATA[id].name;
+        nearestBodyVel = state.velocity;
         nearestBodyRadiusKm = REAL_DATA[id].radius / 1000;
       }
     }
