@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { REAL_DATA, MU_SUN } from '../../engine/constants';
+import type { AttitudeMode } from '../../types';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
 import MiniMap from './MiniMap';
 import './Dashboard.css';
@@ -8,6 +9,7 @@ import './Dashboard.css';
 const SCALE = 1 / 1.496e11;
 const AU_TO_KM = 1.496e8;
 const ORBIT_THRESHOLD_AU = 0.005;
+const RotationRate = Math.PI / 3; // 60 deg/s
 
 const ALL_IDS = ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
 
@@ -30,6 +32,7 @@ function computeBodyStateFull(templateId: string, jd: number): { position: [numb
 function Dashboard() {
   const position = useSpaceshipStore(s => s.position);
   const velocity = useSpaceshipStore(s => s.velocity);
+  const direction = useSpaceshipStore(s => s.direction);
   const thrustMagnitude = useSpaceshipStore(s => s.thrustMagnitude);
   const exploded = useSpaceshipStore(s => s.exploded);
   const simulatedTime = useSpaceshipStore(s => s.simulatedTime);
@@ -37,8 +40,12 @@ function Dashboard() {
   const setLateralThrust = useSpaceshipStore(s => s.setLateralThrust);
   const setVerticalThrust = useSpaceshipStore(s => s.setVerticalThrust);
   const setThrustMagnitude = useSpaceshipStore(s => s.setThrustMagnitude);
+  const yaw = useSpaceshipStore(s => s.yaw);
+  const pitch = useSpaceshipStore(s => s.pitch);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reset = useSpaceshipStore(s => s.reset);
+  const attitudeMode = useSpaceshipStore(s => s.attitudeMode);
+  const setAttitudeMode = useSpaceshipStore(s => s.setAttitudeMode);
 
   const speedMs = Math.sqrt(
     velocity[0] ** 2 + velocity[1] ** 2 + velocity[2] ** 2
@@ -82,15 +89,13 @@ function Dashboard() {
   const relSpeedAU = Math.sqrt(relVelX ** 2 + relVelY ** 2 + relVelZ ** 2);
   const relSpeedKms = relSpeedAU * AU_TO_KM;
 
-  const headingAngleDeg = nearestDistAU > 1e-12 ? (() => {
-    const rx = position[0] - nearestBodyPos[0];
-    const ry = position[1] - nearestBodyPos[1];
-    const rz = position[2] - nearestBodyPos[2];
-    const rLen = Math.sqrt(rx * rx + ry * ry + rz * rz);
-    if (rLen < 1e-15 || relSpeedAU < 1e-15) return 0;
-    const radialDotRel = Math.abs(rx * relVelX + ry * relVelY + rz * relVelZ) / (rLen * relSpeedAU);
-    return Math.asin(Math.min(1, radialDotRel)) * 180 / Math.PI;
-  })() : 0;
+  const headingAngleDeg = (() => {
+    const velLen = Math.sqrt(relVelX ** 2 + relVelY ** 2 + relVelZ ** 2);
+    const dirLen = Math.sqrt(direction[0] ** 2 + direction[1] ** 2 + direction[2] ** 2);
+    if (velLen < 1e-15 || dirLen < 1e-15) return 0;
+    const dot = (direction[0] * relVelX + direction[1] * relVelY + direction[2] * relVelZ) / (dirLen * velLen);
+    return Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
+  })();
 
   const altitudeKm = nearestDistKm - nearestBodyRadiusKm;
   const angularVelDegS = nearestDistAU > 1e-12 ? (relSpeedAU / nearestDistAU) * 180 / Math.PI : 0;
@@ -264,6 +269,46 @@ function Dashboard() {
                   >
                     − 减速
                   </button>
+                </div>
+                <div className="dashboard-rotation-row">
+                  <div className="dashboard-rotation-label">姿态 Q/E/R/F</div>
+                  <div className="dashboard-rotation-btns">
+                    <button className="dashboard-rot-btn"
+                      onMouseDown={() => startHold(() => yaw(RotationRate * 0.1))}
+                      onMouseUp={stopHold} onMouseLeave={stopHold}
+                    >↺左</button>
+                    <button className="dashboard-rot-btn"
+                      onMouseDown={() => startHold(() => pitch(RotationRate * 0.1))}
+                      onMouseUp={stopHold} onMouseLeave={stopHold}
+                    >↻上</button>
+                    <button className="dashboard-rot-btn"
+                      onMouseDown={() => startHold(() => pitch(-RotationRate * 0.1))}
+                      onMouseUp={stopHold} onMouseLeave={stopHold}
+                    >↻下</button>
+                    <button className="dashboard-rot-btn"
+                      onMouseDown={() => startHold(() => yaw(-RotationRate * 0.1))}
+                      onMouseUp={stopHold} onMouseLeave={stopHold}
+                    >↺右</button>
+                  </div>
+                  {isOrbiting && (
+                    <div className="dashboard-mode-row">
+                      <div className="dashboard-mode-label">保持模式</div>
+                      <div className="dashboard-mode-group">
+                        <button
+                          className={`dashboard-mode-btn${attitudeMode === 'inertial' ? ' active' : ''}`}
+                          onClick={() => setAttitudeMode('inertial' as AttitudeMode)}
+                        >惯性保持</button>
+                        <button
+                          className={`dashboard-mode-btn${attitudeMode === 'prograde' ? ' active' : ''}`}
+                          onClick={() => setAttitudeMode('prograde' as AttitudeMode)}
+                        >顺向保持</button>
+                        <button
+                          className={`dashboard-mode-btn${attitudeMode === 'nadir' ? ' active' : ''}`}
+                          onClick={() => setAttitudeMode('nadir' as AttitudeMode)}
+                        >对地指向</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
