@@ -88,17 +88,10 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     isRunning: true,
     dashboardExpanded: true,
     simulatedTime: Date.now(),
-  attitudeMode: 'inertial' as AttitudeMode,
+    attitudeMode: 'inertial' as AttitudeMode,
   })),
   yaw: (angle) => set(s => ({ direction: rotateYaw(s.direction, angle), attitudeMode: 'inertial' as AttitudeMode })),
   pitch: (angle) => set(s => ({ direction: rotatePitch(s.direction, angle), attitudeMode: 'inertial' as AttitudeMode })),
-  setToPrograde: () => set(s => {
-    const vx = s.velocity[0];
-    const vy = s.velocity[1];
-    const vz = s.velocity[2];
-    const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
-    if (speed < 1e-15) return {};
-    return { direction: [vx / speed, vy / speed, vz / speed], attitudeMode: 'prograde' as AttitudeMode };
-  }),
+  setToPrograde: () => set({ attitudeMode: 'prograde' as AttitudeMode }),
   setAttitudeMode: (mode) => set({ attitudeMode: mode }),
 }));
