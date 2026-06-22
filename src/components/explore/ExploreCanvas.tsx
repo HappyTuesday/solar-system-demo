@@ -5,12 +5,16 @@ import { REAL_DATA, MU_SUN } from '../../engine/constants';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { useExploreStore } from '../../stores/exploreStore';
 import { rk4StepSpaceship, applyThrustInBodyFrame, checkSpaceshipCollision, type BodyInfo } from '../../engine/spaceship';
-import type { SpaceshipState } from '../../types';
+import type { SpaceshipState, AttitudeMode } from '../../types';
 
 const SCALE = 1 / 1.496e11;
 const ORBIT_LINE_POINTS = 256;
 
-const MIRROR_FOV = 85;
+const REAR_MIRROR_FOV = 35;
+const SIDE_MIRROR_FOV = 55;
+const CAMERA_NEAR = 1e-7;
+const CAMERA_FAR = 500;
+const ROTATION_RATE = Math.PI / 3; // 60 deg/s
 
 function computeBodyPosition(templateId: string, jd: number): [number, number, number] | null {
   const state = computeBodyState(templateId, jd);
@@ -57,17 +61,88 @@ function rotateDirRight(dir: [number, number, number]): [number, number, number]
   return [dir[1], -dir[0], dir[2]];
 }
 
+function clampMirrorSize(size: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, size));
+}
+
+function createStarfield(scene: THREE.Scene, disposables: { geometries: THREE.BufferGeometry[]; materials: THREE.Material[]; textures: THREE.Texture[] }): THREE.Points {
+  const starCount = 3000;
+  const positions = new Float32Array(starCount * 3);
+  const colors = new Float32Array(starCount * 3);
+
+  const innerR = 180;
+  const outerR = 320;
+
+  for (let i = 0; i < starCount; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const r = innerR + Math.random() * (outerR - innerR);
+
+    positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+    positions[i * 3 + 2] = r * Math.cos(phi);
+
+    const brightness = 0.4 + Math.random() * 0.6;
+    colors[i * 3] = brightness;
+    colors[i * 3 + 1] = brightness * (0.85 + Math.random() * 0.15);
+    colors[i * 3 + 2] = brightness * (0.7 + Math.random() * 0.3);
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  disposables.geometries.push(geom);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 32;
+  canvas.height = 32;
+  const ctx = canvas.getContext('2d')!;
+  const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  gradient.addColorStop(0, 'rgba(255,255,255,1)');
+  gradient.addColorStop(0.08, 'rgba(255,255,255,0.9)');
+  gradient.addColorStop(0.3, 'rgba(200,220,255,0.3)');
+  gradient.addColorStop(1, 'rgba(0,0,50,0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 32, 32);
+  const starTex = new THREE.CanvasTexture(canvas);
+  disposables.textures.push(starTex);
+
+  const mat = new THREE.PointsMaterial({
+    size: 0.6,
+    map: starTex,
+    vertexColors: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    transparent: true,
+    opacity: 0.85,
+  });
+  disposables.materials.push(mat);
+
+  const stars = new THREE.Points(geom, mat);
+  stars.frustumCulled = false;
+  stars.renderOrder = -1;
+  scene.add(stars);
+  return stars;
+}
+
 function ExploreCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const rearFrameRef = useRef<HTMLDivElement>(null);
+  const leftFrameRef = useRef<HTMLDivElement>(null);
+  const rightFrameRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rearCamRef = useRef<THREE.PerspectiveCamera | null>(null);
   const leftCamRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rightCamRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const rearRendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const leftRendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const rightRendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const bodyMeshesRef = useRef<Map<string, THREE.Mesh>>(new Map());
   const allIdsRef = useRef<string[]>(['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune']);
   const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
   const smoothDirRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 1, 0));
+  const keysRef = useRef<Set<string>>(new Set());
   const disposablesRef = useRef<{ geometries: THREE.BufferGeometry[]; materials: THREE.Material[]; textures: THREE.Texture[]; lines: THREE.Line[] }>({
     geometries: [], materials: [], textures: [], lines: [],
   });
@@ -75,6 +150,11 @@ function ExploreCanvas() {
   useEffect(() => {
     if (!containerRef.current) return;
     const container = containerRef.current;
+    const rearFrame = rearFrameRef.current;
+    const leftFrame = leftFrameRef.current;
+    const rightFrame = rightFrameRef.current;
+    if (!rearFrame || !leftFrame || !rightFrame) return;
+
     const rect = container.getBoundingClientRect();
     const w = rect.width;
     const h = rect.height;
@@ -84,29 +164,66 @@ function ExploreCanvas() {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x050510);
 
-    const camera = new THREE.PerspectiveCamera(90, w / Math.max(h, 1), 0.001, 500);
+    const camera = new THREE.PerspectiveCamera(90, w / Math.max(h, 1), CAMERA_NEAR, CAMERA_FAR);
     camera.up.set(0, 0, 1);
     cameraRef.current = camera;
 
-    const rearCam = new THREE.PerspectiveCamera(MIRROR_FOV, 1, 0.001, 500);
+    const rearCam = new THREE.PerspectiveCamera(REAR_MIRROR_FOV, 1, CAMERA_NEAR, CAMERA_FAR);
     rearCam.up.set(0, 0, 1);
     rearCamRef.current = rearCam;
 
-    const leftCam = new THREE.PerspectiveCamera(MIRROR_FOV, 1, 0.001, 500);
+    const leftCam = new THREE.PerspectiveCamera(SIDE_MIRROR_FOV, 1, CAMERA_NEAR, CAMERA_FAR);
     leftCam.up.set(0, 0, 1);
     leftCamRef.current = leftCam;
 
-    const rightCam = new THREE.PerspectiveCamera(MIRROR_FOV, 1, 0.001, 500);
+    const rightCam = new THREE.PerspectiveCamera(SIDE_MIRROR_FOV, 1, CAMERA_NEAR, CAMERA_FAR);
     rightCam.up.set(0, 0, 1);
     rightCamRef.current = rightCam;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(w, h);
+    // --- Main renderer ---
+    const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
     renderer.setPixelRatio(dpr);
+    renderer.setSize(w, h);
+    renderer.domElement.style.position = 'absolute';
+    renderer.domElement.style.top = '0';
+    renderer.domElement.style.left = '0';
     container.appendChild(renderer.domElement);
+
+    // --- Mirror renderers (each gets its own small canvas inside the mirror frame) ---
+    function createMirrorRenderer(parent: HTMLDivElement): THREE.WebGLRenderer {
+      const mr = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
+      mr.setPixelRatio(dpr);
+      mr.domElement.style.display = 'block';
+      mr.domElement.style.width = '100%';
+      mr.domElement.style.height = '100%';
+      parent.appendChild(mr.domElement);
+      return mr;
+    }
+
+    const rearRenderer = createMirrorRenderer(rearFrame);
+    rearRendererRef.current = rearRenderer;
+    const leftRenderer = createMirrorRenderer(leftFrame);
+    leftRendererRef.current = leftRenderer;
+    const rightRenderer = createMirrorRenderer(rightFrame);
+    rightRendererRef.current = rightRenderer;
+
+    function updateMirrorRendererSize(mr: THREE.WebGLRenderer, cssW: number, cssH: number) {
+      mr.setSize(cssW, cssH, false);
+    }
+
+    const rearWCss_init = clampMirrorSize(Math.round(w * 0.28), 150, 380);
+    const rearHCss_init = Math.round(h * 0.12);
+    const sideWCss_init = clampMirrorSize(Math.round(w * 0.12), 70, 160);
+    const sideHCss_init = Math.max(140, Math.round(h * 0.32));
+
+    updateMirrorRendererSize(rearRenderer, rearWCss_init, rearHCss_init);
+    updateMirrorRendererSize(leftRenderer, sideWCss_init, sideHCss_init);
+    updateMirrorRendererSize(rightRenderer, sideWCss_init, sideHCss_init);
 
     scene.add(new THREE.AmbientLight(0x444466, 1.0));
     scene.add(new THREE.PointLight(0xffeedd, 2, 0, 0));
+
+    const stars = createStarfield(scene, disposablesRef.current);
 
     const bodyMeshes = new Map<string, THREE.Mesh>();
     const allIds = allIdsRef.current;
@@ -133,6 +250,7 @@ function ExploreCanvas() {
         mat.color = new THREE.Color(0xcccccc);
       }
       const mesh = new THREE.Mesh(geom, mat);
+      mesh.frustumCulled = false;
       scene.add(mesh);
       bodyMeshes.set(id, mesh);
 
@@ -147,6 +265,7 @@ function ExploreCanvas() {
 
       if (data.semiMajorAxis && data.orbital && id !== 'sun') {
         const line = createOrbitLine(id, orbitColors[id] || 0x556688);
+        line.frustumCulled = false;
         scene.add(line);
         disposablesRef.current.lines.push(line);
         disposablesRef.current.geometries.push(line.geometry);
@@ -250,24 +369,67 @@ function ExploreCanvas() {
         if (checkSpaceshipCollision(shipState, bodyInfos)) {
           store.setExploded();
         } else {
-          const speed = Math.sqrt(
-            shipState.velocity[0] ** 2 + shipState.velocity[1] ** 2 + shipState.velocity[2] ** 2
-          );
-          const newDir: [number, number, number] = speed > 1e-12
-            ? [shipState.velocity[0] / speed, shipState.velocity[1] / speed, shipState.velocity[2] / speed]
-            : shipState.direction;
-
           store.updatePhysics(
             [shipState.position[0], shipState.position[1], shipState.position[2]],
             [shipState.velocity[0], shipState.velocity[1], shipState.velocity[2]],
           );
-          store.setDirection(newDir);
+
+          if (store.attitudeMode !== 'inertial') {
+            const spPos = shipState.position;
+            const spVel = shipState.velocity;
+            let nearestDist = Infinity;
+            let nearestPos: [number, number, number] = [0, 0, 0];
+            let nearestVel: [number, number, number] = [0, 0, 0];
+
+            for (const id of allIds) {
+              if (!REAL_DATA[id]) continue;
+              if (id === 'sun') {
+                const dx = spPos[0], dy = spPos[1], dz = spPos[2];
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist < nearestDist) { nearestDist = dist; nearestPos = [0, 0, 0]; nearestVel = [0, 0, 0]; }
+              } else {
+                const bs = computeBodyState(id, finalJd);
+                if (!bs) continue;
+                const dx = bs.position[0] - spPos[0], dy = bs.position[1] - spPos[1], dz = bs.position[2] - spPos[2];
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist < nearestDist) { nearestDist = dist; nearestPos = bs.position; nearestVel = bs.velocity; }
+              }
+            }
+
+            if (store.attitudeMode === 'prograde') {
+              const rvx = spVel[0] - nearestVel[0];
+              const rvy = spVel[1] - nearestVel[1];
+              const rvz = spVel[2] - nearestVel[2];
+              const rv = Math.sqrt(rvx * rvx + rvy * rvy + rvz * rvz);
+              if (rv > 1e-15) {
+                store.setDirection([rvx / rv, rvy / rv, rvz / rv]);
+              }
+            } else if (store.attitudeMode === 'nadir') {
+              const dx = nearestPos[0] - spPos[0];
+              const dy = nearestPos[1] - spPos[1];
+              const dz = nearestPos[2] - spPos[2];
+              const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+              if (dist > 1e-15) {
+                store.setDirection([dx / dist, dy / dist, dz / dist]);
+              }
+            }
+          }
         }
+      }
+
+      // ---- Attitude rotation (keyboard: Q/E yaw, R/F pitch) ----
+      const keys = keysRef.current;
+      if (keys.size > 0) {
+        const rotAngle = ROTATION_RATE * Math.min(dt, 0.1);
+        const spStore = useSpaceshipStore.getState();
+        if (keys.has('q')) spStore.yaw(rotAngle);
+        if (keys.has('e')) spStore.yaw(-rotAngle);
+        if (keys.has('r')) spStore.pitch(rotAngle);
+        if (keys.has('f')) spStore.pitch(-rotAngle);
       }
 
       const sp = useSpaceshipStore.getState();
       const pos = new THREE.Vector3(sp.position[0], sp.position[1], sp.position[2]);
-      const dir = new THREE.Vector3(sp.direction[0], sp.direction[1], sp.direction[2]);
       const leftArr = rotateDirLeft(sp.direction);
       const rightArr = rotateDirRight(sp.direction);
       const leftDir = new THREE.Vector3(leftArr[0], leftArr[1], leftArr[2]);
@@ -276,44 +438,32 @@ function ExploreCanvas() {
       const { w: rw, h: rh, dpr: rdpr } = sizeRef.current;
       if (rw <= 0 || rh <= 0) { animRef.current = requestAnimationFrame(animate); return; }
 
-      const bufW = Math.round(rw * rdpr);
-      const bufH = Math.round(rh * rdpr);
+      // ---- Update mirror camera aspects (based on current frame CSS sizes) ----
+      const rearWCss = clampMirrorSize(Math.round(rw * 0.28), 150, 380);
+      const rearHCss = Math.round(rh * 0.12);
+      const sideWCss = clampMirrorSize(Math.round(rw * 0.12), 70, 160);
+      const sideHCss = Math.max(140, Math.round(rh * 0.32));
+
+      rearCam.aspect = rearWCss / Math.max(rearHCss, 1);
+      rearCam.updateProjectionMatrix();
+      leftCam.aspect = sideWCss / Math.max(sideHCss, 1);
+      leftCam.updateProjectionMatrix();
+      rightCam.aspect = sideWCss / Math.max(sideHCss, 1);
+      rightCam.updateProjectionMatrix();
 
       // ---- Main view ----
       camera.position.copy(pos);
-
       const targetDir = new THREE.Vector3(sp.direction[0], sp.direction[1], sp.direction[2]);
       smoothDirRef.current.lerp(targetDir, 0.08).normalize();
-
       animLookTarget.set(
         sp.position[0] + smoothDirRef.current.x * 10,
         sp.position[1] + smoothDirRef.current.y * 10,
         sp.position[2] + smoothDirRef.current.z * 10,
       );
       camera.lookAt(animLookTarget);
-
-      renderer.setViewport(0, 0, bufW, bufH);
-      renderer.setScissor(0, 0, bufW, bufH);
-      renderer.setScissorTest(false);
       renderer.render(scene, camera);
 
-      // ---- Mirror sizes (CSS pixels) ----
-      const rearWCss = Math.round(rw * 0.22);
-      const rearHCss = Math.round(rh * 0.18);
-      const sideWCss = Math.round(rw * 0.16);
-      const sideHCss = Math.round(rh * 0.25);
-
-      // Mirror sizes (drawing buffer pixels)
-      const rearW = Math.round(rearWCss * rdpr);
-      const rearH = Math.round(rearHCss * rdpr);
-      const sideW = Math.round(sideWCss * rdpr);
-      const sideH = Math.round(sideHCss * rdpr);
-
-      // ---- Rear mirror (top center, flush with top edge) ----
-      const rearX = Math.round((bufW - rearW) / 2);
-      const rearY = bufH - rearH;
-      rearCam.aspect = rearWCss / Math.max(rearHCss, 1);
-      rearCam.updateProjectionMatrix();
+      // ---- Rear mirror (top center) ----
       rearCam.position.copy(pos);
       animLookTarget.set(
         sp.position[0] - sp.direction[0] * 10,
@@ -321,16 +471,9 @@ function ExploreCanvas() {
         sp.position[2] - sp.direction[2] * 10,
       );
       rearCam.lookAt(animLookTarget);
-      renderer.setViewport(rearX, rearY, rearW, rearH);
-      renderer.setScissor(rearX, rearY, rearW, rearH);
-      renderer.setScissorTest(true);
-      renderer.render(scene, rearCam);
+      rearRenderer.render(scene, rearCam);
 
-      // ---- Left mirror (flush with left edge) ----
-      const leftX = 0;
-      const leftY = Math.round((bufH - sideH) / 2);
-      leftCam.aspect = sideWCss / Math.max(sideHCss, 1);
-      leftCam.updateProjectionMatrix();
+      // ---- Left mirror (left edge) ----
       leftCam.position.copy(pos);
       animLookTarget.set(
         sp.position[0] + leftDir.x * 10,
@@ -338,16 +481,9 @@ function ExploreCanvas() {
         sp.position[2] + leftDir.z * 10,
       );
       leftCam.lookAt(animLookTarget);
-      renderer.setViewport(leftX, leftY, sideW, sideH);
-      renderer.setScissor(leftX, leftY, sideW, sideH);
-      renderer.setScissorTest(true);
-      renderer.render(scene, leftCam);
+      leftRenderer.render(scene, leftCam);
 
-      // ---- Right mirror (flush with right edge) ----
-      const rightX = bufW - sideW;
-      const rightY = Math.round((bufH - sideH) / 2);
-      rightCam.aspect = sideWCss / Math.max(sideHCss, 1);
-      rightCam.updateProjectionMatrix();
+      // ---- Right mirror (right edge) ----
       rightCam.position.copy(pos);
       animLookTarget.set(
         sp.position[0] + rightDir.x * 10,
@@ -355,10 +491,7 @@ function ExploreCanvas() {
         sp.position[2] + rightDir.z * 10,
       );
       rightCam.lookAt(animLookTarget);
-      renderer.setViewport(rightX, rightY, sideW, sideH);
-      renderer.setScissor(rightX, rightY, sideW, sideH);
-      renderer.setScissorTest(true);
-      renderer.render(scene, rightCam);
+      rightRenderer.render(scene, rightCam);
 
       animRef.current = requestAnimationFrame(animate);
     };
@@ -370,19 +503,44 @@ function ExploreCanvas() {
       if (rw <= 0 || rh <= 0) return;
       const rdpr = Math.min(window.devicePixelRatio, 2);
       sizeRef.current = { w: rw, h: rh, dpr: rdpr };
+
       camera.aspect = rw / rh;
       camera.updateProjectionMatrix();
+      renderer.setPixelRatio(rdpr);
       renderer.setSize(rw, rh);
+
+      const newRearWCss = clampMirrorSize(Math.round(rw * 0.28), 150, 380);
+      const newRearHCss = Math.round(rh * 0.12);
+      const newSideWCss = clampMirrorSize(Math.round(rw * 0.12), 70, 160);
+      const newSideHCss = Math.max(140, Math.round(rh * 0.32));
+
+      [rearRenderer, leftRenderer, rightRenderer].forEach(mr => mr.setPixelRatio(rdpr));
+      updateMirrorRendererSize(rearRenderer, newRearWCss, newRearHCss);
+      updateMirrorRendererSize(leftRenderer, newSideWCss, newSideHCss);
+      updateMirrorRendererSize(rightRenderer, newSideWCss, newSideHCss);
     };
     window.addEventListener('resize', onResize);
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      keysRef.current.add(e.key.toLowerCase());
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      keysRef.current.delete(e.key.toLowerCase());
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
 
     return () => {
       cancelAnimationFrame(animRef.current);
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
 
       const d = disposablesRef.current;
       for (const line of d.lines) scene.remove(line);
       for (const [, mesh] of bodyMeshes) scene.remove(mesh);
+      scene.remove(stars);
       d.geometries.forEach(g => g.dispose());
       d.materials.forEach(m => m.dispose());
       d.textures.forEach(t => t.dispose());
@@ -391,61 +549,95 @@ function ExploreCanvas() {
       if (renderer.domElement.parentNode === container) {
         container.removeChild(renderer.domElement);
       }
+
+      [rearRenderer, leftRenderer, rightRenderer].forEach(mr => {
+        mr.dispose();
+        if (mr.domElement.parentNode) {
+          mr.domElement.parentNode.removeChild(mr.domElement);
+        }
+      });
     };
   }, []);
 
   return (
     <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
       {/* Rear mirror frame */}
-      <div style={{
+      <div ref={rearFrameRef} style={{
         position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
-        width: '22%', height: '18%', maxWidth: 280, minWidth: 120,
-        border: '2px solid rgba(180,210,255,0.3)',
+        width: '28%', height: '12%', maxWidth: 380, minWidth: 150,
+        overflow: 'hidden',
+        border: '1px solid rgba(140,170,210,0.25)',
         borderTop: 'none',
-        borderRadius: '0 0 6px 6px',
-        boxShadow: 'inset 0 0 12px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.4)',
+        borderRadius: '0 0 8px 8px',
+        boxShadow: `
+          inset 0 0 20px rgba(0,0,0,0.55),
+          inset 0 0 3px rgba(180,210,255,0.12),
+          0 0 0 2px rgba(30,40,55,0.9),
+          0 0 0 4px rgba(25,32,44,0.8),
+          0 0 0 5px rgba(90,120,160,0.3),
+          0 4px 18px rgba(0,0,0,0.55)
+        `,
         pointerEvents: 'none',
         zIndex: 10,
       }}>
         <div style={{
-          position: 'absolute', bottom: 2, left: '50%', transform: 'translateX(-50%)',
-          color: 'rgba(255,255,255,0.2)', fontSize: 8, fontFamily: 'monospace', userSelect: 'none',
+          position: 'absolute', bottom: 3, left: '50%', transform: 'translateX(-50%)',
+          color: 'rgba(180,210,255,0.18)', fontSize: 8, fontFamily: 'monospace', userSelect: 'none',
+          zIndex: 1,
         }}>
           后视镜
         </div>
       </div>
       {/* Left mirror frame */}
-      <div style={{
+      <div ref={leftFrameRef} style={{
         position: 'absolute', top: '50%', left: 0, transform: 'translateY(-50%)',
-        width: '16%', height: '25%', maxWidth: 200, minWidth: 80, minHeight: 100,
-        border: '2px solid rgba(180,210,255,0.3)',
+        width: '12%', height: '32%', maxWidth: 160, minWidth: 70, minHeight: 140,
+        overflow: 'hidden',
+        border: '1px solid rgba(140,170,210,0.25)',
         borderLeft: 'none',
-        borderRadius: '0 6px 6px 0',
-        boxShadow: 'inset 0 0 12px rgba(0,0,0,0.5), 2px 0 8px rgba(0,0,0,0.4)',
+        borderRadius: '0 8px 8px 0',
+        boxShadow: `
+          inset 0 0 20px rgba(0,0,0,0.55),
+          inset 0 0 3px rgba(180,210,255,0.12),
+          0 0 0 2px rgba(30,40,55,0.9),
+          0 0 0 4px rgba(25,32,44,0.8),
+          0 0 0 5px rgba(90,120,160,0.3),
+          3px 0 14px rgba(0,0,0,0.5)
+        `,
         pointerEvents: 'none',
         zIndex: 10,
       }}>
         <div style={{
-          position: 'absolute', bottom: 2, left: '50%', transform: 'translateX(-50%)',
-          color: 'rgba(255,255,255,0.2)', fontSize: 8, fontFamily: 'monospace', userSelect: 'none',
+          position: 'absolute', bottom: 3, left: '50%', transform: 'translateX(-50%)',
+          color: 'rgba(180,210,255,0.18)', fontSize: 8, fontFamily: 'monospace', userSelect: 'none',
+          zIndex: 1,
         }}>
           左
         </div>
       </div>
       {/* Right mirror frame */}
-      <div style={{
+      <div ref={rightFrameRef} style={{
         position: 'absolute', top: '50%', right: 0, transform: 'translateY(-50%)',
-        width: '16%', height: '25%', maxWidth: 200, minWidth: 80, minHeight: 100,
-        border: '2px solid rgba(180,210,255,0.3)',
+        width: '12%', height: '32%', maxWidth: 160, minWidth: 70, minHeight: 140,
+        overflow: 'hidden',
+        border: '1px solid rgba(140,170,210,0.25)',
         borderRight: 'none',
-        borderRadius: '6px 0 0 6px',
-        boxShadow: 'inset 0 0 12px rgba(0,0,0,0.5), -2px 0 8px rgba(0,0,0,0.4)',
+        borderRadius: '8px 0 0 8px',
+        boxShadow: `
+          inset 0 0 20px rgba(0,0,0,0.55),
+          inset 0 0 3px rgba(180,210,255,0.12),
+          0 0 0 2px rgba(30,40,55,0.9),
+          0 0 0 4px rgba(25,32,44,0.8),
+          0 0 0 5px rgba(90,120,160,0.3),
+          -3px 0 14px rgba(0,0,0,0.5)
+        `,
         pointerEvents: 'none',
         zIndex: 10,
       }}>
         <div style={{
-          position: 'absolute', bottom: 2, left: '50%', transform: 'translateX(-50%)',
-          color: 'rgba(255,255,255,0.2)', fontSize: 8, fontFamily: 'monospace', userSelect: 'none',
+          position: 'absolute', bottom: 3, left: '50%', transform: 'translateX(-50%)',
+          color: 'rgba(180,210,255,0.18)', fontSize: 8, fontFamily: 'monospace', userSelect: 'none',
+          zIndex: 1,
         }}>
           右
         </div>
