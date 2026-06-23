@@ -1,0 +1,88 @@
+.crash-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 5, 16, 0.92);
+  backdrop-filter: blur(12px);
+  animation: crash-overlay-fade-in 0.8s ease-out;
+}
+
+@keyframes crash-overlay-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.crash-content {
+  text-align: center;
+  animation: crash-content-enter 0.6s ease-out 0.3s both;
+}
+
+@keyframes crash-content-enter {
+  from { opacity: 0; transform: scale(0.9) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.crash-title {
+  font-size: 48px;
+  font-weight: 700;
+  color: #ff4444;
+  text-shadow: 0 0 40px rgba(255, 60, 60, 0.6), 0 0 80px rgba(255, 40, 40, 0.3);
+  margin-bottom: 40px;
+  letter-spacing: 8px;
+}
+
+.crash-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 48px;
+}
+
+.crash-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.crash-stat-label {
+  font-size: 13px;
+  color: #667788;
+  letter-spacing: 2px;
+}
+
+.crash-stat-value {
+  font-size: 20px;
+  color: #ccddff;
+  font-weight: 500;
+}
+
+.crash-stat-coords {
+  font-size: 13px;
+  color: #556677;
+  letter-spacing: 1px;
+  font-family: 'Courier New', monospace;
+}
+
+.crash-restart-btn {
+  padding: 12px 48px;
+  font-size: 18px;
+  font-family: inherit;
+  color: #ccddff;
+  background: rgba(0, 180, 255, 0.1);
+  border: 1px solid rgba(0, 180, 255, 0.35);
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: 4px;
+  transition: all 0.2s;
+}
+
+.crash-restart-btn:hover {
+  background: rgba(0, 180, 255, 0.2);
+  border-color: rgba(0, 180, 255, 0.6);
+  color: #ffffff;
+  box-shadow: 0 0 24px rgba(0, 180, 255, 0.15);
+}

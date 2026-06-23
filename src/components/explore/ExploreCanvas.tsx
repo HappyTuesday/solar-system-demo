@@ -6,16 +6,26 @@ import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { useExploreStore } from '../../stores/exploreStore';
 import { rk4StepSpaceship, applyThrustInBodyFrame, checkSpaceshipCollision, type BodyInfo } from '../../engine/spaceship';
 import type { SpaceshipState } from '../../types';
+import { playSound } from '../../hooks/useAudio';
 import TimePanel from './TimePanel';
 
 const SCALE = 1 / 1.496e11;
 const ORBIT_LINE_POINTS = 256;
+const AU_TO_KM = 1.496e8;
 
 const REAR_MIRROR_FOV = 35;
 const SIDE_MIRROR_FOV = 55;
 const CAMERA_NEAR = 1e-7;
 const CAMERA_FAR = 500;
-const ROTATION_RATE = Math.PI / 3; // 60 deg/s
+const ROTATION_RATE = Math.PI / 3;
+
+const EXPLOSION_DURATION = 3.0;
+const EXPLOSION_PARTICLE_COUNT = 300;
+const EXPLOSION_SPREAD_SPEED = 0.0005;
+const EXPLOSION_FLASH_INTENSITY = 12;
+const EXPLOSION_FLASH_DURATION = 0.5;
+const SHAKE_MAX_DURATION = 2.0;
+const SHAKE_INITIAL_AMPLITUDE = 0.003;
 
 function computeBodyPosition(templateId: string, jd: number): [number, number, number] | null {
   const state = computeBodyState(templateId, jd);
@@ -126,6 +136,25 @@ function createStarfield(scene: THREE.Scene, disposables: { geometries: THREE.Bu
   return stars;
 }
 
+function createExplosionParticleTexture(): THREE.CanvasTexture {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const half = size / 2;
+  const gradient = ctx.createRadialGradient(half, half, 0, half, half, half);
+  gradient.addColorStop(0, 'rgba(255,255,200,1)');
+  gradient.addColorStop(0.1, 'rgba(255,200,80,0.95)');
+  gradient.addColorStop(0.3, 'rgba(255,120,30,0.8)');
+  gradient.addColorStop(0.5, 'rgba(220,60,10,0.5)');
+  gradient.addColorStop(0.7, 'rgba(150,20,0,0.2)');
+  gradient.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  return new THREE.CanvasTexture(canvas);
+}
+
 function ExploreCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const rearFrameRef = useRef<HTMLDivElement>(null);
@@ -149,6 +178,13 @@ function ExploreCanvas() {
   const disposablesRef = useRef<{ geometries: THREE.BufferGeometry[]; materials: THREE.Material[]; textures: THREE.Texture[]; lines: THREE.Line[] }>({
     geometries: [], materials: [], textures: [], lines: [],
   });
+
+  const explosionRef = useRef<{
+    particles: THREE.Points | null;
+    flashLight: THREE.PointLight | null;
+    startTime: number;
+    basePosition: THREE.Vector3;
+  }>({ particles: null, flashLight: null, startTime: 0, basePosition: new THREE.Vector3() });
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -183,7 +219,6 @@ function ExploreCanvas() {
     rightCam.up.set(0, 0, 1);
     rightCamRef.current = rightCam;
 
-    // --- Main renderer ---
     const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
     renderer.setPixelRatio(dpr);
     renderer.setSize(w, h);
@@ -192,7 +227,6 @@ function ExploreCanvas() {
     renderer.domElement.style.left = '0';
     container.appendChild(renderer.domElement);
 
-    // --- Mirror renderers (each gets its own small canvas inside the mirror frame) ---
     function createMirrorRenderer(parent: HTMLDivElement): THREE.WebGLRenderer {
       const mr = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
       mr.setPixelRatio(dpr);
@@ -331,7 +365,8 @@ function ExploreCanvas() {
           }
 
           const getBodies = (tOffset: number): BodyInfo[] => {
-            return bodyStates.map(b => ({
+            return bodyStates.map((b, bi) => ({
+              id: allIds[bi] ?? '',
               position: [
                 b.pos[0] + b.vel[0] * tOffset,
                 b.pos[1] + b.vel[1] * tOffset,
@@ -344,6 +379,12 @@ function ExploreCanvas() {
 
           rk4StepSpaceship(shipState, getBodies, subDt);
         }
+
+        const speedKms = Math.sqrt(
+          shipState.velocity[0] ** 2 + shipState.velocity[1] ** 2 + shipState.velocity[2] ** 2,
+        ) * AU_TO_KM;
+        const travelKm = speedKms * simDelta;
+        store.updateFlightStats(travelKm, speedKms);
 
         simulatedTime += simDelta * 1000;
         store.setSimulatedTime(simulatedTime);
@@ -363,14 +404,96 @@ function ExploreCanvas() {
           const data = REAL_DATA[id];
           if (!mesh || !data) continue;
           bodyInfos.push({
+            id,
             position: [mesh.position.x, mesh.position.y, mesh.position.z],
             mass: data.mass,
             radius: data.radius * SCALE,
           });
         }
 
-        if (checkSpaceshipCollision(shipState, bodyInfos)) {
-          store.setExploded();
+        const hitBodyId = checkSpaceshipCollision(shipState, bodyInfos);
+        if (hitBodyId) {
+          playSound('collision');
+          store.setExploded(
+            hitBodyId,
+            [shipState.position[0], shipState.position[1], shipState.position[2]],
+          );
+
+          const expPos = new THREE.Vector3(
+            shipState.position[0], shipState.position[1], shipState.position[2],
+          );
+
+          const particleTex = createExplosionParticleTexture();
+          disposablesRef.current.textures.push(particleTex);
+
+          const particleCount = EXPLOSION_PARTICLE_COUNT;
+          const posArr = new Float32Array(particleCount * 3);
+          const colorArr = new Float32Array(particleCount * 3);
+          const velData = new Float32Array(particleCount * 3);
+          const lifeData = new Float32Array(particleCount);
+
+          for (let i = 0; i < particleCount; i++) {
+            posArr[i * 3] = 0;
+            posArr[i * 3 + 1] = 0;
+            posArr[i * 3 + 2] = 0;
+
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const speed = EXPLOSION_SPREAD_SPEED * (0.3 + Math.random() * 1.0);
+            velData[i * 3] = Math.sin(phi) * Math.cos(theta) * speed;
+            velData[i * 3 + 1] = Math.sin(phi) * Math.sin(theta) * speed;
+            velData[i * 3 + 2] = Math.cos(phi) * speed;
+
+            lifeData[i] = 1.5 + Math.random() * 1.5;
+
+            const t = Math.random();
+            if (t < 0.3) {
+              colorArr[i * 3] = 1.0; colorArr[i * 3 + 1] = 0.9; colorArr[i * 3 + 2] = 0.3;
+            } else if (t < 0.6) {
+              colorArr[i * 3] = 1.0; colorArr[i * 3 + 1] = 0.4; colorArr[i * 3 + 2] = 0.1;
+            } else {
+              colorArr[i * 3] = 0.9; colorArr[i * 3 + 1] = 0.7; colorArr[i * 3 + 2] = 0.2;
+            }
+          }
+
+          const pGeom = new THREE.BufferGeometry();
+          pGeom.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+          pGeom.setAttribute('color', new THREE.BufferAttribute(colorArr, 3));
+          disposablesRef.current.geometries.push(pGeom);
+
+          const pMat = new THREE.PointsMaterial({
+            size: 0.0008,
+            map: particleTex,
+            vertexColors: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            transparent: true,
+            opacity: 1.0,
+          });
+          disposablesRef.current.materials.push(pMat);
+
+          const particles = new THREE.Points(pGeom, pMat);
+          particles.frustumCulled = false;
+          particles.renderOrder = 999;
+          particles.position.copy(expPos);
+
+          const flashLight = new THREE.PointLight(0xff6622, EXPLOSION_FLASH_INTENSITY, 0, 0);
+          flashLight.position.copy(expPos);
+          scene.add(flashLight);
+
+          scene.add(particles);
+
+          explosionRef.current = {
+            particles,
+            flashLight,
+            startTime: time,
+            basePosition: expPos.clone(),
+          };
+
+          (particles as unknown as Record<string, unknown>).__velData = velData;
+          (particles as unknown as Record<string, unknown>).__lifeData = lifeData;
+
+          store.setSimulatedTime(simulatedTime);
         } else {
           store.updatePhysics(
             [shipState.position[0], shipState.position[1], shipState.position[2]],
@@ -437,7 +560,59 @@ function ExploreCanvas() {
         }
       }
 
-      // ---- Attitude rotation (keyboard: Q/E yaw, R/F pitch) ----
+      const expRef = explosionRef.current;
+      if (expRef.particles && expRef.flashLight) {
+        if (store.explosionPhase !== 'exploding') {
+          scene.remove(expRef.particles);
+          expRef.particles.geometry.dispose();
+          (expRef.particles.material as THREE.Material).dispose();
+          scene.remove(expRef.flashLight);
+          expRef.particles = null;
+          expRef.flashLight = null;
+        } else {
+          const elapsed = (time - expRef.startTime) / 1000;
+          const progress = Math.min(elapsed / EXPLOSION_DURATION, 1.0);
+
+          const velData = ((expRef.particles as unknown as Record<string, unknown>).__velData) as Float32Array;
+          const lifeData = ((expRef.particles as unknown as Record<string, unknown>).__lifeData) as Float32Array;
+          const posAttr = expRef.particles.geometry.getAttribute('position') as THREE.BufferAttribute;
+          const posArr = posAttr.array as Float32Array;
+
+          if (velData && lifeData && posArr) {
+            for (let i = 0; i < EXPLOSION_PARTICLE_COUNT; i++) {
+              const age = elapsed;
+              if (age >= lifeData[i]) {
+                posArr[i * 3] = 0;
+                posArr[i * 3 + 1] = 0;
+                posArr[i * 3 + 2] = 0;
+              } else {
+                posArr[i * 3] = velData[i * 3] * age;
+                posArr[i * 3 + 1] = velData[i * 3 + 1] * age;
+                posArr[i * 3 + 2] = velData[i * 3 + 2] * age;
+              }
+            }
+            posAttr.needsUpdate = true;
+          }
+
+          const lifeFactor = 1.0 - progress;
+          (expRef.particles.material as THREE.PointsMaterial).opacity = Math.max(0, lifeFactor);
+
+          const flashElapsed = (time - expRef.startTime) / 1000;
+          const flashProgress = Math.min(flashElapsed / EXPLOSION_FLASH_DURATION, 1.0);
+          expRef.flashLight.intensity = EXPLOSION_FLASH_INTENSITY * (1.0 - flashProgress);
+
+          if (progress >= 1.0) {
+            scene.remove(expRef.particles);
+            expRef.particles.geometry.dispose();
+            (expRef.particles.material as THREE.Material).dispose();
+            scene.remove(expRef.flashLight);
+            expRef.particles = null;
+            expRef.flashLight = null;
+            useSpaceshipStore.getState().setExplosionPhase('complete');
+          }
+        }
+      }
+
       const keys = keysRef.current;
       if (keys.size > 0) {
         const rotAngle = ROTATION_RATE * Math.min(dt, 0.1);
@@ -455,10 +630,22 @@ function ExploreCanvas() {
       const leftDir = new THREE.Vector3(leftArr[0], leftArr[1], leftArr[2]);
       const rightDir = new THREE.Vector3(rightArr[0], rightArr[1], rightArr[2]);
 
+      let shakeOffsetX = 0, shakeOffsetY = 0, shakeOffsetZ = 0;
+
+      if (expRef.particles) {
+        const shakeElapsed = (time - expRef.startTime) / 1000;
+        if (shakeElapsed < SHAKE_MAX_DURATION) {
+          const decay = 1.0 - shakeElapsed / SHAKE_MAX_DURATION;
+          const amplitude = SHAKE_INITIAL_AMPLITUDE * decay * decay;
+          shakeOffsetX = (Math.random() * 2 - 1) * amplitude;
+          shakeOffsetY = (Math.random() * 2 - 1) * amplitude;
+          shakeOffsetZ = (Math.random() * 2 - 1) * amplitude;
+        }
+      }
+
       const { w: rw, h: rh, dpr: rdpr } = sizeRef.current;
       if (rw <= 0 || rh <= 0) { animRef.current = requestAnimationFrame(animate); return; }
 
-      // ---- Update mirror camera aspects (based on current frame CSS sizes) ----
       const rearWCss = clampMirrorSize(Math.round(rw * 0.28), 150, 380);
       const rearHCss = Math.round(rh * 0.12);
       const sideWCss = clampMirrorSize(Math.round(rw * 0.12), 70, 160);
@@ -471,8 +658,11 @@ function ExploreCanvas() {
       rightCam.aspect = sideWCss / Math.max(sideHCss, 1);
       rightCam.updateProjectionMatrix();
 
-      // ---- Main view ----
-      camera.position.copy(pos);
+      camera.position.set(
+        pos.x + shakeOffsetX,
+        pos.y + shakeOffsetY,
+        pos.z + shakeOffsetZ,
+      );
       const targetDir = new THREE.Vector3(sp.direction[0], sp.direction[1], sp.direction[2]);
       smoothDirRef.current.lerp(targetDir, 0.08).normalize();
       const camUp = new THREE.Vector3(0, 0, 1);
@@ -487,7 +677,6 @@ function ExploreCanvas() {
       camera.lookAt(animLookTarget);
       renderer.render(scene, camera);
 
-      // ---- Rear mirror (top center) ----
       rearCam.position.copy(pos);
       animLookTarget.set(
         sp.position[0] - sp.direction[0] * 10,
@@ -497,7 +686,6 @@ function ExploreCanvas() {
       rearCam.lookAt(animLookTarget);
       rearRenderer.render(scene, rearCam);
 
-      // ---- Left mirror (left edge) ----
       leftCam.position.copy(pos);
       animLookTarget.set(
         sp.position[0] + leftDir.x * 10,
@@ -507,7 +695,6 @@ function ExploreCanvas() {
       leftCam.lookAt(animLookTarget);
       leftRenderer.render(scene, leftCam);
 
-      // ---- Right mirror (right edge) ----
       rightCam.position.copy(pos);
       animLookTarget.set(
         sp.position[0] + rightDir.x * 10,
@@ -561,6 +748,16 @@ function ExploreCanvas() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
 
+      const expRef = explosionRef.current;
+      if (expRef.particles) {
+        scene.remove(expRef.particles);
+        expRef.particles.geometry.dispose();
+        (expRef.particles.material as THREE.Material).dispose();
+      }
+      if (expRef.flashLight) {
+        scene.remove(expRef.flashLight);
+      }
+
       const d = disposablesRef.current;
       for (const line of d.lines) scene.remove(line);
       for (const [, mesh] of bodyMeshes) scene.remove(mesh);
@@ -585,7 +782,6 @@ function ExploreCanvas() {
 
   return (
     <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
-      {/* Rear mirror frame — slides down */}
       <div ref={rearFrameRef}
         onMouseEnter={() => setHoveredMirror('rear')}
         onMouseLeave={() => setHoveredMirror(null)}
@@ -627,7 +823,6 @@ function ExploreCanvas() {
           }}>📌</div>
         )}
       </div>
-      {/* Left mirror frame — slides right */}
       <div ref={leftFrameRef}
         onMouseEnter={() => setHoveredMirror('left')}
         onMouseLeave={() => setHoveredMirror(null)}
@@ -669,7 +864,6 @@ function ExploreCanvas() {
           }}>📌</div>
         )}
       </div>
-      {/* Right mirror frame — slides left */}
       <div ref={rightFrameRef}
         onMouseEnter={() => setHoveredMirror('right')}
         onMouseLeave={() => setHoveredMirror(null)}

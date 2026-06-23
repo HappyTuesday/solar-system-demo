@@ -386,6 +386,43 @@ function MiniMap() {
         }
       }
 
+      // --- Velocity direction arrow ---
+      if (!sp.exploded) {
+        let vx = sp.velocity[0];
+        let vy = sp.velocity[1];
+        if (isZoomed && nearestId) {
+          const nbState = nearestId === 'sun'
+            ? { vx: 0, vy: 0 }
+            : computeBodyState2D(nearestId, jd);
+          if (nbState) {
+            vx -= nbState.vx;
+            vy -= nbState.vy;
+          }
+        }
+        const speed = Math.sqrt(vx * vx + vy * vy);
+        if (speed > 1e-9) {
+          const nx = vx / speed;
+          const ny = vy / speed;
+          const gap = 8;
+          const lineLen = 25;
+          const startX = shipSx + nx * gap;
+          const startY = shipSy - ny * gap;
+          const endX = shipSx + nx * lineLen;
+          const endY = shipSy - ny * lineLen;
+
+          ctx.beginPath();
+          ctx.moveTo(startX, startY);
+          ctx.lineTo(endX, endY);
+          ctx.strokeStyle = 'rgba(0, 255, 128, 0.6)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          const arrowAngle = Math.atan2(-vy, vx);
+          ctx.fillStyle = 'rgba(0, 255, 128, 0.6)';
+          drawDirectionArrow(ctx, endX, endY, arrowAngle, 5);
+        }
+      }
+
       // --- Prediction trajectory ---
       if (!sp.exploded) {
         const worldThrust = applyThrustInBodyFrame(
@@ -418,6 +455,7 @@ function MiniMap() {
 
         const getBodiesPred = (tOffset: number): BodyInfo[] => {
           return bodyStates3D.map(b => ({
+            id: '',
             position: [
               b.pos[0] + b.vel[0] * tOffset,
               b.pos[1] + b.vel[1] * tOffset,
@@ -449,6 +487,11 @@ function MiniMap() {
         const predSteps = 200;
         const trajectory = predictTrajectory(predShip, getBodiesPred, predDt, predSteps, onStep);
 
+        const predBodyIdx = ALL_IDS.indexOf(nearestId);
+        const predBodyState = isZoomed && predBodyIdx >= 0 && predBodyIdx < bodyStates3D.length
+          ? bodyStates3D[predBodyIdx]
+          : null;
+
         ctx.save();
         const segmentCount = 10;
         const pointsPerSegment = Math.ceil(trajectory.length / segmentCount);
@@ -464,10 +507,20 @@ function MiniMap() {
           let first = true;
           for (let i = startIdx; i < endIdx; i++) {
             const pt = trajectory[i];
-            const dx = pt[0] - anchorX;
-            const dy = pt[1] - anchorY;
-            const sx = cx + dx * scale;
-            const sy = cy - dy * scale;
+            let sx: number;
+            let sy: number;
+            if (predBodyState) {
+              const t = i * predDt;
+              const bodyX = predBodyState.pos[0] + predBodyState.vel[0] * t;
+              const bodyY = predBodyState.pos[1] + predBodyState.vel[1] * t;
+              sx = cx + (pt[0] - bodyX) * scale;
+              sy = cy - (pt[1] - bodyY) * scale;
+            } else {
+              const dx = pt[0] - anchorX;
+              const dy = pt[1] - anchorY;
+              sx = cx + dx * scale;
+              sy = cy - dy * scale;
+            }
             if (first) { ctx.moveTo(sx, sy); first = false; }
             else { ctx.lineTo(sx, sy); }
           }
@@ -581,7 +634,7 @@ function MiniMap() {
 
       // Spaceship
       ctx.fillStyle = '#00b8ff';
-      drawSpaceship(ctx, shipSx, shipSy, -shipAngle, isZoomed ? 6 : 8, sp.thrustMagnitude);
+      drawSpaceship(ctx, shipSx, shipSy, -shipAngle, isZoomed ? 10 : 12, sp.thrustMagnitude);
 
       // Scale indicator
       const displayUnit = useKm ? 'km' : 'AU';

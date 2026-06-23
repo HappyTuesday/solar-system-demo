@@ -1,5 +1,6 @@
 import ExploreCanvas from '../components/explore/ExploreCanvas';
 import Dashboard from '../components/explore/Dashboard';
+import CrashOverlay from '../components/explore/CrashOverlay';
 import './ExplorePage.css';
 
 function ExplorePage() {
@@ -9,6 +10,7 @@ function ExplorePage() {
         <ExploreCanvas />
       </div>
       <Dashboard />
+      <CrashOverlay />
     </div>
   );
 }

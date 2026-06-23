@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import type { SpaceshipState, AttitudeMode } from '../types';
 import { createSpaceshipState } from '../engine/orbitalInjection';
 
+export type ExplosionPhase = 'none' | 'exploding' | 'complete';
+
 export interface SpaceshipStore extends SpaceshipState {
   isRunning: boolean;
   dashboardExpanded: boolean;
@@ -9,12 +11,21 @@ export interface SpaceshipStore extends SpaceshipState {
   attitudeMode: AttitudeMode;
   targetBodyId: string | null;
 
+  explosionPhase: ExplosionPhase;
+  totalDistanceKm: number;
+  maxSpeedKms: number;
+  sessionStartTime: number;
+  crashBodyId: string | null;
+  crashPosition: [number, number, number];
+
   setForwardThrust: (v: number) => void;
   setLateralThrust: (v: number) => void;
   setVerticalThrust: (v: number) => void;
   setThrustMagnitude: (m: number) => void;
   setDirection: (d: [number, number, number]) => void;
-  setExploded: () => void;
+  setExploded: (bodyId: string, position: [number, number, number]) => void;
+  setExplosionPhase: (phase: ExplosionPhase) => void;
+  updateFlightStats: (distanceKm: number, speedKms: number) => void;
   toggleRunning: () => void;
   toggleDashboard: () => void;
   updatePhysics: (pos: [number, number, number], vel: [number, number, number]) => void;
@@ -70,6 +81,12 @@ const initialState = {
   simulatedTime: now,
   attitudeMode: 'inertial' as AttitudeMode,
   targetBodyId: null as string | null,
+  explosionPhase: 'none' as ExplosionPhase,
+  totalDistanceKm: 0,
+  maxSpeedKms: 0,
+  sessionStartTime: now,
+  crashBodyId: null as string | null,
+  crashPosition: [0, 0, 0] as [number, number, number],
 };
 
 export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
@@ -80,7 +97,18 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
   setVerticalThrust: (v) => set(s => ({ thrust: [s.thrust[0], s.thrust[1], v] })),
   setThrustMagnitude: (m) => set({ thrustMagnitude: m }),
   setDirection: (d) => set({ direction: d }),
-  setExploded: () => set({ exploded: true, isRunning: false }),
+  setExploded: (bodyId, position) => set({
+    exploded: true,
+    isRunning: false,
+    explosionPhase: 'exploding',
+    crashBodyId: bodyId,
+    crashPosition: position,
+  }),
+  setExplosionPhase: (phase) => set({ explosionPhase: phase }),
+  updateFlightStats: (distanceKm, speedKms) => set(s => ({
+    totalDistanceKm: s.totalDistanceKm + distanceKm,
+    maxSpeedKms: Math.max(s.maxSpeedKms, speedKms),
+  })),
   toggleRunning: () => set(s => ({ isRunning: !s.isRunning })),
   toggleDashboard: () => set(s => ({ dashboardExpanded: !s.dashboardExpanded })),
   updatePhysics: (pos, vel) => set({ position: pos, velocity: vel }),
@@ -92,6 +120,12 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     simulatedTime: Date.now(),
     attitudeMode: 'inertial' as AttitudeMode,
     targetBodyId: null as string | null,
+    explosionPhase: 'none' as ExplosionPhase,
+    totalDistanceKm: 0,
+    maxSpeedKms: 0,
+    sessionStartTime: Date.now(),
+    crashBodyId: null as string | null,
+    crashPosition: [0, 0, 0] as [number, number, number],
   })),
   yaw: (angle) => set(s => ({ direction: rotateYaw(s.direction, angle), attitudeMode: 'inertial' as AttitudeMode })),
   pitch: (angle) => set(s => ({ direction: rotatePitch(s.direction, angle), attitudeMode: 'inertial' as AttitudeMode })),

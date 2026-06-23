@@ -48,6 +48,7 @@ export function applyThrustInBodyFrame(
 }
 
 export interface BodyInfo {
+  id: string;
   position: [number, number, number];
   mass: number;
   radius: number;
@@ -176,15 +177,15 @@ export function predictTrajectory(
 export function checkSpaceshipCollision(
   spaceship: SpaceshipState,
   bodies: BodyInfo[],
-): boolean {
+): string | null {
   for (const body of bodies) {
     const dx = spaceship.position[0] - body.position[0];
     const dy = spaceship.position[1] - body.position[1];
     const dz = spaceship.position[2] - body.position[2];
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (dist <= SPACECRAFT_CONFIG.collisionRadiusAU + body.radius) {
-      return true;
+      return body.id;
     }
   }
-  return false;
+  return null;
 }
