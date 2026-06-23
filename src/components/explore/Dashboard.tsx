@@ -326,7 +326,7 @@ function Dashboard() {
                   <div className="dashboard-target-info">
                     {targetBodyId ? (
                       <>
-                        <span className="dashboard-target-name">{REAL_DATA[targetBodyId]?.name || targetBodyId}</span>
+                        <span className="dashboard-target-name">目标：{REAL_DATA[targetBodyId]?.name || targetBodyId}</span>
                         <button className="dashboard-target-ctl-btn"
                           onClick={() => setShowTargetModal(true)}>修改</button>
                         <button className="dashboard-target-ctl-btn"

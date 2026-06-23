@@ -145,6 +145,7 @@ function ExploreCanvas() {
   const smoothDirRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 1, 0));
   const keysRef = useRef<Set<string>>(new Set());
   const [hoveredMirror, setHoveredMirror] = useState<'rear' | 'left' | 'right' | null>(null);
+  const [pinnedMirrors, setPinnedMirrors] = useState<Set<string>>(new Set());
   const disposablesRef = useRef<{ geometries: THREE.BufferGeometry[]; materials: THREE.Material[]; textures: THREE.Texture[]; lines: THREE.Line[] }>({
     geometries: [], materials: [], textures: [], lines: [],
   });
@@ -474,10 +475,14 @@ function ExploreCanvas() {
       camera.position.copy(pos);
       const targetDir = new THREE.Vector3(sp.direction[0], sp.direction[1], sp.direction[2]);
       smoothDirRef.current.lerp(targetDir, 0.08).normalize();
+      const camUp = new THREE.Vector3(0, 0, 1);
+      const right = new THREE.Vector3().crossVectors(smoothDirRef.current, camUp).normalize();
+      const viewUp = new THREE.Vector3().crossVectors(right, smoothDirRef.current).normalize();
+      const centerOffset = viewUp.multiplyScalar(1.5);
       animLookTarget.set(
-        sp.position[0] + smoothDirRef.current.x * 10,
-        sp.position[1] + smoothDirRef.current.y * 10,
-        sp.position[2] + smoothDirRef.current.z * 10,
+        sp.position[0] + smoothDirRef.current.x * 10 + centerOffset.x,
+        sp.position[1] + smoothDirRef.current.y * 10 + centerOffset.y,
+        sp.position[2] + smoothDirRef.current.z * 10 + centerOffset.z,
       );
       camera.lookAt(animLookTarget);
       renderer.render(scene, camera);
@@ -580,12 +585,13 @@ function ExploreCanvas() {
 
   return (
     <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
-      {/* Rear mirror frame */}
+      {/* Rear mirror frame — slides down */}
       <div ref={rearFrameRef}
         onMouseEnter={() => setHoveredMirror('rear')}
         onMouseLeave={() => setHoveredMirror(null)}
         style={{
-        position: 'absolute', top: 0, left: '50%', transform: `translateX(-50%) ${hoveredMirror === 'rear' ? 'scale(1.8)' : ''}`,
+        position: 'absolute', top: 0, left: '50%',
+        transform: `translateX(-50%) translateY(${(hoveredMirror === 'rear' || pinnedMirrors.has('rear')) ? '0' : 'calc(-100% + 18px)'})`,
         width: '28%', height: '12%', maxWidth: 380, minWidth: 150,
         overflow: 'hidden',
         border: '1px solid rgba(140,170,210,0.25)',
@@ -601,22 +607,33 @@ function ExploreCanvas() {
         `,
         pointerEvents: 'auto',
         zIndex: 10,
-        transition: 'transform 0.2s ease',
+        transition: 'transform 0.25s ease',
       }}>
         <div style={{
           position: 'absolute', bottom: 3, left: '50%', transform: 'translateX(-50%)',
-          color: 'rgba(180,210,255,0.18)', fontSize: 8, fontFamily: 'monospace', userSelect: 'none',
-          zIndex: 1,
+          color: 'rgba(180,210,255,0.3)', fontSize: 8, fontFamily: 'monospace', userSelect: 'none',
+          zIndex: 1, whiteSpace: 'nowrap',
         }}>
           后视镜
         </div>
+        {(hoveredMirror === 'rear' || pinnedMirrors.has('rear')) && (
+          <div onClick={(e) => {
+            e.stopPropagation();
+            setPinnedMirrors(prev => { const next = new Set(prev); if (next.has('rear')) next.delete('rear'); else next.add('rear'); return next; });
+          }} style={{
+            position: 'absolute', top: 4, right: 6, zIndex: 2,
+            color: pinnedMirrors.has('rear') ? '#ffaa33' : 'rgba(180,210,255,0.3)',
+            fontSize: 10, cursor: 'pointer', userSelect: 'none', fontFamily: 'monospace', transition: 'color 0.15s',
+          }}>📌</div>
+        )}
       </div>
-      {/* Left mirror frame */}
+      {/* Left mirror frame — slides right */}
       <div ref={leftFrameRef}
         onMouseEnter={() => setHoveredMirror('left')}
         onMouseLeave={() => setHoveredMirror(null)}
         style={{
-        position: 'absolute', top: '50%', left: 0, transform: `translateY(-50%) ${hoveredMirror === 'left' ? 'scale(1.8)' : ''}`,
+        position: 'absolute', top: '50%', left: 0,
+        transform: `translateY(-50%) translateX(${(hoveredMirror === 'left' || pinnedMirrors.has('left')) ? '0' : 'calc(-100% + 22px)'})`,
         width: '12%', height: '32%', maxWidth: 160, minWidth: 70, minHeight: 140,
         overflow: 'hidden',
         border: '1px solid rgba(140,170,210,0.25)',
@@ -632,22 +649,33 @@ function ExploreCanvas() {
         `,
         pointerEvents: 'auto',
         zIndex: 10,
-        transition: 'transform 0.2s ease',
+        transition: 'transform 0.25s ease',
       }}>
         <div style={{
-          position: 'absolute', bottom: 3, left: '50%', transform: 'translateX(-50%)',
-          color: 'rgba(180,210,255,0.18)', fontSize: 8, fontFamily: 'monospace', userSelect: 'none',
+          position: 'absolute', bottom: 3, right: 4,
+          color: 'rgba(180,210,255,0.3)', fontSize: 8, fontFamily: 'monospace', userSelect: 'none',
           zIndex: 1,
         }}>
           左
         </div>
+        {(hoveredMirror === 'left' || pinnedMirrors.has('left')) && (
+          <div onClick={(e) => {
+            e.stopPropagation();
+            setPinnedMirrors(prev => { const next = new Set(prev); if (next.has('left')) next.delete('left'); else next.add('left'); return next; });
+          }} style={{
+            position: 'absolute', top: 4, right: 6, zIndex: 2,
+            color: pinnedMirrors.has('left') ? '#ffaa33' : 'rgba(180,210,255,0.3)',
+            fontSize: 10, cursor: 'pointer', userSelect: 'none', fontFamily: 'monospace', transition: 'color 0.15s',
+          }}>📌</div>
+        )}
       </div>
-      {/* Right mirror frame */}
+      {/* Right mirror frame — slides left */}
       <div ref={rightFrameRef}
         onMouseEnter={() => setHoveredMirror('right')}
         onMouseLeave={() => setHoveredMirror(null)}
         style={{
-        position: 'absolute', top: '50%', right: 0, transform: `translateY(-50%) ${hoveredMirror === 'right' ? 'scale(1.8)' : ''}`,
+        position: 'absolute', top: '50%', right: 0,
+        transform: `translateY(-50%) translateX(${(hoveredMirror === 'right' || pinnedMirrors.has('right')) ? '0' : 'calc(100% - 22px)'})`,
         width: '12%', height: '32%', maxWidth: 160, minWidth: 70, minHeight: 140,
         overflow: 'hidden',
         border: '1px solid rgba(140,170,210,0.25)',
@@ -663,15 +691,25 @@ function ExploreCanvas() {
         `,
         pointerEvents: 'auto',
         zIndex: 10,
-        transition: 'transform 0.2s ease',
+        transition: 'transform 0.25s ease',
       }}>
         <div style={{
-          position: 'absolute', bottom: 3, left: '50%', transform: 'translateX(-50%)',
-          color: 'rgba(180,210,255,0.18)', fontSize: 8, fontFamily: 'monospace', userSelect: 'none',
+          position: 'absolute', bottom: 3, left: 4,
+          color: 'rgba(180,210,255,0.3)', fontSize: 8, fontFamily: 'monospace', userSelect: 'none',
           zIndex: 1,
         }}>
           右
         </div>
+        {(hoveredMirror === 'right' || pinnedMirrors.has('right')) && (
+          <div onClick={(e) => {
+            e.stopPropagation();
+            setPinnedMirrors(prev => { const next = new Set(prev); if (next.has('right')) next.delete('right'); else next.add('right'); return next; });
+          }} style={{
+            position: 'absolute', top: 4, left: 6, zIndex: 2,
+            color: pinnedMirrors.has('right') ? '#ffaa33' : 'rgba(180,210,255,0.3)',
+            fontSize: 10, cursor: 'pointer', userSelect: 'none', fontFamily: 'monospace', transition: 'color 0.15s',
+          }}>📌</div>
+        )}
       </div>
       <TimePanel />
     </div>
