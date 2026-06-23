@@ -33,7 +33,7 @@ export function applyThrustInBodyFrame(
     right[0] * dir[1] - right[1] * dir[0],
   ]);
 
-  const thrustAccel = SPACECRAFT_CONFIG.maxThrustAU * (magnitude / 100);
+  const thrustAccel = SPACECRAFT_CONFIG.maxThrustAU * Math.pow(magnitude / 100, 2);
   const tx = dir[0] * forwardBack * thrustAccel +
             right[0] * leftRight * thrustAccel +
             up[0] * upDown * thrustAccel;
@@ -145,6 +145,33 @@ export function rk4StepSpaceshipWithMovingBodies(
 }
 
 export { rk4StepSpaceshipWithMovingBodies as rk4StepSpaceship };
+
+export function predictTrajectory(
+  spaceship: SpaceshipState,
+  getBodies: (timeOffset: number) => BodyInfo[],
+  dt: number,
+  steps: number,
+  onStep?: (ship: SpaceshipState) => void,
+): [number, number, number][] {
+  const points: [number, number, number][] = [];
+  const ship: SpaceshipState = {
+    ...spaceship,
+    position: [...spaceship.position],
+    velocity: [...spaceship.velocity],
+    thrust: [...spaceship.thrust],
+  };
+
+  let cumulativeTime = 0;
+  for (let i = 0; i < steps; i++) {
+    const wrappedGetBodies = (tOffset: number) => getBodies(cumulativeTime + tOffset);
+    rk4StepSpaceshipWithMovingBodies(ship, wrappedGetBodies, dt);
+    if (onStep) onStep(ship);
+    points.push([ship.position[0], ship.position[1], ship.position[2]]);
+    cumulativeTime += dt;
+  }
+
+  return points;
+}
 
 export function checkSpaceshipCollision(
   spaceship: SpaceshipState,

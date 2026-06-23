@@ -6,6 +6,7 @@ import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { useExploreStore } from '../../stores/exploreStore';
 import { rk4StepSpaceship, applyThrustInBodyFrame, checkSpaceshipCollision, type BodyInfo } from '../../engine/spaceship';
 import type { SpaceshipState } from '../../types';
+import TimePanel from './TimePanel';
 
 const SCALE = 1 / 1.496e11;
 const ORBIT_LINE_POINTS = 256;
@@ -672,6 +673,7 @@ function ExploreCanvas() {
           右
         </div>
       </div>
+      <TimePanel />
     </div>
   );
 }

@@ -2,11 +2,17 @@
 
 ## Project Overview
 
-太阳系搭建演示 — 交互式教育 SPA，用户通过放置天体、设置初速度来搭建太阳系，系统使用 N 体引力模拟天体运动，搭建完成后与真实数据对比评分。
+太阳系搭建演示 — 交互式教育 SPA，包含四个模块：
+- **搭建模式**：用户通过放置天体、设置初速度来搭建太阳系，系统使用 N 体引力模拟天体运动，搭建完成后与真实数据对比评分。
+- **地月系统**：展示地球-月球系统的月相、日食/月食模拟。
+- **探索模式**：飞船自由飞行探索太阳系。
+- **首页/关于**：产品介绍页面。
 
-- **技术栈**: React 18 + TypeScript (strict) + Three.js + Vite + Zustand + sql.js
+- **技术栈**: React 19 + TypeScript 6.0 (strict) + Three.js + Vite 8 + Zustand 5 + react-router-dom 7
+- **渲染后端**: Three.js（主）+ Canvas 2D（备用）
+- **持久化**: localStorage（sql.js 待集成）
 - **语言**: 仅支持中文
-- **平台**: 纯前端，单用户
+- **平台**: 纯前端，单用户，多页面 SPA
 
 ## Rules
 
@@ -29,23 +35,15 @@
 
 - 分层架构，禁止跨层直接依赖：
   - `engine/` — 纯逻辑（无 React、无 Three.js）
-  - `rendering/` — Three.js 封装
-  - `persistence/` — sql.js 封装
+  - `rendering/` — Three.js / Canvas 2D 封装
+  - `persistence/` — localStorage 封装（sql.js 待集成）
   - `stores/` — Zustand 状态管理
-  - `components/` — React UI
   - `hooks/` — React hooks
+  - `components/` — React UI 组件
+  - `pages/` — 页面级组件（路由入口）
 - Engine 层不能 import React 或 Three.js
 - Rendering 层不能 import React（但可以 import engine）
 - Components 层可以 import 所有下层模块
-
-### 关键设计决策
-
-- **太阳静止**：太阳不支持设置初速度，点击即释放，永远静止于释放位置。
-- **释放时冻结**：进入释放模式时模拟暂停，释放完成后恢复。
-- **对数尺寸**：天体体积以对数形式显示（`log10(r / R_min + 1) * K`），不直接显示绝对尺寸。
-- **N 体物理**：使用 4 阶 Runge-Kutta 积分器，所有天体之间有引力相互作用。
-- **评分**：基于轨道半径、质量、速度、行星顺序四个维度，允许 5% 误差。
-- **相机控制**：悬浮在画布右上角的半透明面板，不支持滚轮缩放，不支持画布拖拽。
 
 ### 项目结构
 
@@ -55,28 +53,75 @@ src/
 ├── engine/         # 纯逻辑层
 │   ├── constants.ts
 │   ├── physics.ts
-│   └── scoring.ts
+│   ├── scoring.ts
+│   ├── orbital.ts
+│   ├── orbitalInjection.ts
+│   ├── autoBuild.ts
+│   ├── buildData.ts
+│   ├── coordinateTransform.ts
+│   ├── eclipse.ts
+│   └── spaceship.ts
 ├── rendering/      # Three.js 封装
-│   ├── setup.ts
-│   ├── bodies.ts
-│   ├── grid.ts
-│   ├── interaction.ts
-│   └── cameraRef.ts
-├── persistence/    # sql.js 封装
-│   ├── db.ts
+│   ├── threejs/    # Three.js 渲染后端（主）
+│   │   ├── setup.ts
+│   │   ├── bodies.ts
+│   │   ├── grid.ts
+│   │   ├── interaction.ts
+│   │   ├── touchInteraction.ts
+│   │   ├── cameraRef.ts
+│   │   └── trails.ts
+│   └── canvas2d/   # Canvas 2D 渲染后端（备用）
+│       ├── setup.ts
+│       ├── bodies.ts
+│       ├── grid.ts
+│       └── interaction.ts
+├── persistence/    # 持久化（localStorage）
 │   └── repository.ts
 ├── stores/         # Zustand
 │   ├── buildStore.ts
 │   ├── uiStore.ts
-│   └── historyStore.ts
+│   ├── historyStore.ts
+│   ├── earthMoonStore.ts
+│   ├── exploreStore.ts
+│   └── spaceshipStore.ts
 ├── hooks/          # React hooks
 │   ├── useKeyboardShortcuts.ts
-│   └── useAudio.ts
-└── components/     # React UI
-    ├── toolbar/
-    ├── canvas/
-    ├── controls/
-    └── history/
+│   ├── useAudio.ts
+│   └── useRestore.ts
+├── components/     # React UI
+│   ├── layout/
+│   │   ├── TopNav.tsx
+│   │   └── TopNav.css
+│   ├── shared/
+│   │   └── ErrorBoundary.tsx
+│   ├── builder/
+│   │   ├── BuilderCanvas.tsx
+│   │   ├── BodyCatalogModal.tsx / .css
+│   │   ├── BodyStatusPanel.tsx / .css
+│   │   ├── CelestialToolbar.tsx / .css
+│   │   ├── CloseApproachOverlay.tsx / .css
+│   │   ├── ControlPanel.tsx / .css
+│   │   ├── CoordinateDisplay.tsx / .css
+│   │   ├── HistoryPanel.tsx / .css
+│   │   ├── Ruler.tsx / .css
+│   │   ├── ScoreModal.tsx / .css
+│   │   └── VelocityInputForm.tsx / .css
+│   ├── earthmoon/
+│   │   ├── EarthMoonCanvas.tsx
+│   │   ├── EclipsePanel.tsx
+│   │   ├── MoonPhase.tsx / .css
+│   │   ├── OffScreenIndicator.tsx
+│   │   └── TimeSlider.tsx
+│   └── explore/
+│       ├── ExploreCanvas.tsx
+│       ├── Dashboard.tsx / .css
+│       └── MiniMap.tsx
+└── pages/         # 页面级组件（路由入口）
+    ├── HomePage.tsx / .css
+    ├── BuilderPage.tsx / .css
+    ├── EarthMoonPage.tsx / .css
+    ├── ExplorePage.tsx / .css
+    └── AboutPage.tsx / .css
 docs/
 ├── specs/          # 设计文档
 └── plans/          # 实施计划
@@ -86,6 +131,7 @@ docs/
 
 ```bash
 npm run dev        # 启动开发服务器
-npm run build      # 构建生产版本
-npm run typecheck  # TypeScript 类型检查
+npm run build      # 构建生产版本（含 tsc 类型检查）
+npm run lint       # ESLint 代码检查
+npm run preview    # 预览生产构建
 ```
