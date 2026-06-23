@@ -1,10 +1,16 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { REAL_DATA, MU_SUN } from '../../engine/constants';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
+import { predictTrajectory, applyThrustInBodyFrame, type BodyInfo } from '../../engine/spaceship';
+import type { SpaceshipState } from '../../types';
 
-const CANVAS_W = 212;
-const CANVAS_H = 130;
+const NORMAL_W = 212;
+const NORMAL_H = 130;
+const ENLARGED_W = 600;
+const ENLARGED_H = 380;
+const ENLARGE_ENABLED = false;
 const PADDING = 12;
 const VIEW_RANGE_AU = 0.1;
 const SCALE = 1 / 1.496e11;
@@ -44,6 +50,26 @@ function computeBodyState2D(templateId: string, jd: number): { x: number; y: num
   };
 }
 
+function computeBodyState3D(templateId: string, jd: number): { x: number; y: number; z: number; vx: number; vy: number; vz: number } | null {
+  const data = REAL_DATA[templateId];
+  if (!data || !data.semiMajorAxis || !data.orbital) return null;
+  const o = data.orbital;
+  const period = orbitalPeriod(data.semiMajorAxis, MU_SUN);
+  const M = meanAnomalyAtTime(o.meanAnomalyAtEpoch, period, o.epoch, jd);
+  const Mmod = ((M % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  const E = solveKepler(Mmod, o.eccentricity);
+  const nu = trueAnomaly(E, o.eccentricity);
+  const sv = stateVectors(data.semiMajorAxis, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN);
+  return {
+    x: sv.position[0] * SCALE,
+    y: sv.position[1] * SCALE,
+    z: sv.position[2] * SCALE,
+    vx: sv.velocity[0] * SCALE,
+    vy: sv.velocity[1] * SCALE,
+    vz: sv.velocity[2] * SCALE,
+  };
+}
+
 interface BodyDrawInfo {
   id: string;
   color: string;
@@ -65,6 +91,13 @@ function drawDirectionArrow(ctx: CanvasRenderingContext2D, x: number, y: number,
   ctx.closePath();
   ctx.fill();
   ctx.restore();
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})`;
 }
 
 function drawSpaceship(ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, size: number, thrustPercent: number) {
@@ -136,7 +169,34 @@ function drawSpaceship(ctx: CanvasRenderingContext2D, x: number, y: number, angl
 
 function MiniMap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
+  const trailRef = useRef<[number, number][]>([]);
+  const wasZoomedRef = useRef(false);
+  const [enlarged, setEnlarged] = useState(false);
+  const [size, setSize] = useState({ w: NORMAL_W, h: NORMAL_H });
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || enlarged) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const rw = Math.floor(entry.contentRect.width);
+        const rh = Math.floor(entry.contentRect.height);
+        if (rw > 0 && rh > 0) {
+          setSize({ w: rw, h: rh });
+        }
+      }
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [enlarged]);
+
+  const handleToggle = useCallback((e: React.MouseEvent) => {
+    if (!ENLARGE_ENABLED) return;
+    e.stopPropagation();
+    setEnlarged(prev => !prev);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -145,36 +205,37 @@ function MiniMap() {
     if (!ctx) return;
 
     let smoothViewRange = VIEW_RANGE_AU;
+    let running = true;
 
     const draw = () => {
       ctx.save();
       ctx.scale(2, 2);
       const sp = useSpaceshipStore.getState();
       const jd = julianDate(sp.simulatedTime);
-      const cx = CANVAS_W / 2;
-      const cy = CANVAS_H / 2;
-      const usableW = CANVAS_W - PADDING * 2;
-      const usableH = CANVAS_H - PADDING * 2;
+      const cw = canvas.width / 2;
+      const ch = canvas.height / 2;
+      const cx = cw / 2;
+      const cy = ch / 2;
+      const usableW = cw - PADDING * 2;
+      const usableH = ch - PADDING * 2;
       const usable = Math.min(usableW, usableH);
 
       let nearestDistAU = Infinity;
       let nearestId = '';
       let nearestX = 0;
       let nearestY = 0;
-      let nearestVx = 0;
-      let nearestVy = 0;
       for (const id of ALL_IDS) {
         if (id === 'sun') {
           const dx2 = sp.position[0] ** 2 + sp.position[1] ** 2;
           const dist = Math.sqrt(dx2);
-          if (dist < nearestDistAU) { nearestDistAU = dist; nearestId = id; nearestX = 0; nearestY = 0; nearestVx = 0; nearestVy = 0; }
+          if (dist < nearestDistAU) { nearestDistAU = dist; nearestId = id; nearestX = 0; nearestY = 0; }
         } else {
           const state2d = computeBodyState2D(id, jd);
           if (!state2d) continue;
           const dx = state2d.x - sp.position[0];
           const dy = state2d.y - sp.position[1];
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < nearestDistAU) { nearestDistAU = dist; nearestId = id; nearestX = state2d.x; nearestY = state2d.y; nearestVx = state2d.vx; nearestVy = state2d.vy; }
+          if (dist < nearestDistAU) { nearestDistAU = dist; nearestId = id; nearestX = state2d.x; nearestY = state2d.y; }
         }
       }
 
@@ -184,6 +245,12 @@ function MiniMap() {
         targetViewRange = nearestDistAU * 2.5;
         isZoomed = true;
       }
+
+      if (isZoomed !== wasZoomedRef.current) {
+        trailRef.current = [];
+        wasZoomedRef.current = isZoomed;
+      }
+
       smoothViewRange += (targetViewRange - smoothViewRange) * ZOOM_LERP;
       const viewRange = smoothViewRange;
 
@@ -205,24 +272,24 @@ function MiniMap() {
       const gridStepAU = gridStepDisplay / (useKm ? AU_TO_KM2 : 1);
       const gridStepPx = gridStepAU * scale;
 
-      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+      ctx.clearRect(0, 0, cw, ch);
       ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+      ctx.fillRect(0, 0, cw, ch);
 
       // Grid lines
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
       ctx.lineWidth = 0.5;
       const gridStep = gridStepPx;
-      for (let gx = cx % gridStep; gx < CANVAS_W; gx += gridStep) {
+      for (let gx = cx % gridStep; gx < cw; gx += gridStep) {
         ctx.beginPath();
         ctx.moveTo(gx, PADDING);
-        ctx.lineTo(gx, CANVAS_H - PADDING);
+        ctx.lineTo(gx, ch - PADDING);
         ctx.stroke();
       }
-      for (let gy = cy % gridStep; gy < CANVAS_H; gy += gridStep) {
+      for (let gy = cy % gridStep; gy < ch; gy += gridStep) {
         ctx.beginPath();
         ctx.moveTo(PADDING, gy);
-        ctx.lineTo(CANVAS_W - PADDING, gy);
+        ctx.lineTo(cw - PADDING, gy);
         ctx.stroke();
       }
 
@@ -245,7 +312,7 @@ function MiniMap() {
           bodies.push({
             id, color: BODY_COLORS[id],
             sx, sy, distance: distPx / (scale || 1),
-            inView: sx > PADDING && sx < CANVAS_W - PADDING && sy > PADDING && sy < CANVAS_H - PADDING,
+            inView: sx > PADDING && sx < cw - PADDING && sy > PADDING && sy < ch - PADDING,
           });
         } else {
           const pos2d = computeBodyPos2D(id, jd);
@@ -258,7 +325,7 @@ function MiniMap() {
           bodies.push({
             id, color: BODY_COLORS[id] || '#888888',
             sx, sy, distance: distPx / (scale || 1),
-            inView: sx > PADDING && sx < CANVAS_W - PADDING && sy > PADDING && sy < CANVAS_H - PADDING,
+            inView: sx > PADDING && sx < cw - PADDING && sy > PADDING && sy < ch - PADDING,
           });
         }
       }
@@ -269,6 +336,148 @@ function MiniMap() {
         const dy = sp.position[1] - anchorY;
         shipSx = cx + dx * scale;
         shipSy = cy - dy * scale;
+      }
+
+      // --- Motion trail ---
+      {
+        const trail = trailRef.current;
+        if (isZoomed) {
+          trail.push([sp.position[0] - nearestX, sp.position[1] - nearestY]);
+        } else {
+          trail.push([sp.position[0], sp.position[1]]);
+        }
+        const maxTrail = 500;
+        while (trail.length > maxTrail) trail.shift();
+
+        if (trail.length > 1) {
+          ctx.save();
+          const segmentCount = 8;
+          const pointsPerSegment = Math.ceil((trail.length - 1) / segmentCount);
+          for (let seg = 0; seg < segmentCount; seg++) {
+            const start = seg * pointsPerSegment;
+            const end = Math.min(start + pointsPerSegment + 1, trail.length);
+            if (start >= trail.length - 1) break;
+
+            const alpha = 0.35 * (seg + 1) / segmentCount;
+            if (alpha <= 0) continue;
+
+            ctx.beginPath();
+            let first = true;
+            for (let i = start; i < end; i++) {
+              let sx: number;
+              let sy: number;
+              if (isZoomed) {
+                sx = cx + trail[i][0] * scale;
+                sy = cy - trail[i][1] * scale;
+              } else {
+                const dx = trail[i][0] - anchorX;
+                const dy = trail[i][1] - anchorY;
+                sx = cx + dx * scale;
+                sy = cy - dy * scale;
+              }
+              if (first) { ctx.moveTo(sx, sy); first = false; }
+              else { ctx.lineTo(sx, sy); }
+            }
+            ctx.strokeStyle = `rgba(0, 180, 255, ${alpha.toFixed(2)})`;
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      }
+
+      // --- Prediction trajectory ---
+      if (!sp.exploded) {
+        const worldThrust = applyThrustInBodyFrame(
+          sp.thrust[0], sp.thrust[1], sp.thrust[2],
+          sp.thrustMagnitude, sp.direction,
+        );
+
+        const predShip: SpaceshipState = {
+          position: sp.position,
+          velocity: sp.velocity,
+          direction: sp.direction,
+          thrust: worldThrust,
+          thrustMagnitude: sp.thrustMagnitude,
+          exploded: false,
+        };
+
+        const bodyStates3D: { pos: [number, number, number]; vel: [number, number, number]; mass: number }[] = [];
+        for (const id of ALL_IDS) {
+          const data = REAL_DATA[id];
+          if (!data) continue;
+          if (id === 'sun') {
+            bodyStates3D.push({ pos: [0, 0, 0], vel: [0, 0, 0], mass: data.mass });
+          } else {
+            const s3d = computeBodyState3D(id, jd);
+            if (s3d) {
+              bodyStates3D.push({ pos: [s3d.x, s3d.y, s3d.z], vel: [s3d.vx, s3d.vy, s3d.vz], mass: data.mass });
+            }
+          }
+        }
+
+        const getBodiesPred = (tOffset: number): BodyInfo[] => {
+          return bodyStates3D.map(b => ({
+            position: [
+              b.pos[0] + b.vel[0] * tOffset,
+              b.pos[1] + b.vel[1] * tOffset,
+              b.pos[2] + b.vel[2] * tOffset,
+            ],
+            mass: b.mass,
+            radius: 0,
+          }));
+        };
+
+        const doPrograde = sp.attitudeMode === 'prograde' && sp.thrustMagnitude > 0;
+        const bfThrust = sp.thrust;
+        const bfMag = sp.thrustMagnitude;
+
+        const onStep = doPrograde ? (ship: SpaceshipState) => {
+          const speed = Math.sqrt(
+            ship.velocity[0] ** 2 + ship.velocity[1] ** 2 + ship.velocity[2] ** 2,
+          );
+          if (speed > 1e-15) {
+            ship.direction = [ship.velocity[0] / speed, ship.velocity[1] / speed, ship.velocity[2] / speed];
+            ship.thrust = applyThrustInBodyFrame(
+              bfThrust[0], bfThrust[1], bfThrust[2],
+              bfMag, ship.direction,
+            );
+          }
+        } : undefined;
+
+        const predDt = 1.0;
+        const predSteps = 200;
+        const trajectory = predictTrajectory(predShip, getBodiesPred, predDt, predSteps, onStep);
+
+        ctx.save();
+        const segmentCount = 10;
+        const pointsPerSegment = Math.ceil(trajectory.length / segmentCount);
+        for (let seg = 0; seg < segmentCount; seg++) {
+          const startIdx = seg * pointsPerSegment;
+          const endIdx = Math.min(startIdx + pointsPerSegment, trajectory.length);
+          if (startIdx >= trajectory.length) break;
+
+          const alpha = 0.3 * (1 - seg / segmentCount);
+          if (alpha <= 0) continue;
+
+          ctx.beginPath();
+          let first = true;
+          for (let i = startIdx; i < endIdx; i++) {
+            const pt = trajectory[i];
+            const dx = pt[0] - anchorX;
+            const dy = pt[1] - anchorY;
+            const sx = cx + dx * scale;
+            const sy = cy - dy * scale;
+            if (first) { ctx.moveTo(sx, sy); first = false; }
+            else { ctx.lineTo(sx, sy); }
+          }
+          ctx.strokeStyle = `rgba(0, 255, 128, ${alpha.toFixed(2)})`;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 4]);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        ctx.restore();
       }
 
       // Draw bodies in view
@@ -324,8 +533,8 @@ function MiniMap() {
           edgeX = cx + ndx * (hh / Math.abs(ndy));
         }
 
-        edgeX = Math.max(PADDING, Math.min(CANVAS_W - PADDING, edgeX));
-        edgeY = Math.max(PADDING, Math.min(CANVAS_H - PADDING, edgeY));
+        edgeX = Math.max(PADDING, Math.min(cw - PADDING, edgeX));
+        edgeY = Math.max(PADDING, Math.min(ch - PADDING, edgeY));
 
         const angle = Math.atan2(ndy, ndx);
 
@@ -340,13 +549,26 @@ function MiniMap() {
         ctx.globalAlpha = 1;
       }
 
-      // Spaceship — use relative velocity direction to nearest body
-      const relVx = sp.velocity[0] - nearestVx;
-      const relVy = sp.velocity[1] - nearestVy;
-      const relSpeed = Math.sqrt(relVx * relVx + relVy * relVy);
-      const shipAngle = relSpeed > 1e-12
-        ? Math.atan2(relVy, relVx)
-        : Math.atan2(sp.direction[1], sp.direction[0]);
+      // Pulse glow on target body (skip when zoomed into orbiting body)
+      if (sp.targetBodyId && !(isZoomed && nearestId === sp.targetBodyId)) {
+        const targetBody = bodies.find(b => b.id === sp.targetBodyId);
+        if (targetBody && targetBody.inView) {
+          const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.004);
+          const alpha = 0.1 + 0.4 * pulse;
+          for (let ring = 0; ring < 3; ring++) {
+            const radius = (targetBody.id === 'sun' ? SUN_RADIUS_PX : 2.5) + (ring + 1) * 4;
+            ctx.beginPath();
+            ctx.arc(targetBody.sx, targetBody.sy, radius, 0, Math.PI * 2);
+            const ringAlpha = alpha * (1 - ring * 0.3);
+            ctx.strokeStyle = hexToRgba(targetBody.color, ringAlpha);
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Spaceship — use ship heading direction
+      const shipAngle = Math.atan2(sp.direction[1], sp.direction[0]);
 
       // Direction line
       const dirLen = isZoomed ? 10 : 14;
@@ -365,8 +587,8 @@ function MiniMap() {
       const displayUnit = useKm ? 'km' : 'AU';
       const scaleBarPx = gridStepPx;
       const scaleBarDisplay = gridStepDisplay;
-      const barX = CANVAS_W - PADDING - scaleBarPx;
-      const barY = CANVAS_H - PADDING - 4;
+      const barX = cw - PADDING - scaleBarPx;
+      const barY = ch - PADDING - 4;
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -391,30 +613,79 @@ function MiniMap() {
       const legendText = isZoomed
         ? `▲ ${REAL_DATA[nearestId]?.name || '天体'} · 绕飞视图`
         : '▲ 飞船 · 俯视图';
-      ctx.fillText(legendText, 4, CANVAS_H - 4);
+      ctx.fillText(legendText, 4, ch - 4);
 
       ctx.restore();
-      rafRef.current = requestAnimationFrame(draw);
+      if (running) rafRef.current = requestAnimationFrame(draw);
     };
 
     rafRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, []);
+    return () => {
+      running = false;
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [enlarged]);
+
+  const enlargedCanvas = enlarged ? (() => {
+    const ew = ENLARGED_W, eh = ENLARGED_H;
+    return createPortal(
+    <>
+      <div
+        onClick={handleToggle}
+        style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+          zIndex: 200, cursor: 'pointer',
+        }}
+      />
+      <canvas
+        ref={canvasRef}
+        width={ew * 2}
+        height={eh * 2}
+        onClick={handleToggle}
+        style={{
+          width: ew,
+          height: eh,
+          display: 'block',
+          borderRadius: 8,
+          background: 'rgba(0,0,0,0.5)',
+          border: '2px solid rgba(0,180,255,0.5)',
+          cursor: 'pointer',
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 201,
+          boxShadow: '0 0 40px rgba(0,180,255,0.15)',
+        }}
+      />
+    </>,
+    document.body,
+  );
+})() : null;
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={CANVAS_W * 2}
-      height={CANVAS_H * 2}
-      style={{
-        width: CANVAS_W,
-        height: CANVAS_H,
-        display: 'block',
-        borderRadius: 4,
-        background: 'rgba(0,0,0,0.5)',
-        border: '1px solid rgba(0,180,255,0.2)',
-      }}
-    />
+    <>
+      {enlargedCanvas}
+      {!enlarged && (
+        <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
+          <canvas
+            ref={canvasRef}
+            width={size.w * 2}
+            height={size.h * 2}
+            onClick={handleToggle}
+            style={{
+              width: size.w,
+              height: size.h,
+              display: 'block',
+              borderRadius: 4,
+              background: 'rgba(0,0,0,0.5)',
+              border: '1px solid rgba(0,180,255,0.2)',
+              cursor: ENLARGE_ENABLED ? 'pointer' : 'default',
+            }}
+          />
+        </div>
+      )}
+    </>
   );
 }
 

@@ -1,0 +1,117 @@
+.target-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 16px;
+  font-family: 'Courier New', monospace;
+}
+
+.target-modal-panel {
+  width: 340px;
+  background: rgba(5, 10, 30, 0.96);
+  border: 1px solid rgba(0, 180, 255, 0.35);
+  border-radius: 8px 8px 0 0;
+  color: #ccc;
+  box-shadow: 0 0 30px rgba(0, 180, 255, 0.1);
+  animation: target-modal-slide-up 0.2s ease-out;
+}
+
+@keyframes target-modal-slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.target-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid rgba(0, 180, 255, 0.12);
+}
+
+.target-modal-title {
+  font-size: 11px;
+  color: #00b8ff;
+  letter-spacing: 1px;
+}
+
+.target-modal-close-btn {
+  background: none;
+  border: 1px solid rgba(0, 180, 255, 0.15);
+  border-radius: 3px;
+  color: #667788;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 8px;
+  font-family: inherit;
+  transition: all 0.12s;
+}
+
+.target-modal-close-btn:hover {
+  background: rgba(255, 50, 50, 0.15);
+  color: #ff5555;
+  border-color: rgba(255, 80, 80, 0.3);
+}
+
+.target-modal-list {
+  padding: 6px 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.target-modal-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.target-modal-item:hover {
+  background: rgba(0, 180, 255, 0.08);
+}
+
+.target-modal-item.selected {
+  background: rgba(0, 255, 128, 0.08);
+}
+
+.target-modal-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.target-modal-body-name {
+  flex: 1;
+  font-size: 11px;
+  color: #ccddee;
+}
+
+.target-modal-item.selected .target-modal-body-name {
+  color: #00ff88;
+}
+
+.target-modal-dist {
+  font-size: 9px;
+  color: #556677;
+  text-align: right;
+  min-width: 70px;
+}
+
+.target-modal-angle {
+  font-size: 9px;
+  color: #445566;
+  text-align: right;
+  min-width: 40px;
+}
+
+.target-modal-item:hover .target-modal-dist,
+.target-modal-item:hover .target-modal-angle {
+  color: #8899bb;
+}

@@ -7,6 +7,7 @@ export interface SpaceshipStore extends SpaceshipState {
   dashboardExpanded: boolean;
   simulatedTime: number;
   attitudeMode: AttitudeMode;
+  targetBodyId: string | null;
 
   setForwardThrust: (v: number) => void;
   setLateralThrust: (v: number) => void;
@@ -22,6 +23,7 @@ export interface SpaceshipStore extends SpaceshipState {
   yaw: (angle: number) => void;
   pitch: (angle: number) => void;
   setAttitudeMode: (mode: AttitudeMode) => void;
+  setTargetBody: (id: string | null) => void;
 }
 
 function rotateYaw(dir: [number, number, number], angle: number): [number, number, number] {
@@ -67,6 +69,7 @@ const initialState = {
   dashboardExpanded: true,
   simulatedTime: now,
   attitudeMode: 'inertial' as AttitudeMode,
+  targetBodyId: null as string | null,
 };
 
 export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
@@ -88,8 +91,13 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     dashboardExpanded: true,
     simulatedTime: Date.now(),
     attitudeMode: 'inertial' as AttitudeMode,
+    targetBodyId: null as string | null,
   })),
   yaw: (angle) => set(s => ({ direction: rotateYaw(s.direction, angle), attitudeMode: 'inertial' as AttitudeMode })),
   pitch: (angle) => set(s => ({ direction: rotatePitch(s.direction, angle), attitudeMode: 'inertial' as AttitudeMode })),
   setAttitudeMode: (mode) => set({ attitudeMode: mode }),
+  setTargetBody: (id) => set({
+    targetBodyId: id,
+    attitudeMode: id !== null ? 'target' as AttitudeMode : 'inertial' as AttitudeMode,
+  }),
 }));

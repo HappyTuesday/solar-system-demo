@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
 import { REAL_DATA, MU_SUN } from '../../engine/constants';
@@ -143,6 +143,7 @@ function ExploreCanvas() {
   const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
   const smoothDirRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 1, 0));
   const keysRef = useRef<Set<string>>(new Set());
+  const [hoveredMirror, setHoveredMirror] = useState<'rear' | 'left' | 'right' | null>(null);
   const disposablesRef = useRef<{ geometries: THREE.BufferGeometry[]; materials: THREE.Material[]; textures: THREE.Texture[]; lines: THREE.Line[] }>({
     geometries: [], materials: [], textures: [], lines: [],
   });
@@ -412,6 +413,23 @@ function ExploreCanvas() {
               if (dist > 1e-15) {
                 store.setDirection([dx / dist, dy / dist, dz / dist]);
               }
+            } else if (store.attitudeMode === 'target' && store.targetBodyId) {
+              let targetPos: [number, number, number] | null = null;
+              if (store.targetBodyId === 'sun') {
+                targetPos = [0, 0, 0];
+              } else {
+                const bs = computeBodyState(store.targetBodyId, finalJd);
+                if (bs) targetPos = bs.position;
+              }
+              if (targetPos) {
+                const dx = targetPos[0] - spPos[0];
+                const dy = targetPos[1] - spPos[1];
+                const dz = targetPos[2] - spPos[2];
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist > 1e-15) {
+                  store.setDirection([dx / dist, dy / dist, dz / dist]);
+                }
+              }
             }
           }
         }
@@ -562,8 +580,11 @@ function ExploreCanvas() {
   return (
     <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
       {/* Rear mirror frame */}
-      <div ref={rearFrameRef} style={{
-        position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+      <div ref={rearFrameRef}
+        onMouseEnter={() => setHoveredMirror('rear')}
+        onMouseLeave={() => setHoveredMirror(null)}
+        style={{
+        position: 'absolute', top: 0, left: '50%', transform: `translateX(-50%) ${hoveredMirror === 'rear' ? 'scale(1.8)' : ''}`,
         width: '28%', height: '12%', maxWidth: 380, minWidth: 150,
         overflow: 'hidden',
         border: '1px solid rgba(140,170,210,0.25)',
@@ -577,8 +598,9 @@ function ExploreCanvas() {
           0 0 0 5px rgba(90,120,160,0.3),
           0 4px 18px rgba(0,0,0,0.55)
         `,
-        pointerEvents: 'none',
+        pointerEvents: 'auto',
         zIndex: 10,
+        transition: 'transform 0.2s ease',
       }}>
         <div style={{
           position: 'absolute', bottom: 3, left: '50%', transform: 'translateX(-50%)',
@@ -589,8 +611,11 @@ function ExploreCanvas() {
         </div>
       </div>
       {/* Left mirror frame */}
-      <div ref={leftFrameRef} style={{
-        position: 'absolute', top: '50%', left: 0, transform: 'translateY(-50%)',
+      <div ref={leftFrameRef}
+        onMouseEnter={() => setHoveredMirror('left')}
+        onMouseLeave={() => setHoveredMirror(null)}
+        style={{
+        position: 'absolute', top: '50%', left: 0, transform: `translateY(-50%) ${hoveredMirror === 'left' ? 'scale(1.8)' : ''}`,
         width: '12%', height: '32%', maxWidth: 160, minWidth: 70, minHeight: 140,
         overflow: 'hidden',
         border: '1px solid rgba(140,170,210,0.25)',
@@ -604,8 +629,9 @@ function ExploreCanvas() {
           0 0 0 5px rgba(90,120,160,0.3),
           3px 0 14px rgba(0,0,0,0.5)
         `,
-        pointerEvents: 'none',
+        pointerEvents: 'auto',
         zIndex: 10,
+        transition: 'transform 0.2s ease',
       }}>
         <div style={{
           position: 'absolute', bottom: 3, left: '50%', transform: 'translateX(-50%)',
@@ -616,8 +642,11 @@ function ExploreCanvas() {
         </div>
       </div>
       {/* Right mirror frame */}
-      <div ref={rightFrameRef} style={{
-        position: 'absolute', top: '50%', right: 0, transform: 'translateY(-50%)',
+      <div ref={rightFrameRef}
+        onMouseEnter={() => setHoveredMirror('right')}
+        onMouseLeave={() => setHoveredMirror(null)}
+        style={{
+        position: 'absolute', top: '50%', right: 0, transform: `translateY(-50%) ${hoveredMirror === 'right' ? 'scale(1.8)' : ''}`,
         width: '12%', height: '32%', maxWidth: 160, minWidth: 70, minHeight: 140,
         overflow: 'hidden',
         border: '1px solid rgba(140,170,210,0.25)',
@@ -631,8 +660,9 @@ function ExploreCanvas() {
           0 0 0 5px rgba(90,120,160,0.3),
           -3px 0 14px rgba(0,0,0,0.5)
         `,
-        pointerEvents: 'none',
+        pointerEvents: 'auto',
         zIndex: 10,
+        transition: 'transform 0.2s ease',
       }}>
         <div style={{
           position: 'absolute', bottom: 3, left: '50%', transform: 'translateX(-50%)',
