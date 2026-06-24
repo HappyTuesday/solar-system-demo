@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
-import { REAL_DATA, MU_SUN, SPACECRAFT_CONFIG, AU_TO_M } from '../../engine/constants';
+import { REAL_DATA, MU_SUN } from '../../engine/constants';
 import type { AttitudeMode } from '../../types';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
 import MiniMap from './MiniMap';
@@ -11,12 +11,6 @@ const SCALE = 1 / 1.496e11;
 const AU_TO_KM = 1.496e8;
 const ORBIT_THRESHOLD_AU = 0.005;
 const RotationRate = Math.PI / 3;
-const G_EARTH = 9.81;
-
-function thrustToG(magnitude: number): number {
-  const accelAU = SPACECRAFT_CONFIG.maxThrustAU * (magnitude / 100);
-  return (accelAU * AU_TO_M) / G_EARTH;
-}
 
 const ALL_IDS = ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
 
@@ -273,7 +267,7 @@ function Dashboard() {
                 <div className="dashboard-stat">
                   <div className="dashboard-stat-label">推力</div>
                   <div className="dashboard-stat-value" style={{ color: '#00b8ff' }}>
-                    {thrustToG(thrustMagnitude).toFixed(1)} <span style={{ fontSize: 8, color: '#556677' }}>G</span>
+                    {thrustMagnitude} <span style={{ fontSize: 8, color: '#556677' }}>MN</span>
                   </div>
                 </div>
               </div>
@@ -349,10 +343,10 @@ function Dashboard() {
                     </div>
                     <div className="thrust-slider-labels">
                       <span style={{ left: '0%' }}>0</span>
-                      <span style={{ left: '25%' }}>{thrustToG(25).toFixed(0)}</span>
-                      <span style={{ left: '50%' }}>{thrustToG(50).toFixed(0)}</span>
-                      <span style={{ left: '75%' }}>{thrustToG(75).toFixed(0)}</span>
-                      <span style={{ left: '100%' }}>{thrustToG(100).toFixed(0)}</span>
+                      <span style={{ left: '25%' }}>25</span>
+                      <span style={{ left: '50%' }}>50</span>
+                      <span style={{ left: '75%' }}>75</span>
+                      <span style={{ left: '100%' }}>100</span>
                     </div>
                     <div className="thrust-slider-thumb" style={{ left: `${thrustMagnitude}%` }} />
                   </div>
