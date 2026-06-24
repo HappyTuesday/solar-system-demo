@@ -454,7 +454,7 @@ export const SPACECRAFT_DRAGON2 = {
   mass: 10500,
   length: 8.1,
   diameter: 4.0,
-  collisionRadiusAU: 5.4e-8,
+  collisionRadiusAU: 0,
   maxThrustAU: 7e-5,
   defaultOrbit: {
     semiMajorAxis: 6.771e6,

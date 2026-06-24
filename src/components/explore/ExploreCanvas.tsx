@@ -6,7 +6,6 @@ import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { useExploreStore } from '../../stores/exploreStore';
 import { rk4StepSpaceship, applyThrustInBodyFrame, checkSpaceshipCollision, type BodyInfo } from '../../engine/spaceship';
 import type { SpaceshipState } from '../../types';
-import { playSound } from '../../hooks/useAudio';
 import TimePanel from './TimePanel';
 
 const SCALE = 1 / 1.496e11;
@@ -185,6 +184,57 @@ function ExploreCanvas() {
     startTime: number;
     basePosition: THREE.Vector3;
   }>({ particles: null, flashLight: null, startTime: 0, basePosition: new THREE.Vector3() });
+
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  function playExplosionSound() {
+    try {
+      if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
+      const ctx = audioCtxRef.current;
+      const now = ctx.currentTime;
+
+      const bufferSize = ctx.sampleRate * 2;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        const t = i / bufferSize;
+        const env = Math.exp(-t * 5);
+        data[i] = (Math.random() * 2 - 1) * env * 0.6;
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const lowPass = ctx.createBiquadFilter();
+      lowPass.type = 'lowpass';
+      lowPass.frequency.setValueAtTime(800, now);
+      lowPass.frequency.exponentialRampToValueAtTime(80, now + 1.5);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.8, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 2);
+
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(120, now);
+      osc.frequency.exponentialRampToValueAtTime(20, now + 1.5);
+      const oscGain = ctx.createGain();
+      oscGain.gain.setValueAtTime(0.3, now);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+
+      noise.connect(lowPass);
+      lowPass.connect(gain);
+      gain.connect(ctx.destination);
+      osc.connect(oscGain);
+      oscGain.connect(ctx.destination);
+
+      noise.start(now);
+      noise.stop(now + 2);
+      osc.start(now);
+      osc.stop(now + 1.5);
+    } catch {
+      // audio not available
+    }
+  }
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -413,7 +463,7 @@ function ExploreCanvas() {
 
         const hitBodyId = checkSpaceshipCollision(shipState, bodyInfos);
         if (hitBodyId) {
-          playSound('collision');
+          playExplosionSound();
           store.setExploded(
             hitBodyId,
             [shipState.position[0], shipState.position[1], shipState.position[2]],
