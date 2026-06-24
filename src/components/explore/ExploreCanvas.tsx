@@ -21,9 +21,9 @@ const ROTATION_RATE = Math.PI / 3;
 
 const EXPLOSION_DURATION = 3.0;
 const EXPLOSION_PARTICLE_COUNT = 300;
-const EXPLOSION_SPREAD_SPEED = 0.0005;
-const EXPLOSION_FLASH_INTENSITY = 12;
-const EXPLOSION_FLASH_DURATION = 0.5;
+const EXPLOSION_SPREAD_SPEED = 0.002;
+const EXPLOSION_FLASH_INTENSITY = 25;
+const EXPLOSION_FLASH_DURATION = 0.8;
 const SHAKE_MAX_DURATION = 2.0;
 const SHAKE_INITIAL_AMPLITUDE = 0.003;
 
@@ -462,10 +462,11 @@ function ExploreCanvas() {
           disposablesRef.current.geometries.push(pGeom);
 
           const pMat = new THREE.PointsMaterial({
-            size: 0.0008,
+            size: 0.003,
             map: particleTex,
             vertexColors: true,
             blending: THREE.AdditiveBlending,
+            depthTest: false,
             depthWrite: false,
             transparent: true,
             opacity: 1.0,
@@ -562,7 +563,7 @@ function ExploreCanvas() {
 
       const expRef = explosionRef.current;
       if (expRef.particles && expRef.flashLight) {
-        if (store.explosionPhase !== 'exploding') {
+        if (useSpaceshipStore.getState().explosionPhase !== 'exploding') {
           scene.remove(expRef.particles);
           expRef.particles.geometry.dispose();
           (expRef.particles.material as THREE.Material).dispose();
