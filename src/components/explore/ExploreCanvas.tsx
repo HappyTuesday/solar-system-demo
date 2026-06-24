@@ -196,6 +196,8 @@ function ExploreCanvas() {
     active: boolean;
     osc2: OscillatorNode;
     oscGain2: GainNode;
+    bandLow: BiquadFilterNode;
+    bandMid: BiquadFilterNode;
   } | null>(null);
 
   function startEngineSound() {
@@ -256,7 +258,7 @@ function ExploreCanvas() {
       osc.start();
       osc2.start();
 
-      engineSoundRef.current = { noiseSource, osc, gainNode, oscGain, osc2, oscGain2, active: false };
+      engineSoundRef.current = { noiseSource, osc, gainNode, oscGain, osc2, oscGain2, bandLow, bandMid, active: false };
     } catch {
       // audio not available
     }
@@ -278,6 +280,13 @@ function ExploreCanvas() {
       es.gainNode.gain.setTargetAtTime(noiseVol, now, 0.05);
       es.oscGain.gain.setTargetAtTime(noiseVol * 0.35, now, 0.05);
       es.oscGain2.gain.setTargetAtTime(noiseVol * 0.25, now, 0.05);
+
+      const freqMul = 1.0 + pct * 2.5;
+      es.bandLow.frequency.setTargetAtTime(60 * freqMul, now, 0.05);
+      es.bandMid.frequency.setTargetAtTime(160 * freqMul, now, 0.05);
+      es.osc.frequency.setTargetAtTime(25 * freqMul, now, 0.05);
+      es.osc2.frequency.setTargetAtTime(55 * freqMul, now, 0.05);
+      es.noiseSource.playbackRate.setTargetAtTime(freqMul * 0.85, now, 0.05);
     }
   }
 
