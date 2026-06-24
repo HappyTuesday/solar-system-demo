@@ -45,7 +45,6 @@ function Dashboard() {
   const pitch = useSpaceshipStore(s => s.pitch);
   const setDirection = useSpaceshipStore(s => s.setDirection);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const reset = useSpaceshipStore(s => s.reset);
   const attitudeMode = useSpaceshipStore(s => s.attitudeMode);
   const setAttitudeMode = useSpaceshipStore(s => s.setAttitudeMode);
   const targetBodyId = useSpaceshipStore(s => s.targetBodyId);
@@ -226,18 +225,7 @@ function Dashboard() {
       <div className="dashboard-tab">飞船仪表</div>
       <div className="dashboard-panel">
 
-        {exploded ? (
-          <div className="dashboard-exploded">
-            飞行终止
-            {' '}
-            <button
-              className="dashboard-ctrl-btn"
-              onClick={reset}
-            >
-              重新出发
-            </button>
-          </div>
-        ) : (
+        {exploded ? null : (
           <div className="dashboard-panel-body">
             <div className="dashboard-column">
               <div className="dashboard-column-title">基本参数</div>
