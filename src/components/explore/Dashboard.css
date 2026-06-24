@@ -167,14 +167,17 @@
 }
 
 .dashboard-thrust-row {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  margin-top: 16px;
 }
 
 .dashboard-thrust-header {
+  position: absolute;
+  top: -14px;
+  left: 0;
+  right: 0;
   text-align: center;
-  padding-bottom: 4px;
 }
 
 .dashboard-thrust-title {
