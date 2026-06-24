@@ -17,13 +17,14 @@ export interface SpaceshipStore extends SpaceshipState {
   sessionStartTime: number;
   crashBodyId: string | null;
   crashPosition: [number, number, number];
+  crashBodyPosition: [number, number, number];
 
   setForwardThrust: (v: number) => void;
   setLateralThrust: (v: number) => void;
   setVerticalThrust: (v: number) => void;
   setThrustMagnitude: (m: number) => void;
   setDirection: (d: [number, number, number]) => void;
-  setExploded: (bodyId: string, position: [number, number, number]) => void;
+  setExploded: (bodyId: string, position: [number, number, number], bodyPosition: [number, number, number]) => void;
   setExplosionPhase: (phase: ExplosionPhase) => void;
   updateFlightStats: (distanceKm: number, speedKms: number) => void;
   toggleRunning: () => void;
@@ -87,6 +88,7 @@ const initialState = {
   sessionStartTime: now,
   crashBodyId: null as string | null,
   crashPosition: [0, 0, 0] as [number, number, number],
+  crashBodyPosition: [0, 0, 0] as [number, number, number],
 };
 
 export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
@@ -97,12 +99,13 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
   setVerticalThrust: (v) => set(s => ({ thrust: [s.thrust[0], s.thrust[1], v] })),
   setThrustMagnitude: (m) => set({ thrustMagnitude: m }),
   setDirection: (d) => set({ direction: d }),
-  setExploded: (bodyId, position) => set({
+  setExploded: (bodyId, position, bodyPosition) => set({
     exploded: true,
     isRunning: false,
     explosionPhase: 'exploding',
     crashBodyId: bodyId,
     crashPosition: position,
+    crashBodyPosition: bodyPosition,
   }),
   setExplosionPhase: (phase) => set({ explosionPhase: phase }),
   updateFlightStats: (distanceKm, speedKms) => set(s => ({
@@ -126,6 +129,7 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     sessionStartTime: Date.now(),
     crashBodyId: null as string | null,
     crashPosition: [0, 0, 0] as [number, number, number],
+    crashBodyPosition: [0, 0, 0] as [number, number, number],
   })),
   yaw: (angle) => set(s => ({ direction: rotateYaw(s.direction, angle), attitudeMode: 'inertial' as AttitudeMode })),
   pitch: (angle) => set(s => ({ direction: rotatePitch(s.direction, angle), attitudeMode: 'inertial' as AttitudeMode })),

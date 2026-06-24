@@ -30,6 +30,36 @@ function formatDistance(km: number): string {
   return `${(km / 1e9).toFixed(2)} 十亿 km`;
 }
 
+function toLatLon(
+  crashPos: [number, number, number],
+  bodyPos: [number, number, number],
+  axialTilt: number,
+): { lat: number; lon: number } {
+  const dx = crashPos[0] - bodyPos[0];
+  const dy = crashPos[1] - bodyPos[1];
+  const dz = crashPos[2] - bodyPos[2];
+  const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+  if (dist < 1e-20) return { lat: 0, lon: 0 };
+
+  const nx = dx / dist;
+  const ny = dy / dist;
+  const nz = dz / dist;
+
+  const cosT = Math.cos(-axialTilt);
+  const sinT = Math.sin(-axialTilt);
+  const ty = ny * cosT - nz * sinT;
+  const tz = ny * sinT + nz * cosT;
+
+  const latRad = Math.asin(Math.max(-1, Math.min(1, tz)));
+  const lonRad = Math.atan2(ty, nx);
+
+  return {
+    lat: (latRad * 180) / Math.PI,
+    lon: ((lonRad * 180) / Math.PI + 360) % 360,
+  };
+}
+
 export default function CrashOverlay() {
   const phase = useSpaceshipStore(s => s.explosionPhase);
   const totalDistanceKm = useSpaceshipStore(s => s.totalDistanceKm);
@@ -38,11 +68,19 @@ export default function CrashOverlay() {
   const simulatedTime = useSpaceshipStore(s => s.simulatedTime);
   const crashBodyId = useSpaceshipStore(s => s.crashBodyId);
   const crashPosition = useSpaceshipStore(s => s.crashPosition);
+  const crashBodyPosition = useSpaceshipStore(s => s.crashBodyPosition);
 
   if (phase !== 'complete') return null;
 
-  const bodyName = crashBodyId ? (REAL_DATA[crashBodyId]?.name || crashBodyId) : '未知';
+  const bodyData = crashBodyId ? REAL_DATA[crashBodyId] : null;
+  const bodyName = bodyData?.name || crashBodyId || '未知';
+  const axialTilt = bodyData?.orbital?.axialTilt ?? 0;
   const flightDuration = simulatedTime - sessionStartTime;
+  const latlon = toLatLon(crashPosition, crashBodyPosition, axialTilt);
+
+  const latStr = latlon.lat >= 0
+    ? `北纬 ${latlon.lat.toFixed(2)}°`
+    : `南纬 ${(-latlon.lat).toFixed(2)}°`;
 
   const reset = () => {
     useSpaceshipStore.getState().reset();
@@ -68,11 +106,9 @@ export default function CrashOverlay() {
           </div>
           <div className="crash-stat-item">
             <span className="crash-stat-label">坠毁地点</span>
-            <span className="crash-stat-value">
-              {bodyName}
-            </span>
+            <span className="crash-stat-value">{bodyName}</span>
             <span className="crash-stat-coords">
-              ({crashPosition[0].toFixed(4)}, {crashPosition[1].toFixed(4)}, {crashPosition[2].toFixed(4)}) AU
+              {latStr}，东经 {latlon.lon.toFixed(2)}°
             </span>
           </div>
         </div>

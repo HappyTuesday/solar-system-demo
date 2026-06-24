@@ -473,9 +473,11 @@ function ExploreCanvas() {
         if (hitBodyId) {
           wasExplodedRef.current = true;
           playExplosionSound();
+          const hitBody = bodyInfos.find(b => b.id === hitBodyId);
           store.setExploded(
             hitBodyId,
             [shipState.position[0], shipState.position[1], shipState.position[2]],
+            hitBody ? hitBody.position : [0, 0, 0],
           );
 
           const expPos = new THREE.Vector3(
