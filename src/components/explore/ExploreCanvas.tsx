@@ -505,6 +505,8 @@ function ExploreCanvas() {
       if (store.isRunning && dt > 0 && !store.exploded) {
         const clampedDt = Math.min(dt, 0.1);
 
+        simulatedTime = store.simulatedTime;
+
         const worldThrust = applyThrustInBodyFrame(
           store.thrust[0],
           store.thrust[1],
