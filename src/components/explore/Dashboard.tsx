@@ -14,7 +14,7 @@ const RotationRate = Math.PI / 3;
 const G_EARTH = 9.81;
 
 function thrustToG(magnitude: number): number {
-  const accelAU = SPACECRAFT_CONFIG.maxThrustAU * Math.pow(magnitude / 100, 2);
+  const accelAU = SPACECRAFT_CONFIG.maxThrustAU * (magnitude / 100);
   return (accelAU * AU_TO_M) / G_EARTH;
 }
 

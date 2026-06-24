@@ -33,7 +33,7 @@ export function applyThrustInBodyFrame(
     right[0] * dir[1] - right[1] * dir[0],
   ]);
 
-  const thrustAccel = SPACECRAFT_CONFIG.maxThrustAU * Math.pow(magnitude / 100, 2);
+  const thrustAccel = SPACECRAFT_CONFIG.maxThrustAU * (magnitude / 100);
   const tx = dir[0] * forwardBack * thrustAccel +
             right[0] * leftRight * thrustAccel +
             up[0] * upDown * thrustAccel;
