@@ -169,21 +169,20 @@
 .dashboard-thrust-row {
   position: relative;
   display: flex;
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .dashboard-thrust-header {
   position: absolute;
-  top: -14px;
+  top: -12px;
   left: 0;
   right: 0;
   text-align: center;
 }
 
 .dashboard-thrust-title {
-  font-size: 9px;
-  color: #667788;
-  letter-spacing: 1px;
+  font-size: 7px;
+  color: #445566;
 }
 
 .thrust-slider-wrap {
