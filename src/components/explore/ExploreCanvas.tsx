@@ -276,10 +276,10 @@ function ExploreCanvas() {
       es.active = false;
     } else {
       es.active = true;
-      const noiseVol = 0.05 + pct * 0.40;
-      es.gainNode.gain.setTargetAtTime(noiseVol, now, 0.05);
-      es.oscGain.gain.setTargetAtTime(noiseVol * 0.35, now, 0.05);
-      es.oscGain2.gain.setTargetAtTime(noiseVol * 0.25, now, 0.05);
+      const vol = 0.15;
+      es.gainNode.gain.setTargetAtTime(vol, now, 0.05);
+      es.oscGain.gain.setTargetAtTime(vol, now, 0.05);
+      es.oscGain2.gain.setTargetAtTime(vol, now, 0.05);
 
       const freqMul = 1.0 + pct * 2.5;
       es.bandLow.frequency.setTargetAtTime(60 * freqMul, now, 0.05);
