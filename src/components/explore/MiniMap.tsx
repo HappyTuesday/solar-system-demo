@@ -617,6 +617,39 @@ function MiniMap() {
             ctx.lineWidth = 1;
             ctx.stroke();
           }
+        } else if (targetBody) {
+          const dx = targetBody.sx - edgeAnchorX;
+          const dy = targetBody.sy - edgeAnchorY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > 0.001) {
+            const ndx = dx / dist;
+            const ndy = dy / dist;
+            const hw = usableW / 2;
+            const hh = usableH / 2;
+            let edgeX: number;
+            let edgeY: number;
+            if (Math.abs(ndx) * hh > Math.abs(ndy) * hw) {
+              edgeX = ndx > 0 ? cx + hw : cx - hw;
+              edgeY = cy + ndy * (hw / Math.abs(ndx));
+            } else {
+              edgeY = ndy > 0 ? cy + hh : cy - hh;
+              edgeX = cx + ndx * (hh / Math.abs(ndy));
+            }
+            edgeX = Math.max(PADDING, Math.min(cw - PADDING, edgeX));
+            edgeY = Math.max(PADDING, Math.min(ch - PADDING, edgeY));
+
+            const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.004);
+            const alpha = 0.1 + 0.4 * pulse;
+            for (let ring = 0; ring < 3; ring++) {
+              const radius = 2.5 + (ring + 1) * 4;
+              ctx.beginPath();
+              ctx.arc(edgeX, edgeY, radius, 0, Math.PI * 2);
+              const ringAlpha = alpha * (1 - ring * 0.3);
+              ctx.strokeStyle = hexToRgba(targetBody.color, ringAlpha);
+              ctx.lineWidth = 1;
+              ctx.stroke();
+            }
+          }
         }
       }
 
