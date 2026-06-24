@@ -12,7 +12,7 @@ const SCALE = 1 / 1.496e11;
 const ORBIT_LINE_POINTS = 256;
 const AU_TO_KM = 1.496e8;
 
-const REAR_MIRROR_FOV = 35;
+const REAR_MIRROR_FOV = 65;
 const SIDE_MIRROR_FOV = 55;
 const CAMERA_NEAR = 1e-7;
 const CAMERA_FAR = 500;
