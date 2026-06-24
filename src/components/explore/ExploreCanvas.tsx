@@ -188,6 +188,89 @@ function ExploreCanvas() {
 
   const audioCtxRef = useRef<AudioContext | null>(null);
 
+  const engineSoundRef = useRef<{
+    noiseSource: AudioBufferSourceNode;
+    osc: OscillatorNode;
+    gainNode: GainNode;
+    oscGain: GainNode;
+    active: boolean;
+  } | null>(null);
+
+  function startEngineSound() {
+    try {
+      if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') ctx.resume();
+
+      const bufferSize = ctx.sampleRate * 2;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      const noiseSource = ctx.createBufferSource();
+      noiseSource.buffer = buffer;
+      noiseSource.loop = true;
+
+      const lowPass = ctx.createBiquadFilter();
+      lowPass.type = 'lowpass';
+      lowPass.frequency.value = 100;
+      lowPass.Q.value = 2;
+
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = 0;
+
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = 40;
+
+      const oscGain = ctx.createGain();
+      oscGain.gain.value = 0;
+
+      noiseSource.connect(lowPass);
+      lowPass.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      osc.connect(oscGain);
+      oscGain.connect(ctx.destination);
+
+      noiseSource.start();
+      osc.start();
+
+      engineSoundRef.current = { noiseSource, osc, gainNode, oscGain, active: false };
+    } catch {
+      // audio not available
+    }
+  }
+
+  function setEngineVolume(magnitude: number) {
+    const es = engineSoundRef.current;
+    if (!es || !audioCtxRef.current) return;
+    const pct = magnitude / 100;
+    const now = audioCtxRef.current.currentTime;
+    if (pct <= 0.001) {
+      es.gainNode.gain.setTargetAtTime(0, now, 0.15);
+      es.oscGain.gain.setTargetAtTime(0, now, 0.15);
+      es.active = false;
+    } else {
+      es.active = true;
+      const volume = 0.04 + pct * 0.30;
+      es.gainNode.gain.setTargetAtTime(volume, now, 0.06);
+      es.oscGain.gain.setTargetAtTime(volume * 0.4, now, 0.06);
+    }
+  }
+
+  function destroyEngineSound() {
+    const es = engineSoundRef.current;
+    if (!es) return;
+    try {
+      es.noiseSource.stop();
+      es.osc.stop();
+    } catch {
+      // already stopped
+    }
+    engineSoundRef.current = null;
+  }
+
   function playExplosionSound() {
     try {
       if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
@@ -370,6 +453,13 @@ function ExploreCanvas() {
     const animate = (time: number) => {
       const store = useSpaceshipStore.getState();
 
+      if (store.isRunning && !store.exploded && store.thrustMagnitude > 0) {
+        if (!engineSoundRef.current) startEngineSound();
+        setEngineVolume(store.thrustMagnitude);
+      } else if (engineSoundRef.current?.active) {
+        setEngineVolume(0);
+      }
+
       if (!store.exploded && wasExplodedRef.current) {
         simulatedTime = store.simulatedTime;
         smoothDirRef.current.set(store.direction[0], store.direction[1], store.direction[2]);
@@ -472,6 +562,7 @@ function ExploreCanvas() {
         const hitBodyId = checkSpaceshipCollision(shipState, bodyInfos);
         if (hitBodyId) {
           wasExplodedRef.current = true;
+          setEngineVolume(0);
           playExplosionSound();
           const hitBody = bodyInfos.find(b => b.id === hitBodyId);
           store.setExploded(
@@ -809,6 +900,7 @@ function ExploreCanvas() {
       window.removeEventListener('resize', onResize);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      destroyEngineSound();
 
       const expRef = explosionRef.current;
       if (expRef.particles) {
