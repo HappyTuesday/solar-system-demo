@@ -850,7 +850,7 @@ function ExploreCanvas() {
         style={{
         position: 'absolute', top: 0, left: '50%',
         transform: `translateX(-50%) translateY(${(hoveredMirror === 'rear' || pinnedMirrors.has('rear')) ? '0' : 'calc(-100% + 18px)'})`,
-        width: '28%', height: '12%', maxWidth: 380, minWidth: 150,
+        width: '28%', height: '20%', maxWidth: 380, minWidth: 150, minHeight: 120,
         overflow: 'hidden',
         border: '1px solid rgba(140,170,210,0.25)',
         borderTop: 'none',
