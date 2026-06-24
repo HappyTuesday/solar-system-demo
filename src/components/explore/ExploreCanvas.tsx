@@ -194,6 +194,8 @@ function ExploreCanvas() {
     gainNode: GainNode;
     oscGain: GainNode;
     active: boolean;
+    osc2: OscillatorNode;
+    oscGain2: GainNode;
   } | null>(null);
 
   function startEngineSound() {
@@ -202,41 +204,59 @@ function ExploreCanvas() {
       const ctx = audioCtxRef.current;
       if (ctx.state === 'suspended') ctx.resume();
 
-      const bufferSize = ctx.sampleRate * 2;
+      const bufferSize = ctx.sampleRate * 4;
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const data = buffer.getChannelData(0);
+      let brown = 0;
       for (let i = 0; i < bufferSize; i++) {
-        data[i] = Math.random() * 2 - 1;
+        brown += (Math.random() * 2 - 1) * 0.02;
+        brown = Math.max(-1, Math.min(1, brown));
+        data[i] = brown;
       }
       const noiseSource = ctx.createBufferSource();
       noiseSource.buffer = buffer;
       noiseSource.loop = true;
 
-      const lowPass = ctx.createBiquadFilter();
-      lowPass.type = 'lowpass';
-      lowPass.frequency.value = 100;
-      lowPass.Q.value = 2;
+      const bandLow = ctx.createBiquadFilter();
+      bandLow.type = 'bandpass';
+      bandLow.frequency.value = 60;
+      bandLow.Q.value = 1.0;
+
+      const bandMid = ctx.createBiquadFilter();
+      bandMid.type = 'bandpass';
+      bandMid.frequency.value = 160;
+      bandMid.Q.value = 2.0;
 
       const gainNode = ctx.createGain();
       gainNode.gain.value = 0;
 
       const osc = ctx.createOscillator();
       osc.type = 'sawtooth';
-      osc.frequency.value = 40;
-
+      osc.frequency.value = 25;
       const oscGain = ctx.createGain();
       oscGain.gain.value = 0;
 
-      noiseSource.connect(lowPass);
-      lowPass.connect(gainNode);
+      const osc2 = ctx.createOscillator();
+      osc2.type = 'triangle';
+      osc2.frequency.value = 55;
+      const oscGain2 = ctx.createGain();
+      oscGain2.gain.value = 0;
+
+      noiseSource.connect(bandLow);
+      noiseSource.connect(bandMid);
+      bandLow.connect(gainNode);
+      bandMid.connect(gainNode);
       gainNode.connect(ctx.destination);
       osc.connect(oscGain);
       oscGain.connect(ctx.destination);
+      osc2.connect(oscGain2);
+      oscGain2.connect(ctx.destination);
 
       noiseSource.start();
       osc.start();
+      osc2.start();
 
-      engineSoundRef.current = { noiseSource, osc, gainNode, oscGain, active: false };
+      engineSoundRef.current = { noiseSource, osc, gainNode, oscGain, osc2, oscGain2, active: false };
     } catch {
       // audio not available
     }
@@ -248,14 +268,16 @@ function ExploreCanvas() {
     const pct = magnitude / 100;
     const now = audioCtxRef.current.currentTime;
     if (pct <= 0.001) {
-      es.gainNode.gain.setTargetAtTime(0, now, 0.15);
-      es.oscGain.gain.setTargetAtTime(0, now, 0.15);
+      es.gainNode.gain.setTargetAtTime(0, now, 0.2);
+      es.oscGain.gain.setTargetAtTime(0, now, 0.2);
+      es.oscGain2.gain.setTargetAtTime(0, now, 0.2);
       es.active = false;
     } else {
       es.active = true;
-      const volume = 0.04 + pct * 0.30;
-      es.gainNode.gain.setTargetAtTime(volume, now, 0.06);
-      es.oscGain.gain.setTargetAtTime(volume * 0.4, now, 0.06);
+      const noiseVol = 0.05 + pct * 0.40;
+      es.gainNode.gain.setTargetAtTime(noiseVol, now, 0.05);
+      es.oscGain.gain.setTargetAtTime(noiseVol * 0.35, now, 0.05);
+      es.oscGain2.gain.setTargetAtTime(noiseVol * 0.25, now, 0.05);
     }
   }
 
@@ -265,6 +287,7 @@ function ExploreCanvas() {
     try {
       es.noiseSource.stop();
       es.osc.stop();
+      es.osc2.stop();
     } catch {
       // already stopped
     }
