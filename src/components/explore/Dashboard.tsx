@@ -327,6 +327,10 @@ function Dashboard() {
                   </div>
                 </div>
                 <div className="dashboard-thrust-row">
+                  <div className="dashboard-thrust-header">
+                    <span className="dashboard-thrust-title">推力</span>
+                    <span className="dashboard-thrust-value">{thrustMagnitude} <span className="dashboard-thrust-unit">MN</span></span>
+                  </div>
                   <div
                     className="thrust-slider-wrap"
                     ref={sliderTrackRef}
