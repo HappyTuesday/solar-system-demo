@@ -300,7 +300,7 @@ function ExploreCanvas() {
     }
 
     const rearWCss_init = clampMirrorSize(Math.round(w * 0.28), 150, 380);
-    const rearHCss_init = Math.round(h * 0.12);
+    const rearHCss_init = Math.round(h * 0.20);
     const sideWCss_init = clampMirrorSize(Math.round(w * 0.12), 70, 160);
     const sideHCss_init = Math.max(140, Math.round(h * 0.32));
 
@@ -709,7 +709,7 @@ function ExploreCanvas() {
       if (rw <= 0 || rh <= 0) { animRef.current = requestAnimationFrame(animate); return; }
 
       const rearWCss = clampMirrorSize(Math.round(rw * 0.28), 150, 380);
-      const rearHCss = Math.round(rh * 0.12);
+      const rearHCss = Math.round(rh * 0.20);
       const sideWCss = clampMirrorSize(Math.round(rw * 0.12), 70, 160);
       const sideHCss = Math.max(140, Math.round(rh * 0.32));
 
