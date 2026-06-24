@@ -171,6 +171,7 @@ function ExploreCanvas() {
   const allIdsRef = useRef<string[]>(['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune']);
   const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
   const smoothDirRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 1, 0));
+  const wasExplodedRef = useRef(false);
   const keysRef = useRef<Set<string>>(new Set());
   const [hoveredMirror, setHoveredMirror] = useState<'rear' | 'left' | 'right' | null>(null);
   const [pinnedMirrors, setPinnedMirrors] = useState<Set<string>>(new Set());
@@ -367,10 +368,17 @@ function ExploreCanvas() {
     const animLookTarget = new THREE.Vector3();
 
     const animate = (time: number) => {
+      const store = useSpaceshipStore.getState();
+
+      if (!store.exploded && wasExplodedRef.current) {
+        simulatedTime = store.simulatedTime;
+        smoothDirRef.current.set(store.direction[0], store.direction[1], store.direction[2]);
+        lastTime = time;
+        wasExplodedRef.current = false;
+      }
+
       const dt = (time - lastTime) / 1000;
       lastTime = time;
-
-      const store = useSpaceshipStore.getState();
 
       if (store.isRunning && dt > 0 && !store.exploded) {
         const clampedDt = Math.min(dt, 0.1);
@@ -463,6 +471,7 @@ function ExploreCanvas() {
 
         const hitBodyId = checkSpaceshipCollision(shipState, bodyInfos);
         if (hitBodyId) {
+          wasExplodedRef.current = true;
           playExplosionSound();
           store.setExploded(
             hitBodyId,
