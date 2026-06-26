@@ -8,6 +8,14 @@ import './Dashboard.css';
 
 const RotationRate = Math.PI / 3;
 
+function formatWaitDays(days: number): string {
+  const totalSeconds = days * 86400;
+  if (totalSeconds < 60) return `${Math.round(totalSeconds)} 秒`;
+  if (totalSeconds < 3600) return `${Math.round(totalSeconds / 60)} 分`;
+  if (totalSeconds < 86400) return `${Math.round(totalSeconds / 3600)} 小时`;
+  return `${Math.round(days)} 天`;
+}
+
 function Dashboard() {
   const direction = useSpaceshipStore(s => s.direction);
   const thrustMagnitude = useSpaceshipStore(s => s.thrustMagnitude);
@@ -219,7 +227,7 @@ function Dashboard() {
                           </div>
                           <div className="dashboard-nav-phase-detail">
                             {phase.name.startsWith('等待')
-                                ? `预计等待约 ${phase.expectedWaitDays ?? 0} 天`
+                                ? `预计等待约 ${formatWaitDays(phase.expectedWaitDays ?? 0)}`
                                 : phase.thrustDirection === 'none'
                                   ? '无推力 · 等待转移'
                                   : `推力 ${phase.thrustDirection === 'forward' ? '↑' : '↓'}${phase.thrustMagnitude}MN · Δv ${phase.deltaV.toFixed(3)} AU/s`}

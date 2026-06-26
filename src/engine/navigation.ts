@@ -148,7 +148,7 @@ export function planHohmannTransfer(
       thrustMagnitude: 0,
       deltaV: 0,
       expectedSpeedKms: 0,
-      expectedWaitDays: Math.round(waitDays),
+      expectedWaitDays: waitDays,
       targetOrbit: { semiMajorAxis: aCurrentAU, eccentricity: 0 },
     });
   }
