@@ -5,6 +5,7 @@ import { REAL_DATA, MU_SUN } from '../../engine/constants';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { useExploreStore } from '../../stores/exploreStore';
 import { rk4StepSpaceship, applyThrustInBodyFrame, checkSpaceshipCollision, type BodyInfo } from '../../engine/spaceship';
+import { NAVIGATION_CONFIG } from '../../engine/constants';
 import type { SpaceshipState } from '../../types';
 import TimePanel from './TimePanel';
 
@@ -570,6 +571,15 @@ function ExploreCanvas() {
 
         simulatedTime += simDelta * 1000;
         store.setSimulatedTime(simulatedTime);
+
+        {
+          const navStore = useSpaceshipStore.getState();
+          const elapsed = (simulatedTime - navStore.lastDeviationCheckTime) / 1000;
+          if (elapsed > NAVIGATION_CONFIG.deviationCheckInterval) {
+            useSpaceshipStore.setState({ lastDeviationCheckTime: simulatedTime });
+            navStore.checkNavigationalDeviation();
+          }
+        }
 
         const finalJd = julianDate(simulatedTime);
         for (const id of allIds) {
