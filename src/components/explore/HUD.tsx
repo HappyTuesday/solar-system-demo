@@ -43,19 +43,17 @@ export default function HUD() {
 
   // Find nearest body
   let nearestBodyName = '';
-  let nearestBodyId = '';
   let nearestDistAU = Infinity;
   let nearestBodyVel: [number, number, number] = [0, 0, 0];
   let nearestBodyRadiusKm = 0;
-  let nearestBodyPos: [number, number, number] = [0, 0, 0];
 
   for (const id of ALL_IDS) {
     if (id === 'sun') {
       const dx2 = position[0] ** 2 + position[1] ** 2 + position[2] ** 2;
       const dist = Math.sqrt(dx2);
       if (dist < nearestDistAU) {
-        nearestDistAU = dist; nearestBodyId = 'sun'; nearestBodyName = '太阳';
-        nearestBodyVel = [0, 0, 0]; nearestBodyRadiusKm = REAL_DATA.sun.radius / 1000; nearestBodyPos = [0, 0, 0];
+        nearestDistAU = dist; nearestBodyName = '太阳';
+        nearestBodyVel = [0, 0, 0]; nearestBodyRadiusKm = REAL_DATA.sun.radius / 1000;
       }
     } else {
       const state = computeBodyStateFull(id, jd);
@@ -65,8 +63,8 @@ export default function HUD() {
       const dz = state.position[2] - position[2];
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
       if (dist < nearestDistAU) {
-        nearestDistAU = dist; nearestBodyId = id; nearestBodyName = REAL_DATA[id].name;
-        nearestBodyVel = state.velocity; nearestBodyRadiusKm = REAL_DATA[id].radius / 1000; nearestBodyPos = state.position;
+        nearestDistAU = dist; nearestBodyName = REAL_DATA[id].name;
+        nearestBodyVel = state.velocity; nearestBodyRadiusKm = REAL_DATA[id].radius / 1000;
       }
     }
   }

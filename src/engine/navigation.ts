@@ -56,8 +56,6 @@ export function planHohmannTransfer(
   destinationId: string,
   simulatedTime: number,
 ): NavigationPlan {
-  const jd = julianDate(simulatedTime);
-
   const aCurrentAU = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN);
 
   if (destinationId === 'sun') {
@@ -154,7 +152,7 @@ export function checkDeviation(
   shipVelocity: [number, number, number],
   plan: NavigationPlan,
   currentPhaseIdx: number,
-  simulatedTime: number,
+  _simulatedTime: number,
 ): { deviated: boolean; deviationAU: number; deviationKms: number } {
   if (currentPhaseIdx < 0 || currentPhaseIdx >= plan.phases.length) {
     return { deviated: false, deviationAU: 0, deviationKms: 0 };
