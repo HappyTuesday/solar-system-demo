@@ -132,6 +132,7 @@ export function planHohmannTransfer(
 
     if (angleToWait > 0.05) { // More than ~3 degrees off — need waiting
       waitDays = (angleToWait / TWO_PI) * synodicDays;
+      if (waitDays < 1) waitDays = 1;
       hasWaitingPhase = true;
     }
   }
@@ -142,7 +143,7 @@ export function planHohmannTransfer(
   if (hasWaitingPhase) {
     phases.push({
       index: 0,
-      name: `等待发射窗口 · 约${Math.round(waitDays)}天`,
+      name: '等待发射窗口',
       thrustDirection: 'none',
       thrustMagnitude: 0,
       deltaV: 0,
