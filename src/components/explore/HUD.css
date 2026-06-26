@@ -1,6 +1,6 @@
 .hud-container {
   position: fixed;
-  bottom: 130px;
+  bottom: 175px;
   left: 50%;
   transform: translateX(-50%);
   width: 1100px;
