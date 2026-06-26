@@ -218,9 +218,11 @@ function Dashboard() {
                             阶段{phase.index + 1}：{phase.name}
                           </div>
                           <div className="dashboard-nav-phase-detail">
-                            {phase.thrustDirection === 'none'
-                              ? '无推力 · 等待转移'
-                              : `推力 ${phase.thrustDirection === 'forward' ? '↑' : '↓'}${phase.thrustMagnitude}MN · Δv ${phase.deltaV.toFixed(3)} AU/s`}
+                            {phase.name.startsWith('等待')
+                              ? `等待窗口 · 约${phase.expectedWaitDays ?? 0}天`
+                              : phase.thrustDirection === 'none'
+                                ? '无推力 · 等待转移'
+                                : `推力 ${phase.thrustDirection === 'forward' ? '↑' : '↓'}${phase.thrustMagnitude}MN · Δv ${phase.deltaV.toFixed(3)} AU/s`}
                           </div>
                         </div>
                       </div>
