@@ -533,6 +533,83 @@ function MiniMap() {
         ctx.restore();
       }
 
+      // --- Navigation orbit lines ---
+      const navPlan = useSpaceshipStore.getState().navigationPlan;
+      if (navPlan && navPlan.phases.length > 0) {
+        const navActivePhase = useSpaceshipStore.getState().activePhaseIndex;
+        if (navActivePhase >= 0 && navActivePhase < navPlan.phases.length) {
+          const phase = navPlan.phases[navActivePhase];
+
+          // Green dashed: active phase target navigation orbit
+          const navOrbitAU = phase.targetOrbit.semiMajorAxis;
+          const navEcc = phase.targetOrbit.eccentricity;
+          const navAPx = navOrbitAU * scale;
+
+          if (navAPx > 0.5 && navAPx < usable * 5) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(0, 255, 136, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 2]);
+            ctx.beginPath();
+
+            const b = navAPx * Math.sqrt(1 - navEcc * navEcc);
+            for (let i = 0; i <= 128; i++) {
+              const angle = (i / 128) * Math.PI * 2;
+              const ox = cx + Math.cos(angle) * navAPx;
+              const oy = cy - Math.sin(angle) * b;
+              if (i === 0) ctx.moveTo(ox, oy);
+              else ctx.lineTo(ox, oy);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+          }
+        }
+
+        // Red dashed: destination body's orbital path
+        const destData = REAL_DATA[navPlan.destinationId];
+        if (destData && destData.semiMajorAxis && destData.orbital && navPlan.destinationId !== 'sun') {
+          const destAU = destData.semiMajorAxis / 1.496e11;
+          const destPx = destAU * scale;
+          const destEcc = destData.orbital.eccentricity;
+
+          if (destPx > 0.5 && destPx < usable * 5) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 68, 68, 0.4)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 2]);
+            ctx.beginPath();
+
+            const bDest = destPx * Math.sqrt(1 - destEcc * destEcc);
+            for (let i = 0; i <= 128; i++) {
+              const angle = (i / 128) * Math.PI * 2;
+              const ox = cx + Math.cos(angle) * destPx;
+              const oy = cy - Math.sin(angle) * bDest;
+              if (i === 0) ctx.moveTo(ox, oy);
+              else ctx.lineTo(ox, oy);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+          }
+        }
+      }
+
+      // Blue: current orbit around nearest body (use nearestDistAU as radius)
+      if (isZoomed && nearestDistAU > 1e-12) {
+        const orbitRadiusPx = nearestDistAU * scale;
+        if (orbitRadiusPx > 2 && orbitRadiusPx < usable * 3) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(68, 136, 255, 0.5)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([]);
+          ctx.beginPath();
+          ctx.arc(cx, cy, orbitRadiusPx, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
       // Draw bodies in view
       for (const b of bodies) {
         if (!b.inView) continue;
@@ -700,6 +777,50 @@ function MiniMap() {
         ? `▲ ${REAL_DATA[nearestId]?.name || '天体'} · 绕飞视图`
         : '▲ 飞船 · 俯视图';
       ctx.fillText(legendText, 4, ch - 4);
+
+      // --- Legend at bottom (only when navigation plan exists) ---
+      const navPlanLegend = useSpaceshipStore.getState().navigationPlan;
+      if (navPlanLegend) {
+        ctx.save();
+        ctx.fillStyle = '#445566';
+        ctx.font = '7px monospace';
+        ctx.textAlign = 'left';
+        const legendY = ch - 6;
+
+        // Blue dot = current orbit
+        ctx.fillStyle = '#4488ff';
+        ctx.beginPath();
+        ctx.arc(cw - 180, legendY, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#445566';
+        ctx.fillText('当前轨道', cw - 174, legendY + 2.5);
+
+        // Red dash = target orbit
+        ctx.strokeStyle = 'rgba(255,68,68,0.6)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 2]);
+        ctx.beginPath();
+        ctx.moveTo(cw - 120, legendY);
+        ctx.lineTo(cw - 100, legendY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#445566';
+        ctx.fillText('目标绕飞', cw - 94, legendY + 2.5);
+
+        // Green dash = nav orbit
+        ctx.strokeStyle = 'rgba(0,255,136,0.6)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 1.5]);
+        ctx.beginPath();
+        ctx.moveTo(cw - 55, legendY);
+        ctx.lineTo(cw - 35, legendY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#445566';
+        ctx.fillText('导航轨道', cw - 29, legendY + 2.5);
+
+        ctx.restore();
+      }
 
       ctx.restore();
       if (running) rafRef.current = requestAnimationFrame(draw);
