@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import type { SpaceshipState, AttitudeMode } from '../types';
 import { createSpaceshipState } from '../engine/orbitalInjection';
+import type { NavigationPlan } from '../engine/navigation';
+import { planHohmannTransfer, checkPhaseCompletion, checkDeviation } from '../engine/navigation';
+import { NAVIGATION_CONFIG } from '../engine/constants';
 
 export type ExplosionPhase = 'none' | 'exploding' | 'complete';
 
@@ -10,6 +13,13 @@ export interface SpaceshipStore extends SpaceshipState {
   simulatedTime: number;
   attitudeMode: AttitudeMode;
   targetBodyId: string | null;
+
+  // 导航
+  navigationPlan: NavigationPlan | null;
+  activePhaseIndex: number;
+  deviationWarning: string | null;
+  lastDeviationCheckTime: number;
+  lastReplanTime: number;
 
   explosionPhase: ExplosionPhase;
   totalDistanceKm: number;
@@ -36,6 +46,11 @@ export interface SpaceshipStore extends SpaceshipState {
   pitch: (angle: number) => void;
   setAttitudeMode: (mode: AttitudeMode) => void;
   setTargetBody: (id: string | null) => void;
+  setNavigationPlan: (plan: NavigationPlan | null) => void;
+  setActivePhaseIndex: (idx: number) => void;
+  setDeviationWarning: (msg: string | null) => void;
+  checkNavigationalDeviation: () => void;
+  replanNavigation: () => void;
 }
 
 function rotateYaw(dir: [number, number, number], angle: number): [number, number, number] {
@@ -82,6 +97,11 @@ const initialState = {
   simulatedTime: now,
   attitudeMode: 'inertial' as AttitudeMode,
   targetBodyId: null as string | null,
+  navigationPlan: null as NavigationPlan | null,
+  activePhaseIndex: -1 as number,
+  deviationWarning: null as string | null,
+  lastDeviationCheckTime: now as number,
+  lastReplanTime: 0 as number,
   explosionPhase: 'none' as ExplosionPhase,
   totalDistanceKm: 0,
   maxSpeedKms: 0,
@@ -123,6 +143,11 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     simulatedTime: Date.now(),
     attitudeMode: 'inertial' as AttitudeMode,
     targetBodyId: null as string | null,
+    navigationPlan: null as NavigationPlan | null,
+    activePhaseIndex: -1 as number,
+    deviationWarning: null as string | null,
+    lastDeviationCheckTime: Date.now() as number,
+    lastReplanTime: 0 as number,
     explosionPhase: 'none' as ExplosionPhase,
     totalDistanceKm: 0,
     maxSpeedKms: 0,
@@ -134,8 +159,68 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
   yaw: (angle) => set(s => ({ direction: rotateYaw(s.direction, angle), attitudeMode: 'inertial' as AttitudeMode })),
   pitch: (angle) => set(s => ({ direction: rotatePitch(s.direction, angle), attitudeMode: 'inertial' as AttitudeMode })),
   setAttitudeMode: (mode) => set({ attitudeMode: mode }),
-  setTargetBody: (id) => set({
-    targetBodyId: id,
-    attitudeMode: id !== null ? 'target' as AttitudeMode : 'inertial' as AttitudeMode,
+  setTargetBody: (id) => set(s => {
+    const newMode = id !== null ? 'target' as AttitudeMode : 'inertial' as AttitudeMode;
+    if (id !== null) {
+      const plan = planHohmannTransfer(s.position, s.velocity, id, s.simulatedTime);
+      return {
+        targetBodyId: id,
+        attitudeMode: newMode,
+        navigationPlan: plan.phases.length > 0 ? plan : null,
+        activePhaseIndex: plan.phases.length > 0 ? 0 : -1,
+        deviationWarning: null,
+        lastReplanTime: s.simulatedTime,
+      };
+    }
+    return {
+      targetBodyId: null,
+      attitudeMode: newMode,
+      navigationPlan: null,
+      activePhaseIndex: -1,
+      deviationWarning: null,
+    };
   }),
+  setNavigationPlan: (plan) => set({ navigationPlan: plan }),
+  setActivePhaseIndex: (idx) => set({ activePhaseIndex: idx }),
+  setDeviationWarning: (msg) => set({ deviationWarning: msg }),
+  checkNavigationalDeviation: () => {
+    const s = useSpaceshipStore.getState();
+    if (!s.navigationPlan || s.activePhaseIndex < 0) return;
+
+    if (checkPhaseCompletion(s.position, s.velocity, s.navigationPlan, s.activePhaseIndex, s.simulatedTime)) {
+      const nextIdx = s.activePhaseIndex + 1;
+      if (nextIdx < s.navigationPlan.phases.length) {
+        useSpaceshipStore.setState({ activePhaseIndex: nextIdx, deviationWarning: null });
+      }
+      return;
+    }
+
+    const result = checkDeviation(s.position, s.velocity, s.navigationPlan, s.activePhaseIndex, s.simulatedTime);
+    if (result.deviated) {
+      const cooldown = s.simulatedTime - s.lastReplanTime;
+      if (cooldown > NAVIGATION_CONFIG.rePlanCooldownSec * 1000) {
+        useSpaceshipStore.setState({ deviationWarning: `偏离预定轨道 ${result.deviationKms.toFixed(0)} km，正在重规划...` });
+        useSpaceshipStore.getState().replanNavigation();
+      }
+    }
+  },
+  replanNavigation: () => {
+    const s = useSpaceshipStore.getState();
+    if (!s.navigationPlan || s.activePhaseIndex < 0) return;
+    const plan = planHohmannTransfer(s.position, s.velocity, s.navigationPlan.destinationId, s.simulatedTime);
+    if (plan.phases.length <= s.activePhaseIndex) {
+      useSpaceshipStore.setState({
+        navigationPlan: { ...plan, phases: plan.phases },
+        activePhaseIndex: 0,
+        deviationWarning: '路线已重规划',
+        lastReplanTime: s.simulatedTime,
+      });
+    } else {
+      useSpaceshipStore.setState({
+        navigationPlan: { ...plan, phases: plan.phases },
+        deviationWarning: '路线已重规划',
+        lastReplanTime: s.simulatedTime,
+      });
+    }
+  },
 }));
