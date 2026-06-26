@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { REAL_DATA } from '../../engine/constants';
 import type { AttitudeMode } from '../../types';
@@ -38,6 +38,7 @@ function Dashboard() {
   const [showTargetModal, setShowTargetModal] = useState(false);
 
   const sliderTrackRef = useRef<HTMLDivElement>(null);
+  const navPhasesRef = useRef<HTMLDivElement>(null);
 
   const updateThrustFromClientX = useCallback((clientX: number) => {
     const track = sliderTrackRef.current;
@@ -90,6 +91,14 @@ function Dashboard() {
       intervalRef.current = null;
     }
   }, []);
+
+  useEffect(() => {
+    if (!navPhasesRef.current || activePhaseIndex < 0) return;
+    const activeEl = navPhasesRef.current.querySelector('.dashboard-nav-phase.active');
+    if (activeEl) {
+      activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [activePhaseIndex]);
 
   const getPhaseStatus = (phaseIdx: number): 'completed' | 'active' | 'pending' => {
     if (phaseIdx < activePhaseIndex) return 'completed';
@@ -214,7 +223,7 @@ function Dashboard() {
               </div>
 
               {navigationPlan && navigationPlan.phases.length > 0 ? (
-                <div className="dashboard-nav-phases">
+                <div className="dashboard-nav-phases" ref={navPhasesRef}>
                   {navigationPlan.phases.map((phase) => {
                     const status = getPhaseStatus(phase.index);
                     const icon = status === 'completed' ? '✓' : status === 'active' ? '→' : '○';
