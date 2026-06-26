@@ -202,7 +202,7 @@ function Dashboard() {
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setShowTargetModal(true)}
               >
-                设置目的地
+                前往目的地
               </div>
 
               {navigationPlan && navigationPlan.phases.length > 0 ? (

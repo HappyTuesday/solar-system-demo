@@ -160,12 +160,10 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
   pitch: (angle) => set(s => ({ direction: rotatePitch(s.direction, angle), attitudeMode: 'inertial' as AttitudeMode })),
   setAttitudeMode: (mode) => set({ attitudeMode: mode }),
   setTargetBody: (id) => set(s => {
-    const newMode = id !== null ? 'target' as AttitudeMode : 'inertial' as AttitudeMode;
     if (id !== null) {
       const plan = planHohmannTransfer(s.position, s.velocity, id, s.simulatedTime);
       return {
         targetBodyId: id,
-        attitudeMode: newMode,
         navigationPlan: plan.phases.length > 0 ? plan : null,
         activePhaseIndex: plan.phases.length > 0 ? 0 : -1,
         deviationWarning: null,
@@ -174,7 +172,6 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     }
     return {
       targetBodyId: null,
-      attitudeMode: newMode,
       navigationPlan: null,
       activePhaseIndex: -1,
       deviationWarning: null,
