@@ -1,6 +1,7 @@
 import ExploreCanvas from '../components/explore/ExploreCanvas';
 import Dashboard from '../components/explore/Dashboard';
 import HUD from '../components/explore/HUD';
+import PhaseGuide from '../components/explore/PhaseGuide';
 import CrashOverlay from '../components/explore/CrashOverlay';
 import './ExplorePage.css';
 
@@ -12,6 +13,7 @@ function ExplorePage() {
       </div>
       <HUD />
       <Dashboard />
+      <PhaseGuide />
       <CrashOverlay />
     </div>
   );

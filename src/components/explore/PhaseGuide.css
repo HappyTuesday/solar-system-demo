@@ -1,0 +1,39 @@
+.phase-guide-container {
+  position: fixed;
+  bottom: 0;
+  left: calc(50% + 510px);
+  z-index: 55;
+  pointer-events: none;
+  font-family: 'Courier New', monospace;
+  padding: 10px 14px 24px;
+  max-width: 260px;
+}
+
+.phase-guide-title {
+  font-size: 9px;
+  color: #445566;
+  margin-bottom: 6px;
+}
+
+.phase-guide-phase-name {
+  font-size: 11px;
+  color: #ffcc00;
+  margin-bottom: 6px;
+}
+
+.phase-guide-instruction {
+  font-size: 10px;
+  color: #8899bb;
+  line-height: 1.6;
+}
+
+.phase-guide-instruction span {
+  display: block;
+}
+
+.phase-guide-note {
+  font-size: 9px;
+  color: #556677;
+  margin-top: 6px;
+  line-height: 1.5;
+}
