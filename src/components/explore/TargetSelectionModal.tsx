@@ -71,7 +71,7 @@ function TargetSelectionModal({ bodies, currentTarget, onSelect, onClose }: Prop
     <div className="target-modal-overlay" onClick={handleOverlayClick}>
       <div className="target-modal-panel">
         <div className="target-modal-header">
-          <span className="target-modal-title">选择目标天体</span>
+          <span className="target-modal-title">选择目的地天体</span>
           <button className="target-modal-close-btn" onClick={onClose}>✕</button>
         </div>
         <div className="target-modal-list">
