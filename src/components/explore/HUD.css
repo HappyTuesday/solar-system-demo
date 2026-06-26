@@ -1,0 +1,71 @@
+.hud-container {
+  position: fixed;
+  bottom: 130px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1100px;
+  z-index: 50;
+  pointer-events: none;
+  font-family: 'Courier New', monospace;
+  padding: 0 18px;
+}
+
+.hud-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+
+.hud-row-orbital {
+  font-size: 10px;
+  color: #778899;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.hud-row-basic {
+  font-size: 10px;
+  color: #778899;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.hud-label {
+  color: #556677;
+}
+
+.hud-value-green {
+  color: #00ff88;
+}
+
+.hud-value-blue {
+  color: #88ccff;
+}
+
+.hud-value-yellow {
+  color: #ffcc00;
+}
+
+.hud-value-orange {
+  color: #ffaa33;
+}
+
+.hud-value-cyan {
+  color: #00b8ff;
+}
+
+.hud-value-brown {
+  color: #ccaa88;
+}
+
+.hud-value-purple {
+  color: #cc88ff;
+}
+
+.hud-unit {
+  color: #445566;
+  font-size: 7px;
+}
