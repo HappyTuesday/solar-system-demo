@@ -23,6 +23,7 @@
 .dashboard-panel-body {
   display: flex;
   gap: 24px;
+  min-height: 160px;
 }
 
 .dashboard-column {
