@@ -1,9 +1,9 @@
 .hud-container {
   position: fixed;
-  bottom: 200px;
+  bottom: 230px;
   left: 50%;
   transform: translateX(-50%);
-  width: 1100px;
+  width: 1000px;
   z-index: 50;
   pointer-events: none;
   font-family: 'Courier New', monospace;
