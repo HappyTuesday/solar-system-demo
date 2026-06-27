@@ -587,7 +587,29 @@ function ExploreCanvas() {
           const mesh = bodyMeshes.get(id);
           if (!mesh) continue;
           const pos = computeBodyPosition(id, finalJd);
-          if (pos) mesh.position.set(pos[0], pos[1], pos[2]);
+          if (pos) {
+            mesh.position.set(pos[0], pos[1], pos[2]);
+            // Minimum visible size: every body visible at least as a tiny dot
+            const dist = camera.position.distanceTo(mesh.position);
+            const minVisibleAU = 0.003; // ~1 pixel equivalent at 1 AU
+            if (dist > minVisibleAU) {
+              mesh.scale.setScalar(dist / minVisibleAU);
+            } else {
+              mesh.scale.setScalar(1);
+            }
+          }
+        }
+
+        // Sun minimum visible size
+        const sunMesh = bodyMeshes.get('sun');
+        if (sunMesh) {
+          const sunDist = camera.position.length();
+          const minVisibleAU = 0.003;
+          if (sunDist > minVisibleAU) {
+            sunMesh.scale.setScalar(sunDist / minVisibleAU);
+          } else {
+            sunMesh.scale.setScalar(1);
+          }
         }
 
         const bodyInfos: BodyInfo[] = [];
