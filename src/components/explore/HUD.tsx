@@ -1,22 +1,21 @@
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
-import { REAL_DATA } from '../../engine/constants';
+import { REAL_DATA, MU_SUN } from '../../engine/constants';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
 import './HUD.css';
 
 const SCALE = 1 / 1.496e11;
 const AU_TO_KM = 1.496e8;
-const MU_SUN_VALUE = 1.32712440018e20;
 
 function computeBodyStateFull(templateId: string, jd: number) {
   const data = REAL_DATA[templateId];
   if (!data || !data.semiMajorAxis || !data.orbital) return null;
   const o = data.orbital;
-  const period = orbitalPeriod(data.semiMajorAxis, MU_SUN_VALUE);
+  const period = orbitalPeriod(data.semiMajorAxis, MU_SUN);
   const M = meanAnomalyAtTime(o.meanAnomalyAtEpoch, period, o.epoch, jd);
   const Mmod = ((M % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
   const E = solveKepler(Mmod, o.eccentricity);
   const nu = trueAnomaly(E, o.eccentricity);
-  const sv = stateVectors(data.semiMajorAxis, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN_VALUE);
+  const sv = stateVectors(data.semiMajorAxis, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN);
   return {
     position: [sv.position[0] * SCALE, sv.position[1] * SCALE, sv.position[2] * SCALE] as [number, number, number],
     velocity: [sv.velocity[0] * SCALE, sv.velocity[1] * SCALE, sv.velocity[2] * SCALE] as [number, number, number],
