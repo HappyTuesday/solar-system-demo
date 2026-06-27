@@ -54,6 +54,7 @@ export default function PhaseGuide() {
   const navigationPlan = useSpaceshipStore(s => s.navigationPlan);
   const activePhaseIndex = useSpaceshipStore(s => s.activePhaseIndex);
   const windowReady = useSpaceshipStore(s => s.windowReady);
+  const windowRemainingDays = useSpaceshipStore(s => s.windowRemainingDays);
   const position = useSpaceshipStore(s => s.position);
   const velocity = useSpaceshipStore(s => s.velocity);
   const simulatedTime = useSpaceshipStore(s => s.simulatedTime);
@@ -107,16 +108,13 @@ export default function PhaseGuide() {
           <span key={i}>{line}</span>
         ))}
       </div>
-      {phase.expectedWaitDays && phase.expectedWaitDays > 0 ? (
+      {phase.name.startsWith('等待') && (
         <div className="phase-guide-note">
-          预计等待约{' '}
-          {phase.expectedWaitDays >= 1
-            ? `${Math.round(phase.expectedWaitDays)} 天`
-            : phase.expectedWaitDays * 24 >= 1
-              ? `${Math.round(phase.expectedWaitDays * 24)} 小时`
-              : `${Math.round(phase.expectedWaitDays * 1440)} 分`}
+          {windowReady
+            ? '发射窗口已就绪 · 请点火'
+            : `预计等待约 ${formatWaitDetail(windowRemainingDays > 0 ? windowRemainingDays : (phase.expectedWaitDays ?? 0))}`}
         </div>
-      ) : null}
+      )}
       {phase.thrustDirection !== 'none' && (
         <div className="phase-guide-note">
           预期 Δv：{phase.deltaV.toFixed(4)} AU/s（{(phase.deltaV * AU_TO_KM).toFixed(1)} km/s）
