@@ -152,6 +152,8 @@ export default function HUD() {
         )}
         <div className="hud-row-basic">
           <span className="hud-label">R:{++globalRenderCount}</span>
+          <span className="hud-label">&nbsp;&nbsp;p[0]:{position[0].toFixed(6)}</span>
+          <span className="hud-label">&nbsp;&nbsp;d:{orbDistAU.toExponential(2)}</span>
           <span className="hud-label">&nbsp;&nbsp;相位({orbitalPhaseDeg.toFixed(1)}°)</span>
           <span className="hud-label">&nbsp;&nbsp;Y</span> <span className="hud-value-green">{position[1].toFixed(4)}</span>
           <span className="hud-label">&nbsp;&nbsp;Z</span> <span className="hud-value-green">{position[2].toFixed(4)}</span>
