@@ -32,6 +32,17 @@ function formatTime(timestamp: number): string {
   return `${h}:${m}:${s}`;
 }
 
+function formatSimPerSecond(scale: number): string {
+  const simSec = scale; // per real second
+  if (simSec < 60) return `${Math.round(simSec)} 模拟秒`;
+  const simMin = simSec / 60;
+  if (simMin < 60) return simMin >= 10 ? `${Math.round(simMin)} 模拟分` : `${simMin.toFixed(1)} 模拟分`;
+  const simHour = simMin / 60;
+  if (simHour < 24) return simHour >= 10 ? `${Math.round(simHour)} 模拟小时` : `${simHour.toFixed(1)} 模拟小时`;
+  const simDay = simHour / 24;
+  return simDay >= 10 ? `${Math.round(simDay)} 模拟天` : `${simDay.toFixed(1)} 模拟天`;
+}
+
 export default function TimePanel() {
   const simulatedTime = useSpaceshipStore(s => s.simulatedTime);
   const timeScale = useExploreStore(s => s.timeScale);
@@ -57,7 +68,7 @@ export default function TimePanel() {
       </div>
       <div className="time-panel-right">
         <div className="time-panel-ratio">
-          时间倍率 <span className="time-panel-ratio-value">{Math.round(timeScale)}×</span>
+          1 秒 ≈ {formatSimPerSecond(timeScale)}
         </div>
         <input
           type="range"
