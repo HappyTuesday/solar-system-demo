@@ -85,6 +85,10 @@ export default function PhaseGuide() {
 
     const window = checkWindowReady(position, velocity, navigationPlan, activePhaseIndex, simulatedTime);
 
+    const waitEndTimeText = phase.waitEndTime != null
+      ? new Date(phase.waitEndTime).toLocaleString()
+      : '无';
+
     debugLines = [
       `当前轨道 a = ${aCurrentAU.toFixed(3)} AU`,
       `目标轨道 a = ${aTargetAU.toFixed(3)} AU（${destData?.name || ''}）`,
@@ -93,7 +97,9 @@ export default function PhaseGuide() {
       `会合周期 ≈ ${Math.round(synodicPeriodDays)} 天`,
       `飞船周期 ≈ ${Math.round(shipPeriodDays)} 天，目标周期 ≈ ${Math.round(targetPeriodDays)} 天`,
       `方向：${goingOutward ? '向外' : '向内'}转移`,
-      `窗口状态：${window.windowReady ? '已就绪' : `等待中 · 剩余 ${formatWaitDetail(window.remainingDays)}`}`,
+      `窗口截止时间：${waitEndTimeText}`,
+      `窗口就绪：${window.windowReady ? '是' : '否'} · 剩余 ${formatWaitDetail(window.remainingDays)}`,
+      `(Store剩余：${formatWaitDetail(windowRemainingDays)})`,
     ];
   }
 

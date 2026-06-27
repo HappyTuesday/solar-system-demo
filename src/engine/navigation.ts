@@ -12,6 +12,7 @@ export interface NavigationPhase {
   deltaV: number;
   expectedSpeedKms: number;
   expectedWaitDays?: number;
+  waitEndTime?: number;
   targetOrbit: {
     semiMajorAxis: number;
     eccentricity: number;
@@ -148,6 +149,7 @@ export function planHohmannTransfer(
       deltaV: 0,
       expectedSpeedKms: 0,
       expectedWaitDays: waitDays,
+      waitEndTime: simulatedTime + waitDays * 86400 * 1000,
       targetOrbit: { semiMajorAxis: aCurrentAU, eccentricity: 0 },
     });
   }
@@ -306,52 +308,63 @@ export function checkWindowReady(
     return { windowReady: false, remainingDays: 0 };
   }
 
-  const jd = julianDate(simulatedTime);
-  const targetState = computeBodyState(plan.destinationId, jd);
-  if (!targetState) return { windowReady: false, remainingDays: 0 };
+  // Use time-based remaining calculation (linear, unaffected by ship's local orbit wobble)
+  if (phase.waitEndTime != null) {
+    const remainingMs = phase.waitEndTime - simulatedTime;
+    const remainingDays = remainingMs / (86400 * 1000);
 
-  const shipAngle = Math.atan2(shipPosition[1], shipPosition[0]);
-  const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
+    // Window is ready when remaining time <= 0, check with orbital calculation for verification
+    const windowReady = remainingMs <= 0;
 
-  const aCurrentAU = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN_AU);
-  const destData = REAL_DATA[plan.destinationId];
-  if (!destData || !destData.semiMajorAxis) return { windowReady: false, remainingDays: 0 };
-  const aTargetAU = destData.semiMajorAxis / AU_TO_M;
-  const goingOutward = aTargetAU > aCurrentAU;
+    // If window is ready, use orbital calculation to confirm
+    if (windowReady) {
+      const jd = julianDate(simulatedTime);
+      const targetState = computeBodyState(plan.destinationId, jd);
+      if (targetState) {
+        const shipAngle = Math.atan2(shipPosition[1], shipPosition[0]);
+        const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
 
-  const muSun = MU_SUN_AU;
-  const omegaTarget = Math.sqrt(muSun / (aTargetAU * aTargetAU * aTargetAU));
-  const aTransferAU = (aCurrentAU + aTargetAU) / 2;
-  const transferTimeSec = Math.PI * Math.sqrt(
-    (aTransferAU * aTransferAU * aTransferAU) / muSun
-  );
-  const targetTravelAngle = omegaTarget * transferTimeSec;
+        const aCurrentAU = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN_AU);
+        const destData = REAL_DATA[plan.destinationId];
+        if (destData && destData.semiMajorAxis) {
+          const aTargetAU = destData.semiMajorAxis / AU_TO_M;
+          const goingOutward = aTargetAU > aCurrentAU;
 
-  let requiredPhaseAngle: number;
-  let currentPhaseAngle: number;
-  if (goingOutward) {
-    requiredPhaseAngle = Math.PI - targetTravelAngle;
-    currentPhaseAngle = shipAngle - targetAngle;
-  } else {
-    requiredPhaseAngle = targetTravelAngle - Math.PI;
-    currentPhaseAngle = targetAngle - shipAngle;
+          const muSun = MU_SUN_AU;
+          const omegaTarget = Math.sqrt(muSun / (aTargetAU * aTargetAU * aTargetAU));
+          const aTransferAU = (aCurrentAU + aTargetAU) / 2;
+          const transferTimeSec = Math.PI * Math.sqrt(
+            (aTransferAU * aTransferAU * aTransferAU) / muSun
+          );
+          const targetTravelAngle = omegaTarget * transferTimeSec;
+
+          let requiredPhaseAngle: number;
+          let currentPhaseAngle: number;
+          if (goingOutward) {
+            requiredPhaseAngle = Math.PI - targetTravelAngle;
+            currentPhaseAngle = shipAngle - targetAngle;
+          } else {
+            requiredPhaseAngle = targetTravelAngle - Math.PI;
+            currentPhaseAngle = targetAngle - shipAngle;
+          }
+
+          const TWO_PI = 2 * Math.PI;
+          const currentNorm = ((currentPhaseAngle % TWO_PI) + TWO_PI) % TWO_PI;
+          const requiredNorm = ((requiredPhaseAngle % TWO_PI) + TWO_PI) % TWO_PI;
+          const diff = Math.abs(currentNorm - requiredNorm);
+
+          // Time says ready AND orbital position confirms
+          return { windowReady: diff < 0.1 || Math.abs(diff - TWO_PI) < 0.1, remainingDays: 0 };
+        }
+      }
+      // Fallback: time says ready but cannot confirm orbitally (unusual)
+      return { windowReady: true, remainingDays: 0 };
+    }
+
+    // Window not ready yet: return linear countdown
+    return { windowReady: false, remainingDays: Math.max(0, remainingDays) };
   }
 
-  const TWO_PI = 2 * Math.PI;
-  const currentNorm = ((currentPhaseAngle % TWO_PI) + TWO_PI) % TWO_PI;
-  const requiredNorm = ((requiredPhaseAngle % TWO_PI) + TWO_PI) % TWO_PI;
-  const diff = Math.abs(currentNorm - requiredNorm);
-
-  const windowReady = diff < 0.05 || Math.abs(diff - TWO_PI) < 0.05;
-
-  if (windowReady) return { windowReady: true, remainingDays: 0 };
-
-  // Calculate remaining wait time
-  const omegaShip = Math.sqrt(muSun / (aCurrentAU * aCurrentAU * aCurrentAU));
-  let angleToWait = requiredNorm - currentNorm;
-  if (angleToWait < 0) angleToWait += TWO_PI;
-  const synodicPeriodSec = TWO_PI / Math.abs(omegaShip - omegaTarget);
-  const remainingDays = (angleToWait / TWO_PI) * synodicPeriodSec / 86400;
-
-  return { windowReady: false, remainingDays };
+  // Fallback: no waitEndTime (legacy plan)
+  return { windowReady: false, remainingDays: 0 };
 }
