@@ -9,15 +9,10 @@
   background: rgba(5, 10, 30, 0.85);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(100, 160, 220, 0.2);
   border-radius: 8px;
   padding: 14px 18px;
   font-family: 'Courier New', monospace;
   user-select: none;
-  box-shadow:
-    0 0 0 1px rgba(30, 40, 55, 0.8),
-    0 0 0 2px rgba(25, 32, 44, 0.6),
-    0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
 .time-panel-left {

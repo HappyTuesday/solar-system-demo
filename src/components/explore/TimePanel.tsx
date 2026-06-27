@@ -4,11 +4,11 @@ import { useExploreStore } from '../../stores/exploreStore';
 import './TimePanel.css';
 
 const MIN_EXP = 0;
-const MAX_EXP = 4;
-const PRESETS = [1, 10, 100, 1000, 10000];
+const MAX_EXP = 5;
+const PRESETS = [1, 10, 100, 1000, 10000, 100000];
 
 function expToScale(exp: number): number {
-  return Math.pow(10, exp);
+  return Math.round(Math.pow(10, exp));
 }
 
 function scaleToExp(scale: number): number {
@@ -64,7 +64,7 @@ export default function TimePanel() {
           className="time-panel-slider"
           min={MIN_EXP}
           max={MAX_EXP}
-          step={1}
+          step={0.01}
           value={currentExp}
           onChange={handleSliderChange}
           style={{
