@@ -290,3 +290,69 @@ export function checkDeviation(
     deviationKms: devKms,
   };
 }
+
+export function checkWindowReady(
+  shipPosition: [number, number, number],
+  shipVelocity: [number, number, number],
+  plan: NavigationPlan,
+  currentPhaseIdx: number,
+  simulatedTime: number,
+): { windowReady: boolean; remainingDays: number } {
+  if (currentPhaseIdx < 0 || currentPhaseIdx >= plan.phases.length) {
+    return { windowReady: false, remainingDays: 0 };
+  }
+
+  const phase = plan.phases[currentPhaseIdx];
+  if (!phase.name.startsWith('等待')) {
+    return { windowReady: false, remainingDays: 0 };
+  }
+
+  const jd = julianDate(simulatedTime);
+  const targetState = computeBodyState(plan.destinationId, jd);
+  if (!targetState) return { windowReady: false, remainingDays: 0 };
+
+  const shipAngle = Math.atan2(shipPosition[1], shipPosition[0]);
+  const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
+
+  const aCurrentAU = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN);
+  const destData = REAL_DATA[plan.destinationId];
+  if (!destData || !destData.semiMajorAxis) return { windowReady: false, remainingDays: 0 };
+  const aTargetAU = destData.semiMajorAxis / AU_TO_M;
+  const goingOutward = aTargetAU > aCurrentAU;
+
+  const muSun = MU_SUN;
+  const omegaTarget = Math.sqrt(muSun / (aTargetAU * aTargetAU * aTargetAU));
+  const aTransferAU = (aCurrentAU + aTargetAU) / 2;
+  const transferTimeSec = Math.PI * Math.sqrt(
+    (aTransferAU * destData.semiMajorAxis * destData.semiMajorAxis * destData.semiMajorAxis) / muSun
+  );
+  const targetTravelAngle = omegaTarget * transferTimeSec;
+
+  let requiredPhaseAngle: number;
+  let currentPhaseAngle: number;
+  if (goingOutward) {
+    requiredPhaseAngle = Math.PI - targetTravelAngle;
+    currentPhaseAngle = shipAngle - targetAngle;
+  } else {
+    requiredPhaseAngle = targetTravelAngle - Math.PI;
+    currentPhaseAngle = targetAngle - shipAngle;
+  }
+
+  const TWO_PI = 2 * Math.PI;
+  const currentNorm = ((currentPhaseAngle % TWO_PI) + TWO_PI) % TWO_PI;
+  const requiredNorm = ((requiredPhaseAngle % TWO_PI) + TWO_PI) % TWO_PI;
+  const diff = Math.abs(currentNorm - requiredNorm);
+
+  const windowReady = diff < 0.05 || Math.abs(diff - TWO_PI) < 0.05;
+
+  if (windowReady) return { windowReady: true, remainingDays: 0 };
+
+  // Calculate remaining wait time
+  const omegaShip = Math.sqrt(muSun / (aCurrentAU * aCurrentAU * aCurrentAU));
+  let angleToWait = requiredNorm - currentNorm;
+  if (angleToWait < 0) angleToWait += TWO_PI;
+  const synodicPeriodSec = TWO_PI / Math.abs(omegaShip - omegaTarget);
+  const remainingDays = (angleToWait / TWO_PI) * synodicPeriodSec / 86400;
+
+  return { windowReady: false, remainingDays };
+}

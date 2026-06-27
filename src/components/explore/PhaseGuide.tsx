@@ -1,15 +1,18 @@
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import './PhaseGuide.css';
 
-function getPhaseGuide(phaseName: string, phaseIndex: number): string {
+function getPhaseGuide(phaseName: string, windowReady: boolean): string {
   if (phaseName.startsWith('等待')) {
-    return '保持当前轨道，等待行星对齐\n无需推力操作\n到达发射窗口后自动提示';
+    if (windowReady) {
+      return '发射窗口已到达\n立即开启正向推力点火\n点火后将自动进入下一阶段';
+    }
+    return '保持当前轨道，等待行星对齐\n无需推力操作\n到达发射窗口后将自动提示';
   }
   if (phaseName.includes('提升远日点') || phaseName.includes('降低近日点')) {
     return '开启正向推力，沿飞行方向加速\n推力调至 100MN\n观察导航地图绿色轨道线\n半长轴达标后自动进入下一阶段';
   }
   if (phaseName.includes('转移轨道滑行')) {
-    return '关闭推力，沿转移轨道惯性滑行\n耐心等待约半周期\n接近目标天体后自动提示';
+    return '关闭推力，沿转移轨道惯性滑行\n耐心等待约半周期\n接近目标天体后将自动提示';
   }
   if (phaseName.includes('捕获') && phaseName.includes('制动')) {
     return '开启反向推力，沿飞行反方向减速\n推力调至 100MN\n减速至目标轨道参数后自动进入下一阶段';
@@ -26,6 +29,7 @@ function getPhaseGuide(phaseName: string, phaseIndex: number): string {
 export default function PhaseGuide() {
   const navigationPlan = useSpaceshipStore(s => s.navigationPlan);
   const activePhaseIndex = useSpaceshipStore(s => s.activePhaseIndex);
+  const windowReady = useSpaceshipStore(s => s.windowReady);
   const exploded = useSpaceshipStore(s => s.exploded);
 
   if (exploded || !navigationPlan || activePhaseIndex < 0 || activePhaseIndex >= navigationPlan.phases.length) {
@@ -33,7 +37,7 @@ export default function PhaseGuide() {
   }
 
   const phase = navigationPlan.phases[activePhaseIndex];
-  const guide = getPhaseGuide(phase.name, activePhaseIndex);
+  const guide = getPhaseGuide(phase.name, windowReady);
 
   return (
     <div className="phase-guide-container">

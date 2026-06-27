@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { SpaceshipState, AttitudeMode } from '../types';
 import { createSpaceshipState } from '../engine/orbitalInjection';
 import type { NavigationPlan } from '../engine/navigation';
-import { planHohmannTransfer, checkPhaseCompletion, checkDeviation } from '../engine/navigation';
+import { planHohmannTransfer, checkPhaseCompletion, checkDeviation, checkWindowReady } from '../engine/navigation';
 import { NAVIGATION_CONFIG } from '../engine/constants';
 
 export type ExplosionPhase = 'none' | 'exploding' | 'complete';
@@ -20,6 +20,8 @@ export interface SpaceshipStore extends SpaceshipState {
   deviationWarning: string | null;
   lastDeviationCheckTime: number;
   lastReplanTime: number;
+  windowReady: boolean;
+  windowRemainingDays: number;
 
   explosionPhase: ExplosionPhase;
   totalDistanceKm: number;
@@ -51,6 +53,7 @@ export interface SpaceshipStore extends SpaceshipState {
   setDeviationWarning: (msg: string | null) => void;
   checkNavigationalDeviation: () => void;
   replanNavigation: () => void;
+  setWindowReady: (ready: boolean, remainingDays: number) => void;
 }
 
 function rotateYaw(dir: [number, number, number], angle: number): [number, number, number] {
@@ -147,7 +150,9 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     activePhaseIndex: -1 as number,
     deviationWarning: null as string | null,
     lastDeviationCheckTime: Date.now() as number,
-    lastReplanTime: 0 as number,
+  lastReplanTime: 0 as number,
+  windowReady: false as boolean,
+  windowRemainingDays: 0 as number,
     explosionPhase: 'none' as ExplosionPhase,
     totalDistanceKm: 0,
     maxSpeedKms: 0,
@@ -167,6 +172,8 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
         navigationPlan: plan.phases.length > 0 ? plan : null,
         activePhaseIndex: plan.phases.length > 0 ? 0 : -1,
         deviationWarning: null,
+        windowReady: false,
+        windowRemainingDays: 0,
         lastReplanTime: s.simulatedTime,
       };
     }
@@ -180,14 +187,33 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
   setNavigationPlan: (plan) => set({ navigationPlan: plan }),
   setActivePhaseIndex: (idx) => set({ activePhaseIndex: idx }),
   setDeviationWarning: (msg) => set({ deviationWarning: msg }),
+  setWindowReady: (ready, remainingDays) => set({ windowReady: ready, windowRemainingDays: remainingDays }),
   checkNavigationalDeviation: () => {
     const s = useSpaceshipStore.getState();
     if (!s.navigationPlan || s.activePhaseIndex < 0) return;
 
+    const currentPhase = s.navigationPlan.phases[s.activePhaseIndex];
+    const isWaitingPhase = currentPhase && currentPhase.name.startsWith('等待');
+
+    // For waiting phases: check window status, complete only on thrust
+    if (isWaitingPhase) {
+      const window = checkWindowReady(s.position, s.velocity, s.navigationPlan, s.activePhaseIndex, s.simulatedTime);
+      if (window.windowReady && s.thrustMagnitude > 0) {
+        const nextIdx = s.activePhaseIndex + 1;
+        if (nextIdx < s.navigationPlan.phases.length) {
+          useSpaceshipStore.setState({ activePhaseIndex: nextIdx, deviationWarning: null, windowReady: false, windowRemainingDays: 0 });
+        }
+      } else {
+        useSpaceshipStore.setState({ windowReady: window.windowReady, windowRemainingDays: window.remainingDays });
+      }
+      return;
+    }
+
+    // For non-waiting phases: auto-detect completion
     if (checkPhaseCompletion(s.position, s.velocity, s.navigationPlan, s.activePhaseIndex, s.simulatedTime)) {
       const nextIdx = s.activePhaseIndex + 1;
       if (nextIdx < s.navigationPlan.phases.length) {
-        useSpaceshipStore.setState({ activePhaseIndex: nextIdx, deviationWarning: null });
+        useSpaceshipStore.setState({ activePhaseIndex: nextIdx, deviationWarning: null, windowReady: false, windowRemainingDays: 0 });
       }
       return;
     }
