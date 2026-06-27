@@ -12,7 +12,21 @@ export interface OrbitalDatum {
   rotationPhaseAtEpoch: number;
 }
 
-// ===== Real Solar System Data =====
+// ===== Unit System =====
+// All distances in AU, all velocities in AU/s.
+// Conversion constants for display only.
+
+export const AU_TO_KM = 149597870.7;
+export const AU_TO_M = AU_TO_KM * 1000;
+
+// G in AU³/(kg·s²): G_SI / AU_TO_M³
+const G_SI = 6.674e-11;
+export const G_AU = G_SI / (AU_TO_M * AU_TO_M * AU_TO_M);
+
+const SUN_MASS = 1.989e30;
+export const MU_SUN_AU = G_AU * SUN_MASS;
+
+// ===== Real Solar System Data (all distances in AU, velocities in AU/s) =====
 
 export const REAL_DATA: Record<string, {
   mass: number;
@@ -25,7 +39,7 @@ export const REAL_DATA: Record<string, {
   orbital?: OrbitalDatum;
 }> = {
   sun: {
-    name: '太阳', type: 'star', mass: 1.989e30, radius: 6.9634e8,
+    name: '太阳', type: 'star', mass: SUN_MASS, radius: 696340 / AU_TO_KM,
     orbital: {
       eccentricity: 0, inclination: 0, longitudeAscendingNode: 0, argumentOfPeriapsis: 0,
       meanAnomalyAtEpoch: 0, epoch: 2451545.0,
@@ -35,8 +49,8 @@ export const REAL_DATA: Record<string, {
     },
   },
   mercury: {
-    name: '水星', type: 'planet', mass: 3.3011e23, radius: 2.4397e6,
-    semiMajorAxis: 5.791e10, orbitalSpeed: 47870,
+    name: '水星', type: 'planet', mass: 3.3011e23, radius: 2439.7 / AU_TO_KM,
+    semiMajorAxis: 57910000 / AU_TO_KM, orbitalSpeed: 47.87 / AU_TO_KM,
     orbital: {
       eccentricity: 0.20563,
       inclination: 0.12226,
@@ -50,8 +64,8 @@ export const REAL_DATA: Record<string, {
     },
   },
   venus: {
-    name: '金星', type: 'planet', mass: 4.8675e24, radius: 6.0518e6,
-    semiMajorAxis: 1.082e11, orbitalSpeed: 35020,
+    name: '金星', type: 'planet', mass: 4.8675e24, radius: 6051.8 / AU_TO_KM,
+    semiMajorAxis: 108200000 / AU_TO_KM, orbitalSpeed: 35.02 / AU_TO_KM,
     orbital: {
       eccentricity: 0.00677,
       inclination: 0.05925,
@@ -65,8 +79,8 @@ export const REAL_DATA: Record<string, {
     },
   },
   earth: {
-    name: '地球', type: 'planet', mass: 5.9724e24, radius: 6.371e6,
-    semiMajorAxis: 1.496e11, orbitalSpeed: 29780,
+    name: '地球', type: 'planet', mass: 5.9724e24, radius: 6371 / AU_TO_KM,
+    semiMajorAxis: 149597870.7 / AU_TO_KM, orbitalSpeed: 29.78 / AU_TO_KM,
     orbital: {
       eccentricity: 0.01671,
       inclination: 0.0,
@@ -80,8 +94,8 @@ export const REAL_DATA: Record<string, {
     },
   },
   mars: {
-    name: '火星', type: 'planet', mass: 6.4171e23, radius: 3.3895e6,
-    semiMajorAxis: 2.279e11, orbitalSpeed: 24070,
+    name: '火星', type: 'planet', mass: 6.4171e23, radius: 3389.5 / AU_TO_KM,
+    semiMajorAxis: 227900000 / AU_TO_KM, orbitalSpeed: 24.07 / AU_TO_KM,
     orbital: {
       eccentricity: 0.09340,
       inclination: 0.03229,
@@ -95,8 +109,8 @@ export const REAL_DATA: Record<string, {
     },
   },
   jupiter: {
-    name: '木星', type: 'planet', mass: 1.8982e27, radius: 6.9911e7,
-    semiMajorAxis: 7.786e11, orbitalSpeed: 13070,
+    name: '木星', type: 'planet', mass: 1.8982e27, radius: 69911 / AU_TO_KM,
+    semiMajorAxis: 778600000 / AU_TO_KM, orbitalSpeed: 13.07 / AU_TO_KM,
     orbital: {
       eccentricity: 0.04839,
       inclination: 0.02278,
@@ -110,8 +124,8 @@ export const REAL_DATA: Record<string, {
     },
   },
   saturn: {
-    name: '土星', type: 'planet', mass: 5.6834e26, radius: 5.8232e7,
-    semiMajorAxis: 1.434e12, orbitalSpeed: 9690,
+    name: '土星', type: 'planet', mass: 5.6834e26, radius: 58232 / AU_TO_KM,
+    semiMajorAxis: 1434000000 / AU_TO_KM, orbitalSpeed: 9.69 / AU_TO_KM,
     orbital: {
       eccentricity: 0.05386,
       inclination: 0.04343,
@@ -125,8 +139,8 @@ export const REAL_DATA: Record<string, {
     },
   },
   uranus: {
-    name: '天王星', type: 'planet', mass: 8.6810e25, radius: 2.5362e7,
-    semiMajorAxis: 2.871e12, orbitalSpeed: 6810,
+    name: '天王星', type: 'planet', mass: 8.6810e25, radius: 25362 / AU_TO_KM,
+    semiMajorAxis: 2871000000 / AU_TO_KM, orbitalSpeed: 6.81 / AU_TO_KM,
     orbital: {
       eccentricity: 0.04726,
       inclination: 0.01346,
@@ -140,8 +154,8 @@ export const REAL_DATA: Record<string, {
     },
   },
   neptune: {
-    name: '海王星', type: 'planet', mass: 1.0241e26, radius: 2.4622e7,
-    semiMajorAxis: 4.495e12, orbitalSpeed: 5430,
+    name: '海王星', type: 'planet', mass: 1.0241e26, radius: 24622 / AU_TO_KM,
+    semiMajorAxis: 4495000000 / AU_TO_KM, orbitalSpeed: 5.43 / AU_TO_KM,
     orbital: {
       eccentricity: 0.00859,
       inclination: 0.03091,
@@ -155,8 +169,8 @@ export const REAL_DATA: Record<string, {
     },
   },
   moon: {
-    name: '月球', type: 'moon', parentId: 'earth', mass: 7.342e22, radius: 1.7374e6,
-    semiMajorAxis: 3.844e8, orbitalSpeed: 1022,
+    name: '月球', type: 'moon', parentId: 'earth', mass: 7.342e22, radius: 1737.4 / AU_TO_KM,
+    semiMajorAxis: 384400 / AU_TO_KM, orbitalSpeed: 1.022 / AU_TO_KM,
     orbital: {
       eccentricity: 0.0549,
       inclination: 0.08980,
@@ -170,8 +184,8 @@ export const REAL_DATA: Record<string, {
     },
   },
   phobos: {
-    name: '火卫一', type: 'moon', parentId: 'mars', mass: 1.0659e16, radius: 1.1266e4,
-    semiMajorAxis: 9.376e6, orbitalSpeed: 2138,
+    name: '火卫一', type: 'moon', parentId: 'mars', mass: 1.0659e16, radius: 11.266 / AU_TO_KM,
+    semiMajorAxis: 9376 / AU_TO_KM, orbitalSpeed: 2.138 / AU_TO_KM,
     orbital: {
       eccentricity: 0.0151,
       inclination: 0.01745,
@@ -185,8 +199,8 @@ export const REAL_DATA: Record<string, {
     },
   },
   deimos: {
-    name: '火卫二', type: 'moon', parentId: 'mars', mass: 1.4762e15, radius: 6.2e3,
-    semiMajorAxis: 2.3463e7, orbitalSpeed: 1351,
+    name: '火卫二', type: 'moon', parentId: 'mars', mass: 1.4762e15, radius: 6.2 / AU_TO_KM,
+    semiMajorAxis: 23463 / AU_TO_KM, orbitalSpeed: 1.351 / AU_TO_KM,
     orbital: {
       eccentricity: 0.00033,
       inclination: 0.0208,
@@ -200,8 +214,8 @@ export const REAL_DATA: Record<string, {
     },
   },
   io: {
-    name: '木卫一', type: 'moon', parentId: 'jupiter', mass: 8.9319e22, radius: 1.8216e6,
-    semiMajorAxis: 4.217e8, orbitalSpeed: 17334,
+    name: '木卫一', type: 'moon', parentId: 'jupiter', mass: 8.9319e22, radius: 1821.6 / AU_TO_KM,
+    semiMajorAxis: 421700 / AU_TO_KM, orbitalSpeed: 17.334 / AU_TO_KM,
     orbital: {
       eccentricity: 0.0041,
       inclination: 0.00041,
@@ -215,8 +229,8 @@ export const REAL_DATA: Record<string, {
     },
   },
   europa: {
-    name: '木卫二', type: 'moon', parentId: 'jupiter', mass: 4.7998e22, radius: 1.5608e6,
-    semiMajorAxis: 6.711e8, orbitalSpeed: 13740,
+    name: '木卫二', type: 'moon', parentId: 'jupiter', mass: 4.7998e22, radius: 1560.8 / AU_TO_KM,
+    semiMajorAxis: 671100 / AU_TO_KM, orbitalSpeed: 13.74 / AU_TO_KM,
     orbital: {
       eccentricity: 0.0094,
       inclination: 0.00821,
@@ -230,8 +244,8 @@ export const REAL_DATA: Record<string, {
     },
   },
   ganymede: {
-    name: '木卫三', type: 'moon', parentId: 'jupiter', mass: 1.4819e23, radius: 2.6341e6,
-    semiMajorAxis: 1.070e9, orbitalSpeed: 10880,
+    name: '木卫三', type: 'moon', parentId: 'jupiter', mass: 1.4819e23, radius: 2634.1 / AU_TO_KM,
+    semiMajorAxis: 1070000 / AU_TO_KM, orbitalSpeed: 10.88 / AU_TO_KM,
     orbital: {
       eccentricity: 0.0013,
       inclination: 0.00349,
@@ -245,8 +259,8 @@ export const REAL_DATA: Record<string, {
     },
   },
   callisto: {
-    name: '木卫四', type: 'moon', parentId: 'jupiter', mass: 1.0759e23, radius: 2.4103e6,
-    semiMajorAxis: 1.883e9, orbitalSpeed: 8204,
+    name: '木卫四', type: 'moon', parentId: 'jupiter', mass: 1.0759e23, radius: 2410.3 / AU_TO_KM,
+    semiMajorAxis: 1883000 / AU_TO_KM, orbitalSpeed: 8.204 / AU_TO_KM,
     orbital: {
       eccentricity: 0.0074,
       inclination: 0.00489,
@@ -260,8 +274,8 @@ export const REAL_DATA: Record<string, {
     },
   },
   titan: {
-    name: '土卫六', type: 'moon', parentId: 'saturn', mass: 1.3452e23, radius: 2.5747e6,
-    semiMajorAxis: 1.222e9, orbitalSpeed: 5570,
+    name: '土卫六', type: 'moon', parentId: 'saturn', mass: 1.3452e23, radius: 2574.7 / AU_TO_KM,
+    semiMajorAxis: 1222000 / AU_TO_KM, orbitalSpeed: 5.57 / AU_TO_KM,
     orbital: {
       eccentricity: 0.0288,
       inclination: 0.00541,
@@ -388,12 +402,12 @@ export const CELESTIAL_TEMPLATES: CelestialBodyTemplate[] = [
 ];
 
 export const PHYSICAL_CONSTANTS = {
-  G: 6.674e-11,
-  sunMass: 1.989e30,
-  sunRadius: 6.9634e8,
+  G: G_AU,
+  sunMass: SUN_MASS,
+  sunRadius: REAL_DATA.sun.radius,
   timeScale: 1e5,
-  softeningFactor: 1e6,
-  collisionThreshold: 5e6,
+  softeningFactor: 1e6 / AU_TO_M,
+  collisionThreshold: 5e6 / AU_TO_M,
 };
 
 export const SIM_CONFIG = {
@@ -444,11 +458,8 @@ export const AUDIO_FILES = {
   click: '/sounds/click.mp3',
 };
 
-export const MU_SUN = PHYSICAL_CONSTANTS.G * PHYSICAL_CONSTANTS.sunMass;
-
-export const AU_TO_M = 1.496e11;
-export const G_AU = PHYSICAL_CONSTANTS.G / (AU_TO_M * AU_TO_M * AU_TO_M);
-export const MU_SUN_AU = G_AU * PHYSICAL_CONSTANTS.sunMass;
+// Backward compatibility aliases
+export const MU_SUN = MU_SUN_AU;
 
 export const SPACECRAFT_DRAGON2 = {
   name: 'Crew Dragon 2',
@@ -458,7 +469,7 @@ export const SPACECRAFT_DRAGON2 = {
   collisionRadiusAU: 0,
   maxThrustAU: 6.3667e-8,
   defaultOrbit: {
-    semiMajorAxis: 6.771e6,
+    semiMajorAxis: 6771 / AU_TO_KM,
     eccentricity: 0,
     inclination: 0,
     raan: 0,
@@ -474,4 +485,9 @@ export const NAVIGATION_CONFIG = {
   deviationThresholdAU: 0.01,
   phaseCompletionThresholdAU: 0.005,
   rePlanCooldownSec: 30,
+  thrustWindowMinDeg: 30,
+  thrustWindowMaxDeg: 150,
+  orbitCircularizationEcc: 0.01,
+  approachDistanceAU: 0.1,
+  arrivalDistanceAU: 0.05,
 };

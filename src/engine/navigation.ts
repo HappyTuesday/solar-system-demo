@@ -1,12 +1,61 @@
-import { REAL_DATA, MU_SUN, AU_TO_M, NAVIGATION_CONFIG, MU_SUN_AU } from './constants';
+import { REAL_DATA, MU_SUN_AU, AU_TO_KM, NAVIGATION_CONFIG } from './constants';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from './orbital';
 
-const SCALE = 1 / AU_TO_M;
-const AU_TO_KM = 1.496e8;
+export type NavSubStepType =
+  | 'wait_window'
+  | 'wait_departure_tangent'
+  | 'burn_prograde'
+  | 'burn_retrograde'
+  | 'burn_circularize'
+  | 'coast_transfer'
+  | 'coast_approach'
+  | 'orient_prograde'
+  | 'orient_target'
+  | 'arrival';
+
+export type NavSubStepStatus = 'pending' | 'ready' | 'active' | 'completed';
+
+export type NavSubStepConditionType =
+  | 'phase_angle_range'
+  | 'semi_major_axis_range'
+  | 'distance_range'
+  | 'window_ready'
+  | 'immediate'
+  | 'always';
+
+export interface NavSubStepCondition {
+  type: NavSubStepConditionType;
+  min?: number;
+  max?: number;
+  met: boolean;
+  description: string;
+}
+
+export interface NavSubStepAction {
+  thrustDirection: 'forward' | 'backward' | 'off';
+  thrustMagnitude: number;
+  attitudeMode: 'prograde' | 'inertial' | 'target';
+  targetSpeedKmS?: number;
+  targetSpeedAUs?: number;
+  targetSemiMajorAxisAU?: number;
+  description: string;
+  completionCriteria: string;
+}
+
+export interface NavSubStep {
+  id: string;
+  phaseId: number;
+  order: number;
+  type: NavSubStepType;
+  status: NavSubStepStatus;
+  condition: NavSubStepCondition;
+  action: NavSubStepAction;
+}
 
 export interface NavigationPhase {
   index: number;
   name: string;
+  subSteps: NavSubStep[];
   thrustDirection: 'forward' | 'backward' | 'none';
   thrustMagnitude: number;
   deltaV: number;
@@ -30,14 +79,14 @@ function computeBodyState(templateId: string, jd: number): { position: [number, 
   const data = REAL_DATA[templateId];
   if (!data || !data.semiMajorAxis || !data.orbital) return null;
   const o = data.orbital;
-  const period = orbitalPeriod(data.semiMajorAxis, MU_SUN);
+  const period = orbitalPeriod(data.semiMajorAxis, MU_SUN_AU);
   const M = meanAnomalyAtTime(o.meanAnomalyAtEpoch, period, o.epoch, jd);
   const Mmod = ((M % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
   const E = solveKepler(Mmod, o.eccentricity);
   const nu = trueAnomaly(E, o.eccentricity);
   return stateVectors(
     data.semiMajorAxis, o.eccentricity, o.inclination,
-    o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN,
+    o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN_AU,
   );
 }
 
@@ -59,7 +108,7 @@ function getHillRadiusAU(bodyId: string): number {
   if (bodyId === 'sun') return Infinity;
   const data = REAL_DATA[bodyId];
   if (!data?.semiMajorAxis) return 0;
-  const a = data.semiMajorAxis / AU_TO_M; // AU
+  const a = data.semiMajorAxis; // already in AU
   const m = data.mass;
   const M = REAL_DATA.sun.mass;
   return a * Math.pow(m / (3 * M), 1 / 3);
@@ -80,9 +129,9 @@ export function getOrbitingBodyId(
     const state = computeBodyState(id, jd);
     if (!state) continue;
 
-    const bx = state.position[0] * SCALE;
-    const by = state.position[1] * SCALE;
-    const bz = state.position[2] * SCALE;
+    const bx = state.position[0];
+    const by = state.position[1];
+    const bz = state.position[2];
     const dx = shipPosition[0] - bx;
     const dy = shipPosition[1] - by;
     const dz = shipPosition[2] - bz;
@@ -102,7 +151,7 @@ export function getOrbitingBodySemiMajorAxis(
   const bodyId = getOrbitingBodyId(shipPosition, simulatedTime);
   if (bodyId === 'sun') return 0;
   const data = REAL_DATA[bodyId];
-  return (data?.semiMajorAxis ?? 1.496e11) / AU_TO_M;
+  return data?.semiMajorAxis ?? 0;
 }
 
 export function getNearestBodySemiMajorAxis(
@@ -112,7 +161,7 @@ export function getNearestBodySemiMajorAxis(
   const bodyId = findNearestBodyId(shipPosition, simulatedTime);
   if (bodyId === 'sun') return 0;
   const data = REAL_DATA[bodyId];
-  return (data?.semiMajorAxis ?? 1.496e11) / AU_TO_M;
+  return data?.semiMajorAxis ?? 0;
 }
 
 function findNearestBodyId(
@@ -130,9 +179,9 @@ function findNearestBodyId(
     } else {
       const state = computeBodyState(id, jd);
       if (!state) continue;
-      bx = state.position[0] * SCALE;
-      by = state.position[1] * SCALE;
-      bz = state.position[2] * SCALE;
+      bx = state.position[0];
+      by = state.position[1];
+      bz = state.position[2];
     }
     const dx = shipPosition[0] - bx;
     const dy = shipPosition[1] - by;
@@ -162,8 +211,7 @@ export function planHohmannTransfer(
   if (!destData || !destData.semiMajorAxis) {
     return { phases: [], method: 'hohmann', destinationId, plannedAt: simulatedTime };
   }
-  const aTargetMeters = destData.semiMajorAxis;
-  const aTargetAU = aTargetMeters / AU_TO_M;
+  const aTargetAU = destData.semiMajorAxis;
   const aTransferAU = (aCurrentAU + aTargetAU) / 2;
 
   const goingOutward = aTargetAU > aCurrentAU;
@@ -238,6 +286,7 @@ export function planHohmannTransfer(
     phases.push({
       index: 0,
       name: '等待发射窗口',
+      subSteps: [],
       thrustDirection: 'none',
       thrustMagnitude: 0,
       deltaV: 0,
@@ -254,6 +303,7 @@ export function planHohmannTransfer(
     {
       index: phaseOffset,
       name: goingOutward ? '提升远日点' : '降低近日点',
+      subSteps: [],
       thrustDirection: goingOutward ? 'forward' : 'backward',
       thrustMagnitude: 100,
       deltaV: Math.abs(deltaV1),
@@ -263,6 +313,7 @@ export function planHohmannTransfer(
     {
       index: phaseOffset + 1,
       name: '转移轨道滑行',
+      subSteps: [],
       thrustDirection: 'none',
       thrustMagnitude: 0,
       deltaV: 0,
@@ -272,6 +323,7 @@ export function planHohmannTransfer(
     {
       index: phaseOffset + 2,
       name: goingOutward ? '目标捕获制动' : '目标捕获加速',
+      subSteps: [],
       thrustDirection: goingOutward ? 'backward' : 'forward',
       thrustMagnitude: 100,
       deltaV: Math.abs(deltaV3),
@@ -281,6 +333,7 @@ export function planHohmannTransfer(
     {
       index: phaseOffset + 3,
       name: '绕飞圆化',
+      subSteps: [],
       thrustDirection: 'forward',
       thrustMagnitude: 50,
       deltaV: 0,
@@ -312,10 +365,10 @@ export function checkPhaseCompletion(
     const shipAngle = Math.atan2(shipPosition[1], shipPosition[0]);
     const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
 
-  const aCurrentAU = getNearestBodySemiMajorAxis(shipPosition);
+    const aCurrentAU = getNearestBodySemiMajorAxis(shipPosition, simulatedTime);
     const destData = REAL_DATA[plan.destinationId];
     if (!destData || !destData.semiMajorAxis) return false;
-    const aTargetAU = destData.semiMajorAxis / AU_TO_M;
+    const aTargetAU = destData.semiMajorAxis;
     const goingOutward = aTargetAU > aCurrentAU;
 
     const muSun = MU_SUN_AU;
@@ -349,9 +402,9 @@ export function checkPhaseCompletion(
     const jd = julianDate(simulatedTime);
     const destState = computeBodyState(plan.destinationId, jd);
     if (!destState) return false;
-    const dx = destState.position[0] * SCALE - shipPosition[0];
-    const dy = destState.position[1] * SCALE - shipPosition[1];
-    const dz = destState.position[2] * SCALE - shipPosition[2];
+    const dx = destState.position[0] - shipPosition[0];
+    const dy = destState.position[1] - shipPosition[1];
+    const dz = destState.position[2] - shipPosition[2];
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
     return dist < 0.1;
   }
@@ -412,7 +465,7 @@ export function checkWindowReady(
   const aCurrentAU = getOrbitingBodySemiMajorAxis(shipPosition, simulatedTime);
   const destData = REAL_DATA[plan.destinationId];
   if (!destData?.semiMajorAxis) return { windowReady: false, remainingDays: 0 };
-  const aTargetAU = destData.semiMajorAxis / AU_TO_M;
+  const aTargetAU = destData.semiMajorAxis;
   const goingOutward = aTargetAU > aCurrentAU;
 
   const muSun = MU_SUN_AU;
@@ -447,14 +500,14 @@ export function checkWindowReady(
     const bodyState = computeBodyState(orbitingBodyId, jd);
     if (bodyState) {
       const bodyPosAU: [number, number, number] = [
-        bodyState.position[0] * SCALE,
-        bodyState.position[1] * SCALE,
-        bodyState.position[2] * SCALE,
+        bodyState.position[0],
+        bodyState.position[1],
+        bodyState.position[2],
       ];
       const bodyVelAU: [number, number, number] = [
-        bodyState.velocity[0] * SCALE,
-        bodyState.velocity[1] * SCALE,
-        bodyState.velocity[2] * SCALE,
+        bodyState.velocity[0],
+        bodyState.velocity[1],
+        bodyState.velocity[2],
       ];
       const rx = shipPosition[0] - bodyPosAU[0];
       const ry = shipPosition[1] - bodyPosAU[1];
