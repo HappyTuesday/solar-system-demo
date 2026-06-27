@@ -35,6 +35,7 @@ function Dashboard() {
   const setTargetBody = useSpaceshipStore(s => s.setTargetBody);
   const navigationPlan = useSpaceshipStore(s => s.navigationPlan);
   const activePhaseIndex = useSpaceshipStore(s => s.activePhaseIndex);
+  const activeSubStepIndex = useSpaceshipStore(s => s.activeSubStepIndex);
   const deviationWarning = useSpaceshipStore(s => s.deviationWarning);
   const windowReady = useSpaceshipStore(s => s.windowReady);
   const windowRemainingDays = useSpaceshipStore(s => s.windowRemainingDays);
@@ -255,6 +256,11 @@ function Dashboard() {
                                 : phase.thrustDirection === 'none'
                                   ? '无推力 · 等待转移'
                                   : `推力 ${phase.thrustDirection === 'forward' ? '↑' : '↓'}${phase.thrustMagnitude}MN · Δv ${phase.deltaV.toFixed(3)} AU/s`}
+                            {status === 'active' && phase.subSteps.length > 0 && (
+                              <span className="dashboard-nav-substep-count">
+                                {' · 子步骤 ' + (activeSubStepIndex + 1) + '/' + phase.subSteps.length}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
