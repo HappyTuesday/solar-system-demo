@@ -69,6 +69,25 @@ export default function HUD() {
   const altitudeKm = nearestDistKm - nearestBodyRadiusKm;
   const isOrbiting = nearestDistAU < ORBIT_THRESHOLD_AU && nearestDistAU > 1e-12;
 
+  // Compute orbital phase (0° = direction from orbiting body toward the Sun)
+  let orbitalPhaseDeg = 0;
+  if (isOrbiting && nearestBodyId !== 'sun') {
+    const sv = computeBodyStateFull(nearestBodyId ?? '', jd);
+    if (sv) {
+      // Body's position (AU), Sun is at (0,0,0)
+      // Direction from body toward Sun = (0 - bodyX, 0 - bodyY, 0 - bodyZ)
+      const sunDirX = -sv.position[0];
+      const sunDirY = -sv.position[1];
+      // Ship position relative to body
+      const shipRelX = position[0] - sv.position[0];
+      const shipRelY = position[1] - sv.position[1];
+      // Angle from sun-direction to ship position (2D in orbital plane)
+      const sunAngle = Math.atan2(sunDirY, sunDirX);
+      const shipAngle = Math.atan2(shipRelY, shipRelX);
+      orbitalPhaseDeg = ((shipAngle - sunAngle) * 180 / Math.PI + 360) % 360;
+    }
+  }
+
   // Orbital params (only when orbiting)
   let relSpeedKms = 0;
   let angularVelDegS = 0;
@@ -119,6 +138,7 @@ export default function HUD() {
         {isOrbiting && (
           <div className="hud-row-orbital">
             绕飞 · <span className="hud-value-blue">{orbitingBodyId ? (REAL_DATA[orbitingBodyId]?.name || '') : nearestBodyName}</span>
+            <span className="hud-label">&nbsp;&nbsp;相位</span> <span className="hud-value-green">{orbitalPhaseDeg.toFixed(0)}°</span>
             <span className="hud-label">&nbsp;&nbsp;速度</span> <span className="hud-value-green">{relSpeedKms.toFixed(2)} km/s</span>
             <span className="hud-label">&nbsp;&nbsp;高度</span> <span className="hud-value-blue">{altitudeKm.toFixed(0)} km</span>
             <span className="hud-label">&nbsp;&nbsp;角速度</span> <span className="hud-value-yellow">{angularVelDegS.toFixed(4)} °/s</span>

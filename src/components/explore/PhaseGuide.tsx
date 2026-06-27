@@ -178,8 +178,10 @@ export default function PhaseGuide() {
       phaseWaitDays > 0
         ? `预计 ${Math.round(phaseDiff < 180 ? phaseWaitDays : synodicPeriodDays - phaseWaitDays)} 天后进入窗口`
         : `已进入窗口 · 剩余约 ${Math.round(windowDurationDays)} 天`,
-      `【飞船出发条件】绕${departureName}轨道相位`,
-      departureReady ? '✓ 出发切线已就绪' : `✗ 需到达正确出发位置 · 最多等待约 ${departureWaitMins > 0 ? Math.round(departureWaitMins) : 1} 分`,
+      `【飞船出发窗口】绕${departureName}轨道相位`,
+      departureReady
+        ? `✓ 已进入出发窗口 · 约 ${Math.round(departureWaitMins)} 分内可出发`
+        : `✗ 等待到达正确出发位置 · 预计 ${departureWaitMins > 0 ? Math.round(departureWaitMins) : 1} 分`,
       `转移耗时 ≈ ${Math.round(transferTimeDays)} 天，会合周期 ≈ ${Math.round(synodicPeriodDays)} 天`,
       `方向：${goingOutward ? '向外' : '向内'}转移`,
       `综合剩余 ≈ ${formatWaitDetail(window.remainingDays)}`,
