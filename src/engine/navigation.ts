@@ -58,10 +58,19 @@ export function getNearestBodySemiMajorAxis(
   shipPosition: [number, number, number],
   simulatedTime: number,
 ): number {
-  const jd = julianDate(simulatedTime);
+  const bodyId = findNearestBodyId(shipPosition, simulatedTime);
+  if (bodyId === 'sun') return 0;
+  const data = REAL_DATA[bodyId];
+  return (data?.semiMajorAxis ?? 1.496e11) / AU_TO_M;
+}
 
+function findNearestBodyId(
+  shipPosition: [number, number, number],
+  simulatedTime: number,
+): string {
+  const jd = julianDate(simulatedTime);
   let nearestDist = Infinity;
-  let nearestSemiMajorAU = 1;
+  let nearestId = 'sun';
 
   for (const id of BODY_IDS) {
     let bx: number; let by: number; let bz: number;
@@ -78,14 +87,12 @@ export function getNearestBodySemiMajorAxis(
     const dy = shipPosition[1] - by;
     const dz = shipPosition[2] - bz;
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
     if (dist < nearestDist) {
       nearestDist = dist;
-      const data = REAL_DATA[id];
-      nearestSemiMajorAU = id === 'sun' ? 0 : (data?.semiMajorAxis ?? 1.496e11) / AU_TO_M;
+      nearestId = id;
     }
   }
-  return nearestSemiMajorAU;
+  return nearestId;
 }
 
 export function planHohmannTransfer(
@@ -360,7 +367,7 @@ export function checkWindowReady(
         const shipAngle = Math.atan2(shipPosition[1], shipPosition[0]);
         const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
 
-  const aCurrentAU = getNearestBodySemiMajorAxis(shipPosition);
+        const aCurrentAU = getNearestBodySemiMajorAxis(shipPosition, simulatedTime);
         const destData = REAL_DATA[plan.destinationId];
         if (destData && destData.semiMajorAxis) {
           const aTargetAU = destData.semiMajorAxis / AU_TO_M;
@@ -388,9 +395,49 @@ export function checkWindowReady(
           const currentNorm = ((currentPhaseAngle % TWO_PI) + TWO_PI) % TWO_PI;
           const requiredNorm = ((requiredPhaseAngle % TWO_PI) + TWO_PI) % TWO_PI;
           const diff = Math.abs(currentNorm - requiredNorm);
+          const orbitalAligned = diff < 0.1 || Math.abs(diff - TWO_PI) < 0.1;
 
-          // Time says ready AND orbital position confirms
-          return { windowReady: diff < 0.1 || Math.abs(diff - TWO_PI) < 0.1, remainingDays: 0 };
+          // Also check ship's orbital phase around the nearest body (departure tangent)
+          const nearestBodyId = findNearestBodyId(shipPosition, simulatedTime);
+          let departureReady = true; // default: no body constraint (e.g. in deep space)
+          if (nearestBodyId && nearestBodyId !== 'sun' && nearestBodyId !== plan.destinationId) {
+            const bodyState = computeBodyState(nearestBodyId, jd);
+            if (bodyState) {
+              const bodyPosAU: [number, number, number] = [
+                bodyState.position[0] * SCALE,
+                bodyState.position[1] * SCALE,
+                bodyState.position[2] * SCALE,
+              ];
+              const bodyVelAU: [number, number, number] = [
+                bodyState.velocity[0] * SCALE,
+                bodyState.velocity[1] * SCALE,
+                bodyState.velocity[2] * SCALE,
+              ];
+              // Ship position relative to the body
+              const rx = shipPosition[0] - bodyPosAU[0];
+              const ry = shipPosition[1] - bodyPosAU[1];
+              const rz = shipPosition[2] - bodyPosAU[2];
+              // Body's heliocentric velocity direction (forward direction)
+              const bv = Math.sqrt(bodyVelAU[0] ** 2 + bodyVelAU[1] ** 2 + bodyVelAU[2] ** 2);
+              if (bv > 1e-15) {
+                const vnx = bodyVelAU[0] / bv;
+                const vny = bodyVelAU[1] / bv;
+                const vnz = bodyVelAU[2] / bv;
+                const dot = rx * vnx + ry * vny + rz * vnz;
+                // For outward: ship should be on forward side (dot > 0)
+                // For inward: ship should be on backward side (dot < 0)
+                const rr = Math.sqrt(rx * rx + ry * ry + rz * rz);
+                const cosAngle = rr > 1e-15 ? dot / rr : 0;
+                if (goingOutward) {
+                  departureReady = cosAngle > -0.3; // ship ahead of or near the forward tangent
+                } else {
+                  departureReady = cosAngle < 0.3;  // ship behind or near the backward tangent
+                }
+              }
+            }
+          }
+
+          return { windowReady: orbitalAligned && departureReady, remainingDays: 0 };
         }
       }
       // Fallback: time says ready but cannot confirm orbitally (unusual)
