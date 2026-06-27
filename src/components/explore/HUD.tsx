@@ -66,14 +66,21 @@ export default function HUD() {
         orbDistAU = Math.sqrt(dx * dx + dy * dy + dz * dz);
         orbBodyVel = state.velocity;
 
-        // Orbital phase: 0° = direction from orbiting body toward the Sun
+        // Orbital phase: 0° = direction from orbiting body toward the Sun, measured in 3D
         const sunDirX = -state.position[0];
         const sunDirY = -state.position[1];
+        const sunDirZ = -state.position[2];
         const shipRelX = position[0] - state.position[0];
         const shipRelY = position[1] - state.position[1];
-        const sunAngle = Math.atan2(sunDirY, sunDirX);
-        const shipAngle = Math.atan2(shipRelY, shipRelX);
-        orbitalPhaseDeg = ((shipAngle - sunAngle) * 180 / Math.PI + 360) % 360;
+        const shipRelZ = position[2] - state.position[2];
+        const relDist = Math.sqrt(shipRelX * shipRelX + shipRelY * shipRelY + shipRelZ * shipRelZ);
+        const sunDist = Math.sqrt(sunDirX * sunDirX + sunDirY * sunDirY + sunDirZ * sunDirZ);
+        const dotRelSun = shipRelX * sunDirX + shipRelY * sunDirY + shipRelZ * sunDirZ;
+        const cosPhase = relDist > 1e-15 && sunDist > 1e-15 ? dotRelSun / (relDist * sunDist) : 0;
+        orbitalPhaseDeg = Math.acos(Math.max(-1, Math.min(1, cosPhase))) * 180 / Math.PI;
+        const crossZ = shipRelX * sunDirY - shipRelY * sunDirX;
+        if (crossZ < 0) orbitalPhaseDeg = 360 - orbitalPhaseDeg;
+        if (crossZ < 0) orbitalPhaseDeg = 360 - orbitalPhaseDeg;
       }
     }
   }
