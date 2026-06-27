@@ -1,4 +1,4 @@
-import { REAL_DATA, MU_SUN, AU_TO_M, NAVIGATION_CONFIG } from './constants';
+import { REAL_DATA, MU_SUN, AU_TO_M, NAVIGATION_CONFIG, MU_SUN_AU } from './constants';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from './orbital';
 
 const SCALE = 1 / AU_TO_M;
@@ -57,7 +57,7 @@ export function planHohmannTransfer(
   destinationId: string,
   simulatedTime: number,
 ): NavigationPlan {
-  const aCurrentAU = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN);
+  const aCurrentAU = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN_AU);
 
   if (destinationId === 'sun') {
     return { phases: [], method: 'hohmann', destinationId, plannedAt: simulatedTime };
@@ -73,10 +73,10 @@ export function planHohmannTransfer(
 
   const goingOutward = aTargetAU > aCurrentAU;
 
-  const deltaV1 = Math.sqrt(MU_SUN / aCurrentAU) *
+  const deltaV1 = Math.sqrt(MU_SUN_AU / aCurrentAU) *
     (Math.sqrt(2 * aTargetAU / (aCurrentAU + aTargetAU)) - 1);
 
-  const deltaV3 = Math.sqrt(MU_SUN / aTargetAU) *
+  const deltaV3 = Math.sqrt(MU_SUN_AU / aTargetAU) *
     (1 - Math.sqrt(2 * aCurrentAU / (aCurrentAU + aTargetAU)));
 
   // --- Launch window calculation ---
@@ -91,14 +91,13 @@ export function planHohmannTransfer(
   if (targetState) {
     const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
 
-    // Orbital angular velocities (rad/s)
-    const muSun = MU_SUN;
-    const omegaShip = Math.sqrt(muSun / (aCurrentAU * aCurrentAU * aCurrentAU));
-    const omegaTarget = Math.sqrt(muSun / (aTargetAU * aTargetAU * aTargetAU));
+    // Orbital angular velocities (rad/s) - using MU_SUN_AU for AU-scaled coordinates
+    const omegaShip = Math.sqrt(MU_SUN_AU / (aCurrentAU * aCurrentAU * aCurrentAU));
+    const omegaTarget = Math.sqrt(MU_SUN_AU / (aTargetAU * aTargetAU * aTargetAU));
 
     // Transfer time (seconds, half period of transfer ellipse)
     const transferTimeSec = Math.PI * Math.sqrt(
-      (aTransferAU * aTargetMeters * aTargetMeters * aTargetMeters) / muSun
+      (aTransferAU * aTransferAU * aTransferAU) / MU_SUN_AU
     );
 
     // Target's angular travel during transfer
@@ -161,8 +160,8 @@ export function planHohmannTransfer(
       name: goingOutward ? '提升远日点' : '降低近日点',
       thrustDirection: goingOutward ? 'forward' : 'backward',
       thrustMagnitude: 100,
-      deltaV: Math.abs(deltaV1) * SCALE,
-      expectedSpeedKms: Math.abs(deltaV1) / 1000,
+      deltaV: Math.abs(deltaV1),
+      expectedSpeedKms: Math.abs(deltaV1) * AU_TO_KM,
       targetOrbit: { semiMajorAxis: aTransferAU, eccentricity: 0.3 },
     },
     {
@@ -179,8 +178,8 @@ export function planHohmannTransfer(
       name: goingOutward ? '目标捕获制动' : '目标捕获加速',
       thrustDirection: goingOutward ? 'backward' : 'forward',
       thrustMagnitude: 100,
-      deltaV: Math.abs(deltaV3) * SCALE,
-      expectedSpeedKms: Math.abs(deltaV3) / 1000,
+      deltaV: Math.abs(deltaV3),
+      expectedSpeedKms: Math.abs(deltaV3) * AU_TO_KM,
       targetOrbit: { semiMajorAxis: aTargetAU, eccentricity: destData.orbital?.eccentricity ?? 0 },
     },
     {
@@ -217,17 +216,17 @@ export function checkPhaseCompletion(
     const shipAngle = Math.atan2(shipPosition[1], shipPosition[0]);
     const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
 
-    const aCurrentAU = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN);
+    const aCurrentAU = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN_AU);
     const destData = REAL_DATA[plan.destinationId];
     if (!destData || !destData.semiMajorAxis) return false;
     const aTargetAU = destData.semiMajorAxis / AU_TO_M;
     const goingOutward = aTargetAU > aCurrentAU;
 
-    const muSun = MU_SUN;
+    const muSun = MU_SUN_AU;
     const omegaTarget = Math.sqrt(muSun / (aTargetAU * aTargetAU * aTargetAU));
     const aTransferAU = (aCurrentAU + aTargetAU) / 2;
     const transferTimeSec = Math.PI * Math.sqrt(
-      (aTransferAU * destData.semiMajorAxis * destData.semiMajorAxis * destData.semiMajorAxis) / muSun
+      (aTransferAU * aTransferAU * aTransferAU) / muSun
     );
     const targetTravelAngle = omegaTarget * transferTimeSec;
 
@@ -261,7 +260,7 @@ export function checkPhaseCompletion(
     return dist < 0.1;
   }
 
-  const aCurrent = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN);
+  const aCurrent = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN_AU);
   const aTarget = phase.targetOrbit.semiMajorAxis;
   const diff = Math.abs(aCurrent - aTarget);
   return diff < NAVIGATION_CONFIG.phaseCompletionThresholdAU;
@@ -279,7 +278,7 @@ export function checkDeviation(
   }
 
   const phase = plan.phases[currentPhaseIdx];
-  const aCurrent = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN);
+  const aCurrent = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN_AU);
   const aTarget = phase.targetOrbit.semiMajorAxis;
   const devAU = Math.abs(aCurrent - aTarget);
   const devKms = devAU * AU_TO_KM;
@@ -314,17 +313,17 @@ export function checkWindowReady(
   const shipAngle = Math.atan2(shipPosition[1], shipPosition[0]);
   const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
 
-  const aCurrentAU = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN);
+  const aCurrentAU = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN_AU);
   const destData = REAL_DATA[plan.destinationId];
   if (!destData || !destData.semiMajorAxis) return { windowReady: false, remainingDays: 0 };
   const aTargetAU = destData.semiMajorAxis / AU_TO_M;
   const goingOutward = aTargetAU > aCurrentAU;
 
-  const muSun = MU_SUN;
+  const muSun = MU_SUN_AU;
   const omegaTarget = Math.sqrt(muSun / (aTargetAU * aTargetAU * aTargetAU));
   const aTransferAU = (aCurrentAU + aTargetAU) / 2;
   const transferTimeSec = Math.PI * Math.sqrt(
-    (aTransferAU * destData.semiMajorAxis * destData.semiMajorAxis * destData.semiMajorAxis) / muSun
+    (aTransferAU * aTransferAU * aTransferAU) / muSun
   );
   const targetTravelAngle = omegaTarget * transferTimeSec;
 

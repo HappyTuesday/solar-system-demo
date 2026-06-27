@@ -1,5 +1,20 @@
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
+import { checkWindowReady } from '../../engine/navigation';
+import { REAL_DATA, MU_SUN_AU } from '../../engine/constants';
 import './PhaseGuide.css';
+
+const AU_TO_KM = 1.496e8;
+
+function computeOrbitalSemiMajorAxis(
+  pos: [number, number, number],
+  vel: [number, number, number],
+  mu: number,
+): number {
+  const r = Math.sqrt(pos[0] ** 2 + pos[1] ** 2 + pos[2] ** 2);
+  const v2 = vel[0] ** 2 + vel[1] ** 2 + vel[2] ** 2;
+  const a = 1 / (2 / r - v2 / mu);
+  return Math.abs(a);
+}
 
 function getPhaseGuide(phaseName: string, windowReady: boolean): string {
   if (phaseName.startsWith('等待')) {
@@ -26,10 +41,22 @@ function getPhaseGuide(phaseName: string, windowReady: boolean): string {
   return '';
 }
 
+function formatWaitDetail(days: number): string {
+  if (days <= 0) return '即将就绪';
+  const totalSeconds = days * 86400;
+  if (totalSeconds < 60) return `${Math.max(1, Math.round(totalSeconds))} 秒`;
+  if (totalSeconds < 3600) return `${Math.round(totalSeconds / 60)} 分`;
+  if (totalSeconds < 86400) return `${Math.round(totalSeconds / 3600)} 小时`;
+  return `${Math.round(days)} 天`;
+}
+
 export default function PhaseGuide() {
   const navigationPlan = useSpaceshipStore(s => s.navigationPlan);
   const activePhaseIndex = useSpaceshipStore(s => s.activePhaseIndex);
   const windowReady = useSpaceshipStore(s => s.windowReady);
+  const position = useSpaceshipStore(s => s.position);
+  const velocity = useSpaceshipStore(s => s.velocity);
+  const simulatedTime = useSpaceshipStore(s => s.simulatedTime);
   const exploded = useSpaceshipStore(s => s.exploded);
 
   if (exploded || !navigationPlan || activePhaseIndex < 0 || activePhaseIndex >= navigationPlan.phases.length) {
@@ -38,6 +65,36 @@ export default function PhaseGuide() {
 
   const phase = navigationPlan.phases[activePhaseIndex];
   const guide = getPhaseGuide(phase.name, windowReady);
+
+  // Debug info for waiting phase
+  let debugLines: string[] = [];
+  if (phase.name.startsWith('等待')) {
+    const aCurrentAU = computeOrbitalSemiMajorAxis(position, velocity, MU_SUN_AU);
+    const destData = REAL_DATA[navigationPlan.destinationId];
+    const aTargetAU = destData?.semiMajorAxis ? destData.semiMajorAxis / 1.496e11 : 0;
+    const aTransferAU = (aCurrentAU + aTargetAU) / 2;
+    const goingOutward = aTargetAU > aCurrentAU;
+
+    const omegaShip = Math.sqrt(MU_SUN_AU / (aCurrentAU * aCurrentAU * aCurrentAU));
+    const omegaTarget = Math.sqrt(MU_SUN_AU / (aTargetAU * aTargetAU * aTargetAU));
+    const shipPeriodDays = (2 * Math.PI / omegaShip) / 86400;
+    const targetPeriodDays = (2 * Math.PI / omegaTarget) / 86400;
+    const transferTimeDays = (Math.PI * Math.sqrt((aTransferAU * aTransferAU * aTransferAU) / MU_SUN_AU)) / 86400;
+    const synodicPeriodDays = (2 * Math.PI / Math.abs(omegaShip - omegaTarget)) / 86400;
+
+    const window = checkWindowReady(position, velocity, navigationPlan, activePhaseIndex, simulatedTime);
+
+    debugLines = [
+      `当前轨道 a = ${aCurrentAU.toFixed(3)} AU`,
+      `目标轨道 a = ${aTargetAU.toFixed(3)} AU（${destData?.name || ''}）`,
+      `转移椭圆 a = ${aTransferAU.toFixed(3)} AU`,
+      `转移耗时 ≈ ${Math.round(transferTimeDays)} 天`,
+      `会合周期 ≈ ${Math.round(synodicPeriodDays)} 天`,
+      `飞船周期 ≈ ${Math.round(shipPeriodDays)} 天，目标周期 ≈ ${Math.round(targetPeriodDays)} 天`,
+      `方向：${goingOutward ? '向外' : '向内'}转移`,
+      `窗口状态：${window.windowReady ? '已就绪' : `等待中 · 剩余 ${formatWaitDetail(window.remainingDays)}`}`,
+    ];
+  }
 
   return (
     <div className="phase-guide-container">
@@ -62,9 +119,16 @@ export default function PhaseGuide() {
       ) : null}
       {phase.thrustDirection !== 'none' && (
         <div className="phase-guide-note">
-          预期 Δv：{phase.deltaV.toFixed(3)} AU/s
+          预期 Δv：{phase.deltaV.toFixed(4)} AU/s（{(phase.deltaV * AU_TO_KM).toFixed(1)} km/s）
           <br />
           推力方向：{phase.thrustDirection === 'forward' ? '正向（飞行方向）' : '反向（减速）'}
+        </div>
+      )}
+      {debugLines.length > 0 && (
+        <div className="phase-guide-note" style={{ marginTop: '8px', color: '#445566' }}>
+          {debugLines.map((line, i) => (
+            <span key={i}>{line}<br /></span>
+          ))}
         </div>
       )}
     </div>

@@ -448,6 +448,7 @@ export const MU_SUN = PHYSICAL_CONSTANTS.G * PHYSICAL_CONSTANTS.sunMass;
 
 export const AU_TO_M = 1.496e11;
 export const G_AU = PHYSICAL_CONSTANTS.G / (AU_TO_M * AU_TO_M * AU_TO_M);
+export const MU_SUN_AU = G_AU * PHYSICAL_CONSTANTS.sunMass;
 
 export const SPACECRAFT_DRAGON2 = {
   name: 'Crew Dragon 2',
