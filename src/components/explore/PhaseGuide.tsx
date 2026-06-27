@@ -42,10 +42,12 @@ function getPhaseGuide(phaseName: string, windowReady: boolean): string {
 }
 
 function formatWaitDetail(days: number): string {
-  if (days <= 0.0001) return '即将就绪';
-  if (days < 0.05) return `${Math.round(days * 86400)} 秒`;
-  if (days < 1) return `${(days * 24).toFixed(1)} 小时`;
-  return `${days.toFixed(1)} 天`;
+  if (days <= 0.00001) return '即将就绪';
+  const totalSec = days * 86400;
+  if (totalSec < 60) return `${Math.max(1, Math.round(totalSec))} 秒`;
+  if (totalSec < 3600) return `${Math.round(totalSec / 60)} 分`;
+  if (totalSec < 86400) return `${Math.round(totalSec / 3600)} 小时`;
+  return `${Math.round(days)} 天`;
 }
 
 export default function PhaseGuide() {
