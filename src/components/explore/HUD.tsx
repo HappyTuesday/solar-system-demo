@@ -50,8 +50,10 @@ export default function HUD() {
   let orbDistAU = Infinity;
   let orbBodyVel: [number, number, number] = [0, 0, 0];
   let orbitalPhaseDeg = 0;
-  let debugRelX = '';
-  let debugRelY = '';
+  let debugSX = '';
+  let debugSY = '';
+  let debugEX = '';
+  let debugEY = '';
   let debugSA = '';
   let debugCA = '';
 
@@ -73,8 +75,10 @@ export default function HUD() {
         const sunAngle = Math.atan2(-state.position[1], -state.position[0]);
         const shipAngle = Math.atan2(position[1] - state.position[1], position[0] - state.position[0]);
         orbitalPhaseDeg = ((shipAngle - sunAngle) * 180 / Math.PI + 360) % 360;
-        debugRelX = (position[0] - state.position[0]).toExponential(2);
-        debugRelY = (position[1] - state.position[1]).toExponential(2);
+        debugSX = position[0].toFixed(6);
+        debugSY = position[1].toFixed(6);
+        debugEX = state.position[0].toFixed(6);
+        debugEY = state.position[1].toFixed(6);
         debugSA = sunAngle.toFixed(4);
         debugCA = shipAngle.toFixed(4);
       }
@@ -136,8 +140,10 @@ export default function HUD() {
           <div className="hud-row-orbital">
             绕飞 · <span className="hud-value-blue">{orbBodyName}</span>
             <span className="hud-label">&nbsp;&nbsp;相位</span> <span className="hud-value-green">{orbitalPhaseDeg.toFixed(1)}°</span>
-            <span className="hud-label">&nbsp;&nbsp;rx:</span><span className="hud-value-green">{debugRelX}</span>
-            <span className="hud-label">&nbsp;&nbsp;ry:</span><span className="hud-value-green">{debugRelY}</span>
+            <span className="hud-label">&nbsp;&nbsp;sx:</span><span className="hud-value-green">{debugSX}</span>
+            <span className="hud-label">&nbsp;&nbsp;sy:</span><span className="hud-value-green">{debugSY}</span>
+            <span className="hud-label">&nbsp;&nbsp;ex:</span><span className="hud-value-green">{debugEX}</span>
+            <span className="hud-label">&nbsp;&nbsp;ey:</span><span className="hud-value-green">{debugEY}</span>
             <span className="hud-label">&nbsp;&nbsp;sa:</span><span className="hud-value-green">{debugSA}</span>
             <span className="hud-label">&nbsp;&nbsp;ca:</span><span className="hud-value-green">{debugCA}</span>
             <span className="hud-label">&nbsp;&nbsp;高度</span> <span className="hud-value-blue">{altitudeKm.toFixed(0)} km</span>
