@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
-import { REAL_DATA, MU_SUN } from '../../engine/constants';
+import { REAL_DATA, MU_SUN_AU as MU_SUN, AU_TO_KM } from '../../engine/constants';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
 import { predictTrajectory, applyThrustInBodyFrame, type BodyInfo } from '../../engine/spaceship';
+import { getSubStepTargetOrbit } from '../../engine/navigation';
 import type { SpaceshipState } from '../../types';
 
 const NORMAL_W = 212;
@@ -13,7 +14,6 @@ const ENLARGED_H = 380;
 const ENLARGE_ENABLED = false;
 const PADDING = 12;
 const VIEW_RANGE_AU = 0.1;
-const SCALE = 1 / 1.496e11;
 const SUN_RADIUS_PX = 4;
 const ZOOM_THRESHOLD_AU = 0.005;
 const ZOOM_BODY_RADIUS_PX = 8;
@@ -43,10 +43,10 @@ function computeBodyState2D(templateId: string, jd: number): { x: number; y: num
   const nu = trueAnomaly(E, o.eccentricity);
   const sv = stateVectors(data.semiMajorAxis, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN);
   return {
-    x: sv.position[0] * SCALE,
-    y: sv.position[1] * SCALE,
-    vx: sv.velocity[0] * SCALE,
-    vy: sv.velocity[1] * SCALE,
+    x: sv.position[0],
+    y: sv.position[1],
+    vx: sv.velocity[0],
+    vy: sv.velocity[1],
   };
 }
 
@@ -61,12 +61,12 @@ function computeBodyState3D(templateId: string, jd: number): { x: number; y: num
   const nu = trueAnomaly(E, o.eccentricity);
   const sv = stateVectors(data.semiMajorAxis, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN);
   return {
-    x: sv.position[0] * SCALE,
-    y: sv.position[1] * SCALE,
-    z: sv.position[2] * SCALE,
-    vx: sv.velocity[0] * SCALE,
-    vy: sv.velocity[1] * SCALE,
-    vz: sv.velocity[2] * SCALE,
+    x: sv.position[0],
+    y: sv.position[1],
+    z: sv.position[2],
+    vx: sv.velocity[0],
+    vy: sv.velocity[1],
+    vz: sv.velocity[2],
   };
 }
 
@@ -259,9 +259,9 @@ function MiniMap() {
       const anchorY = isZoomed ? nearestY : sp.position[1];
 
       // Adaptive grid & scale bar unit
-      const AU_TO_KM2 = 1.496e8;
+      const AU_TO_KM = 1.496e8;
       const useKm = viewRange < 0.001;
-      const viewRangeDisplay = viewRange * (useKm ? AU_TO_KM2 : 1);
+      const viewRangeDisplay = viewRange * (useKm ? AU_TO_KM : 1);
 
       const niceSteps = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
       const targetStepDisplay = viewRangeDisplay / 6;
@@ -269,7 +269,7 @@ function MiniMap() {
       for (const s of niceSteps) {
         if (s >= targetStepDisplay) { gridStepDisplay = s; break; }
       }
-      const gridStepAU = gridStepDisplay / (useKm ? AU_TO_KM2 : 1);
+      const gridStepAU = gridStepDisplay / (useKm ? AU_TO_KM : 1);
       const gridStepPx = gridStepAU * scale;
 
       ctx.clearRect(0, 0, cw, ch);
@@ -569,7 +569,7 @@ function MiniMap() {
         // Red dashed: destination body's orbital path
         const destData = REAL_DATA[navPlan.destinationId];
         if (destData && destData.semiMajorAxis && destData.orbital && navPlan.destinationId !== 'sun') {
-          const destAU = destData.semiMajorAxis / 1.496e11;
+          const destAU = destData.semiMajorAxis;
           const destPx = destAU * scale;
           const destEcc = destData.orbital.eccentricity;
 
@@ -591,6 +591,46 @@ function MiniMap() {
             ctx.stroke();
             ctx.setLineDash([]);
             ctx.restore();
+          }
+        }
+      }
+
+      // --- Blue dashed: expected orbit for current sub-step ---
+      const navPlanExpected = useSpaceshipStore.getState().navigationPlan;
+      if (navPlanExpected && navPlanExpected.phases.length > 0) {
+        const expectedActivePhaseIdx = useSpaceshipStore.getState().activePhaseIndex;
+        if (expectedActivePhaseIdx >= 0 && expectedActivePhaseIdx < navPlanExpected.phases.length) {
+          const expectedPhase = navPlanExpected.phases[expectedActivePhaseIdx];
+          const expectedSSIdx = useSpaceshipStore.getState().activeSubStepIndex;
+          if (expectedSSIdx >= 0 && expectedSSIdx < expectedPhase.subSteps.length) {
+            const activeSS = expectedPhase.subSteps[expectedSSIdx];
+            const aTarget = REAL_DATA[navPlanExpected.destinationId]?.semiMajorAxis ?? 0;
+            if (aTarget > 0) {
+              const aTransfer = (expectedPhase.targetOrbit.semiMajorAxis + aTarget) / 2;
+              const destEcc = REAL_DATA[navPlanExpected.destinationId]?.orbital?.eccentricity ?? 0;
+              const expectedOrbit = getSubStepTargetOrbit(activeSS, aTransfer, aTarget, destEcc);
+              if (expectedOrbit) {
+                const expAPx = expectedOrbit.semiMajorAxis * scale;
+                if (expAPx > 0.5 && expAPx < usable * 5) {
+                  ctx.save();
+                  ctx.strokeStyle = 'rgba(68, 136, 255, 0.5)';
+                  ctx.lineWidth = 1;
+                  ctx.setLineDash([4, 3]);
+                  ctx.beginPath();
+                  const bExp = expAPx * Math.sqrt(1 - expectedOrbit.eccentricity * expectedOrbit.eccentricity);
+                  for (let i = 0; i <= 128; i++) {
+                    const angle = (i / 128) * Math.PI * 2;
+                    const ox = cx + Math.cos(angle) * expAPx;
+                    const oy = cy - Math.sin(angle) * bExp;
+                    if (i === 0) ctx.moveTo(ox, oy);
+                    else ctx.lineTo(ox, oy);
+                  }
+                  ctx.stroke();
+                  ctx.setLineDash([]);
+                  ctx.restore();
+                }
+              }
+            }
           }
         }
       }
@@ -818,6 +858,18 @@ function MiniMap() {
         ctx.setLineDash([]);
         ctx.fillStyle = '#445566';
         ctx.fillText('导航轨道', cw - 29, legendY + 2.5);
+
+        // Blue dash = expected orbit
+        ctx.strokeStyle = 'rgba(68,136,255,0.6)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 2]);
+        ctx.beginPath();
+        ctx.moveTo(cw + 5, legendY);
+        ctx.lineTo(cw + 25, legendY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#445566';
+        ctx.fillText('期望轨道', cw + 31, legendY + 2.5);
 
         ctx.restore();
       }
