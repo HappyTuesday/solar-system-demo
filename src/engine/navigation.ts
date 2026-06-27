@@ -54,6 +54,57 @@ function computeOrbitalSemiMajorAxis(
 
 const BODY_IDS = ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
 
+// Hill sphere radius for each body (AU)
+function getHillRadiusAU(bodyId: string): number {
+  if (bodyId === 'sun') return Infinity;
+  const data = REAL_DATA[bodyId];
+  if (!data?.semiMajorAxis) return 0;
+  const a = data.semiMajorAxis / AU_TO_M; // AU
+  const m = data.mass;
+  const M = REAL_DATA.sun.mass;
+  return a * Math.pow(m / (3 * M), 1 / 3);
+}
+
+// Find which body the ship is gravitationally orbiting
+export function getOrbitingBodyId(
+  shipPosition: [number, number, number],
+  simulatedTime: number,
+): string {
+  const jd = julianDate(simulatedTime);
+
+  for (const id of BODY_IDS) {
+    if (id === 'sun') continue;
+    const data = REAL_DATA[id];
+    if (!data?.semiMajorAxis) continue;
+
+    const state = computeBodyState(id, jd);
+    if (!state) continue;
+
+    const bx = state.position[0] * SCALE;
+    const by = state.position[1] * SCALE;
+    const bz = state.position[2] * SCALE;
+    const dx = shipPosition[0] - bx;
+    const dy = shipPosition[1] - by;
+    const dz = shipPosition[2] - bz;
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+    const hillR = getHillRadiusAU(id);
+    if (dist < hillR) return id;
+  }
+  return 'sun';
+}
+
+// Get the effective heliocentric semi-major axis of the body the ship is orbiting
+export function getOrbitingBodySemiMajorAxis(
+  shipPosition: [number, number, number],
+  simulatedTime: number,
+): number {
+  const bodyId = getOrbitingBodyId(shipPosition, simulatedTime);
+  if (bodyId === 'sun') return 0;
+  const data = REAL_DATA[bodyId];
+  return (data?.semiMajorAxis ?? 1.496e11) / AU_TO_M;
+}
+
 export function getNearestBodySemiMajorAxis(
   shipPosition: [number, number, number],
   simulatedTime: number,
@@ -367,7 +418,7 @@ export function checkWindowReady(
         const shipAngle = Math.atan2(shipPosition[1], shipPosition[0]);
         const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
 
-        const aCurrentAU = getNearestBodySemiMajorAxis(shipPosition, simulatedTime);
+  const aCurrentAU = getOrbitingBodySemiMajorAxis(shipPosition, simulatedTime);
         const destData = REAL_DATA[plan.destinationId];
         if (destData && destData.semiMajorAxis) {
           const aTargetAU = destData.semiMajorAxis / AU_TO_M;
@@ -397,11 +448,11 @@ export function checkWindowReady(
           const diff = Math.abs(currentNorm - requiredNorm);
           const orbitalAligned = diff < 0.1 || Math.abs(diff - TWO_PI) < 0.1;
 
-          // Also check ship's orbital phase around the nearest body (departure tangent)
-          const nearestBodyId = findNearestBodyId(shipPosition, simulatedTime);
-          let departureReady = true; // default: no body constraint (e.g. in deep space)
-          if (nearestBodyId && nearestBodyId !== 'sun' && nearestBodyId !== plan.destinationId) {
-            const bodyState = computeBodyState(nearestBodyId, jd);
+          // Also check ship's orbital phase around the orbiting body (departure tangent)
+          const orbitingBodyId = getOrbitingBodyId(shipPosition, simulatedTime);
+          let departureReady = true;
+          if (orbitingBodyId !== 'sun' && orbitingBodyId !== plan.destinationId) {
+            const bodyState = computeBodyState(orbitingBodyId, jd);
             if (bodyState) {
               const bodyPosAU: [number, number, number] = [
                 bodyState.position[0] * SCALE,

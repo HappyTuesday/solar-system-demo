@@ -14,6 +14,7 @@ export interface SpaceshipStore extends SpaceshipState {
   attitudeMode: AttitudeMode;
   targetBodyId: string | null;
   nearestBodyId: string | null;
+  orbitingBodyId: string | null;
 
   // 导航
   navigationPlan: NavigationPlan | null;
@@ -50,6 +51,7 @@ export interface SpaceshipStore extends SpaceshipState {
   setAttitudeMode: (mode: AttitudeMode) => void;
   setTargetBody: (id: string | null) => void;
   setNearestBodyId: (id: string | null) => void;
+  setOrbitingBodyId: (id: string | null) => void;
   setNavigationPlan: (plan: NavigationPlan | null) => void;
   setActivePhaseIndex: (idx: number) => void;
   setDeviationWarning: (msg: string | null) => void;
@@ -103,6 +105,7 @@ const initialState = {
   attitudeMode: 'inertial' as AttitudeMode,
   targetBodyId: null as string | null,
   nearestBodyId: null as string | null,
+  orbitingBodyId: null as string | null,
   navigationPlan: null as NavigationPlan | null,
   activePhaseIndex: -1 as number,
   deviationWarning: null as string | null,
@@ -150,6 +153,7 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     attitudeMode: 'inertial' as AttitudeMode,
     targetBodyId: null as string | null,
   nearestBodyId: null as string | null,
+  orbitingBodyId: null as string | null,
     navigationPlan: null as NavigationPlan | null,
     activePhaseIndex: -1 as number,
     deviationWarning: null as string | null,
@@ -169,6 +173,7 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
   pitch: (angle) => set(s => ({ direction: rotatePitch(s.direction, angle), attitudeMode: 'inertial' as AttitudeMode })),
   setAttitudeMode: (mode) => set({ attitudeMode: mode }),
   setNearestBodyId: (id) => set({ nearestBodyId: id }),
+  setOrbitingBodyId: (id) => set({ orbitingBodyId: id }),
   setTargetBody: (id) => set(s => {
     if (id !== null) {
       const plan = planHohmannTransfer(s.position, s.velocity, id, s.simulatedTime);

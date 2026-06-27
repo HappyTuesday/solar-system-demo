@@ -697,10 +697,11 @@ function ExploreCanvas() {
             [shipState.velocity[0], shipState.velocity[1], shipState.velocity[2]],
           );
 
-          // Update nearest body ID (used by HUD, navigation, attitude modes)
+          // Update nearest body ID and orbiting body ID (used by HUD, navigation, attitude modes)
           {
             let nearestDist = Infinity;
             let nearestId = 'sun';
+            let orbitingId = 'sun';
             for (const id of allIds) {
               if (!REAL_DATA[id]) continue;
               if (id === 'sun') {
@@ -713,9 +714,18 @@ function ExploreCanvas() {
                 const dx = bs.position[0] - shipState.position[0], dy = bs.position[1] - shipState.position[1], dz = bs.position[2] - shipState.position[2];
                 const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 if (dist < nearestDist) { nearestDist = dist; nearestId = id; }
+
+                // Hill sphere check for orbiting body
+                const data = REAL_DATA[id];
+                if (data?.semiMajorAxis) {
+                  const aBodyAU = (data.semiMajorAxis / 1.496e11);
+                  const hillR = aBodyAU * Math.pow(data.mass / (3 * REAL_DATA.sun.mass), 1 / 3);
+                  if (dist < hillR) orbitingId = id;
+                }
               }
             }
             store.setNearestBodyId(nearestId);
+            store.setOrbitingBodyId(orbitingId);
           }
 
           if (store.attitudeMode !== 'inertial') {

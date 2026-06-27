@@ -33,6 +33,7 @@ export default function HUD() {
   const simulatedTime = useSpaceshipStore(s => s.simulatedTime);
   const targetBodyId = useSpaceshipStore(s => s.targetBodyId);
   const nearestBodyId = useSpaceshipStore(s => s.nearestBodyId);
+  const orbitingBodyId = useSpaceshipStore(s => s.orbitingBodyId);
 
   if (exploded) return null;
 
@@ -117,7 +118,7 @@ export default function HUD() {
       <div className="hud-row">
         {isOrbiting && (
           <div className="hud-row-orbital">
-            绕飞 · <span className="hud-value-blue">{nearestBodyName}</span>
+            绕飞 · <span className="hud-value-blue">{orbitingBodyId ? (REAL_DATA[orbitingBodyId]?.name || '') : nearestBodyName}</span>
             <span className="hud-label">&nbsp;&nbsp;速度</span> <span className="hud-value-green">{relSpeedKms.toFixed(2)} km/s</span>
             <span className="hud-label">&nbsp;&nbsp;高度</span> <span className="hud-value-blue">{altitudeKm.toFixed(0)} km</span>
             <span className="hud-label">&nbsp;&nbsp;角速度</span> <span className="hud-value-yellow">{angularVelDegS.toFixed(4)} °/s</span>
