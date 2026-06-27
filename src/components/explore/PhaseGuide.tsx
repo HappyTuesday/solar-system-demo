@@ -84,12 +84,8 @@ export default function PhaseGuide() {
 
     const window = checkWindowReady(position, velocity, navigationPlan, activePhaseIndex, simulatedTime);
 
-    const waitEndTimeText = phase.waitEndTime != null
-      ? new Date(phase.waitEndTime).toLocaleString()
-      : '无';
-
     debugLines = [
-      `参考轨道 a = ${aStableAU.toFixed(3)} AU（最近天体）`,
+      `参考轨道 a = ${aStableAU.toFixed(3)} AU（绕飞天体）`,
       `瞬时密切轨道 a = ${aOsculatingAU.toFixed(3)} AU（波动，正常）`,
       `目标轨道 a = ${aTargetAU.toFixed(3)} AU（${destData?.name || ''}）`,
       `转移椭圆 a = ${aTransferAU.toFixed(3)} AU`,
@@ -97,8 +93,7 @@ export default function PhaseGuide() {
       `会合周期 ≈ ${Math.round(synodicPeriodDays)} 天`,
       `飞船周期 ≈ ${Math.round(shipPeriodDays)} 天，目标周期 ≈ ${Math.round(targetPeriodDays)} 天`,
       `方向：${goingOutward ? '向外' : '向内'}转移`,
-      `窗口截止时间：${waitEndTimeText}`,
-      `窗口就绪：${window.windowReady ? '是' : '否'} · 剩余 ${formatWaitDetail(window.remainingDays)}`,
+      `实时剩余 ≈ ${formatWaitDetail(window.remainingDays)}`,
       `(Store剩余：${formatWaitDetail(windowRemainingDays)})`,
     ];
   }

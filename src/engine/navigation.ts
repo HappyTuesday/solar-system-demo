@@ -402,103 +402,84 @@ export function checkWindowReady(
     return { windowReady: false, remainingDays: 0 };
   }
 
-  // Use time-based remaining calculation (linear, unaffected by ship's local orbit wobble)
-  if (phase.waitEndTime != null) {
-    const remainingMs = phase.waitEndTime - simulatedTime;
-    const remainingDays = remainingMs / (86400 * 1000);
+  const jd = julianDate(simulatedTime);
+  const targetState = computeBodyState(plan.destinationId, jd);
+  if (!targetState) return { windowReady: false, remainingDays: 0 };
 
-    // Window is ready when remaining time <= 0, check with orbital calculation for verification
-    const windowReady = remainingMs <= 0;
-
-    // If window is ready, use orbital calculation to confirm
-    if (windowReady) {
-      const jd = julianDate(simulatedTime);
-      const targetState = computeBodyState(plan.destinationId, jd);
-      if (targetState) {
-        const shipAngle = Math.atan2(shipPosition[1], shipPosition[0]);
-        const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
+  const shipAngle = Math.atan2(shipPosition[1], shipPosition[0]);
+  const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
 
   const aCurrentAU = getOrbitingBodySemiMajorAxis(shipPosition, simulatedTime);
-        const destData = REAL_DATA[plan.destinationId];
-        if (destData && destData.semiMajorAxis) {
-          const aTargetAU = destData.semiMajorAxis / AU_TO_M;
-          const goingOutward = aTargetAU > aCurrentAU;
+  const destData = REAL_DATA[plan.destinationId];
+  if (!destData?.semiMajorAxis) return { windowReady: false, remainingDays: 0 };
+  const aTargetAU = destData.semiMajorAxis / AU_TO_M;
+  const goingOutward = aTargetAU > aCurrentAU;
 
-          const muSun = MU_SUN_AU;
-          const omegaTarget = Math.sqrt(muSun / (aTargetAU * aTargetAU * aTargetAU));
-          const aTransferAU = (aCurrentAU + aTargetAU) / 2;
-          const transferTimeSec = Math.PI * Math.sqrt(
-            (aTransferAU * aTransferAU * aTransferAU) / muSun
-          );
-          const targetTravelAngle = omegaTarget * transferTimeSec;
+  const muSun = MU_SUN_AU;
+  const omegaShip = Math.sqrt(muSun / (aCurrentAU * aCurrentAU * aCurrentAU));
+  const omegaTarget = Math.sqrt(muSun / (aTargetAU * aTargetAU * aTargetAU));
+  const aTransferAU = (aCurrentAU + aTargetAU) / 2;
+  const transferTimeSec = Math.PI * Math.sqrt(
+    (aTransferAU * aTransferAU * aTransferAU) / muSun
+  );
+  const targetTravelAngle = omegaTarget * transferTimeSec;
 
-          let requiredPhaseAngle: number;
-          let currentPhaseAngle: number;
-          if (goingOutward) {
-            requiredPhaseAngle = Math.PI - targetTravelAngle;
-            currentPhaseAngle = shipAngle - targetAngle;
-          } else {
-            requiredPhaseAngle = targetTravelAngle - Math.PI;
-            currentPhaseAngle = targetAngle - shipAngle;
-          }
-
-          const TWO_PI = 2 * Math.PI;
-          const currentNorm = ((currentPhaseAngle % TWO_PI) + TWO_PI) % TWO_PI;
-          const requiredNorm = ((requiredPhaseAngle % TWO_PI) + TWO_PI) % TWO_PI;
-          const diff = Math.abs(currentNorm - requiredNorm);
-          const orbitalAligned = diff < 0.1 || Math.abs(diff - TWO_PI) < 0.1;
-
-          // Also check ship's orbital phase around the orbiting body (departure tangent)
-          const orbitingBodyId = getOrbitingBodyId(shipPosition, simulatedTime);
-          let departureReady = true;
-          if (orbitingBodyId !== 'sun' && orbitingBodyId !== plan.destinationId) {
-            const bodyState = computeBodyState(orbitingBodyId, jd);
-            if (bodyState) {
-              const bodyPosAU: [number, number, number] = [
-                bodyState.position[0] * SCALE,
-                bodyState.position[1] * SCALE,
-                bodyState.position[2] * SCALE,
-              ];
-              const bodyVelAU: [number, number, number] = [
-                bodyState.velocity[0] * SCALE,
-                bodyState.velocity[1] * SCALE,
-                bodyState.velocity[2] * SCALE,
-              ];
-              // Ship position relative to the body
-              const rx = shipPosition[0] - bodyPosAU[0];
-              const ry = shipPosition[1] - bodyPosAU[1];
-              const rz = shipPosition[2] - bodyPosAU[2];
-              // Body's heliocentric velocity direction (forward direction)
-              const bv = Math.sqrt(bodyVelAU[0] ** 2 + bodyVelAU[1] ** 2 + bodyVelAU[2] ** 2);
-              if (bv > 1e-15) {
-                const vnx = bodyVelAU[0] / bv;
-                const vny = bodyVelAU[1] / bv;
-                const vnz = bodyVelAU[2] / bv;
-                const dot = rx * vnx + ry * vny + rz * vnz;
-                // For outward: ship should be on forward side (dot > 0)
-                // For inward: ship should be on backward side (dot < 0)
-                const rr = Math.sqrt(rx * rx + ry * ry + rz * rz);
-                const cosAngle = rr > 1e-15 ? dot / rr : 0;
-                if (goingOutward) {
-                  departureReady = cosAngle > -0.3; // ship ahead of or near the forward tangent
-                } else {
-                  departureReady = cosAngle < 0.3;  // ship behind or near the backward tangent
-                }
-              }
-            }
-          }
-
-          return { windowReady: orbitalAligned && departureReady, remainingDays: 0 };
-        }
-      }
-      // Fallback: time says ready but cannot confirm orbitally (unusual)
-      return { windowReady: true, remainingDays: 0 };
-    }
-
-    // Window not ready yet: return linear countdown
-    return { windowReady: false, remainingDays: Math.max(0, remainingDays) };
+  let requiredPhaseAngle: number;
+  let currentPhaseAngle: number;
+  if (goingOutward) {
+    requiredPhaseAngle = Math.PI - targetTravelAngle;
+    currentPhaseAngle = shipAngle - targetAngle;
+  } else {
+    requiredPhaseAngle = targetTravelAngle - Math.PI;
+    currentPhaseAngle = targetAngle - shipAngle;
   }
 
-  // Fallback: no waitEndTime (legacy plan)
-  return { windowReady: false, remainingDays: 0 };
+  const TWO_PI = 2 * Math.PI;
+  const currentNorm = ((currentPhaseAngle % TWO_PI) + TWO_PI) % TWO_PI;
+  const requiredNorm = ((requiredPhaseAngle % TWO_PI) + TWO_PI) % TWO_PI;
+  const diff = Math.abs(currentNorm - requiredNorm);
+  const orbitalAligned = diff < 0.1 || Math.abs(diff - TWO_PI) < 0.1;
+
+  // Check departure tangent if orbiting a planet
+  let departureReady = true;
+  const orbitingBodyId = getOrbitingBodyId(shipPosition, simulatedTime);
+  if (orbitingBodyId !== 'sun' && orbitingBodyId !== plan.destinationId) {
+    const bodyState = computeBodyState(orbitingBodyId, jd);
+    if (bodyState) {
+      const bodyPosAU: [number, number, number] = [
+        bodyState.position[0] * SCALE,
+        bodyState.position[1] * SCALE,
+        bodyState.position[2] * SCALE,
+      ];
+      const bodyVelAU: [number, number, number] = [
+        bodyState.velocity[0] * SCALE,
+        bodyState.velocity[1] * SCALE,
+        bodyState.velocity[2] * SCALE,
+      ];
+      const rx = shipPosition[0] - bodyPosAU[0];
+      const ry = shipPosition[1] - bodyPosAU[1];
+      const rz = shipPosition[2] - bodyPosAU[2];
+      const bv = Math.sqrt(bodyVelAU[0] ** 2 + bodyVelAU[1] ** 2 + bodyVelAU[2] ** 2);
+      if (bv > 1e-15) {
+        const vnx = bodyVelAU[0] / bv;
+        const vny = bodyVelAU[1] / bv;
+        const vnz = bodyVelAU[2] / bv;
+        const dot = rx * vnx + ry * vny + rz * vnz;
+        const rr = Math.sqrt(rx * rx + ry * ry + rz * rz);
+        const cosAngle = rr > 1e-15 ? dot / rr : 0;
+        departureReady = goingOutward ? cosAngle > -0.3 : cosAngle < 0.3;
+      }
+    }
+  }
+
+  // Real-time remaining days: phase difference / synodic angular rate
+  let angleToWait = requiredNorm - currentNorm;
+  if (angleToWait < 0) angleToWait += TWO_PI;
+  const synodicRate = Math.abs(omegaShip - omegaTarget);
+  const remainingDays = orbitalAligned ? 0 : (angleToWait / synodicRate) / 86400;
+
+  return {
+    windowReady: orbitalAligned && departureReady,
+    remainingDays,
+  };
 }
