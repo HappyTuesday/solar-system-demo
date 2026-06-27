@@ -52,13 +52,47 @@ function computeOrbitalSemiMajorAxis(
   return Math.abs(a);
 }
 
+const BODY_IDS = ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
+
+function getNearestBodySemiMajorAxis(
+  shipPosition: [number, number, number],
+): number {
+  let nearestDist = Infinity;
+  let nearestSemiMajorAU = 1; // default to 1 AU (Earth)
+
+  for (const id of BODY_IDS) {
+    let bx: number, by: number, bz: number;
+    if (id === 'sun') {
+      bx = 0; by = 0; bz = 0;
+    } else {
+      const data = REAL_DATA[id];
+      if (!data?.semiMajorAxis) continue;
+      // For approximation, place the body at its semi-major axis on the X axis
+      // This gives a rough distance; actual position varies with orbit phase
+      bx = data.semiMajorAxis / AU_TO_M;
+      by = 0;
+      bz = 0;
+    }
+    const dx = shipPosition[0] - bx;
+    const dy = shipPosition[1] - by;
+    const dz = shipPosition[2] - bz;
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      const data = REAL_DATA[id];
+      nearestSemiMajorAU = id === 'sun' ? 0 : (data?.semiMajorAxis ?? 1.496e11) / AU_TO_M;
+    }
+  }
+  return nearestSemiMajorAU;
+}
+
 export function planHohmannTransfer(
   shipPosition: [number, number, number],
   shipVelocity: [number, number, number],
   destinationId: string,
   simulatedTime: number,
 ): NavigationPlan {
-  const aCurrentAU = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN_AU);
+  const aCurrentAU = getNearestBodySemiMajorAxis(shipPosition);
 
   if (destinationId === 'sun') {
     return { phases: [], method: 'hohmann', destinationId, plannedAt: simulatedTime };
@@ -218,7 +252,7 @@ export function checkPhaseCompletion(
     const shipAngle = Math.atan2(shipPosition[1], shipPosition[0]);
     const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
 
-    const aCurrentAU = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN_AU);
+  const aCurrentAU = getNearestBodySemiMajorAxis(shipPosition);
     const destData = REAL_DATA[plan.destinationId];
     if (!destData || !destData.semiMajorAxis) return false;
     const aTargetAU = destData.semiMajorAxis / AU_TO_M;
@@ -324,7 +358,7 @@ export function checkWindowReady(
         const shipAngle = Math.atan2(shipPosition[1], shipPosition[0]);
         const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
 
-        const aCurrentAU = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN_AU);
+  const aCurrentAU = getNearestBodySemiMajorAxis(shipPosition);
         const destData = REAL_DATA[plan.destinationId];
         if (destData && destData.semiMajorAxis) {
           const aTargetAU = destData.semiMajorAxis / AU_TO_M;
