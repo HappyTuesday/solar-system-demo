@@ -132,16 +132,16 @@ export default function HUD() {
         {isOrbiting && (
           <div className="hud-row-orbital">
             绕飞 · <span className="hud-value-blue">{orbBodyName}</span>
-            <span className="hud-label">&nbsp;&nbsp;相位</span> <span className="hud-value-green">{orbitalPhaseDeg.toFixed(0)}°</span>
-            <span className="hud-label">&nbsp;&nbsp;速度</span> <span className="hud-value-green">{relSpeedKms.toFixed(2)} km/s</span>
+            <span className="hud-label">&nbsp;&nbsp;相位</span> <span className="hud-value-green">{orbitalPhaseDeg.toFixed(1)}°</span>
             <span className="hud-label">&nbsp;&nbsp;高度</span> <span className="hud-value-blue">{altitudeKm.toFixed(0)} km</span>
+            <span className="hud-label">&nbsp;&nbsp;速度</span> <span className="hud-value-green">{relSpeedKms.toFixed(2)} km/s</span>
             <span className="hud-label">&nbsp;&nbsp;角速度</span> <span className="hud-value-yellow">{angularVelDegS.toFixed(4)} °/s</span>
             <span className="hud-label">&nbsp;&nbsp;周期</span> <span className="hud-value-orange">{orbitalPeriodMin.toFixed(1)} min</span>
             <span className="hud-label">&nbsp;&nbsp;船身夹角</span> <span className="hud-value-yellow">{headingAngleDeg.toFixed(1)}°</span>
           </div>
         )}
         <div className="hud-row-basic">
-          <span className="hud-label">X</span> <span className="hud-value-green">{position[0].toFixed(4)}</span>
+          <span className="hud-label">相位({orbitalPhaseDeg.toFixed(1)}°)</span>
           <span className="hud-label">&nbsp;&nbsp;Y</span> <span className="hud-value-green">{position[1].toFixed(4)}</span>
           <span className="hud-label">&nbsp;&nbsp;Z</span> <span className="hud-value-green">{position[2].toFixed(4)}</span>
           <span className="hud-label">&nbsp;&nbsp;速度</span> <span className="hud-value-yellow">{speedMs.toFixed(0)} km/s</span>
