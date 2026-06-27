@@ -80,7 +80,7 @@ export default function HUD() {
 
   const orbDistKm = orbDistAU * AU_TO_KM;
   const altitudeKm = orbDistKm - orbBodyRadiusKm;
-  const isOrbiting = orbDistAU < ORBIT_THRESHOLD_AU && orbDistAU > 1e-12 && orbitingBodyId !== 'sun';
+  const isOrbiting = orbitingBodyId !== 'sun';
 
   // Orbital params (only when orbiting)
   let relSpeedKms = 0;
