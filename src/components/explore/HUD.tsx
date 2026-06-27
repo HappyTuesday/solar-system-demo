@@ -110,7 +110,6 @@ export default function HUD() {
             }
           }
         }
-        if (crossZ < 0) orbitalPhaseDeg = 360 - orbitalPhaseDeg;
       }
     }
   }
