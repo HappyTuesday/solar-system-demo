@@ -216,12 +216,21 @@ function Dashboard() {
             {/* Column 2: Navigation Route */}
             <div className="dashboard-column">
               <div className="dashboard-column-title">导航路线</div>
-              <div className="dashboard-nav-set-btn"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setShowTargetModal(true)}
-              >
-                前往目的地
-              </div>
+              {targetBodyId ? (
+                <div className="dashboard-nav-set-btn"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setShowTargetModal(true)}
+                >
+                  目的地：{REAL_DATA[targetBodyId]?.name || targetBodyId} <span style={{ fontSize: 7, color: '#556677' }}>(修改)</span>
+                </div>
+              ) : (
+                <div className="dashboard-nav-set-btn"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setShowTargetModal(true)}
+                >
+                  前往目的地
+                </div>
+              )}
 
               {navigationPlan && navigationPlan.phases.length > 0 ? (
                 <div className="dashboard-nav-phases" ref={navPhasesRef}>
