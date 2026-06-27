@@ -1,4 +1,6 @@
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
+import { useExploreStore } from '../../stores/exploreStore';
+import { useEffect, useRef } from 'react';
 import { checkWindowReady, getOrbitingBodySemiMajorAxis } from '../../engine/navigation';
 import { REAL_DATA, MU_SUN_AU } from '../../engine/constants';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
@@ -65,6 +67,23 @@ export default function PhaseGuide() {
   const velocity = useSpaceshipStore(s => s.velocity);
   const simulatedTime = useSpaceshipStore(s => s.simulatedTime);
   const exploded = useSpaceshipStore(s => s.exploded);
+  const timeScale = useExploreStore(s => s.timeScale);
+  const setTimeScale = useExploreStore(s => s.setTimeScale);
+  const fastForwardRef = useRef<number | null>(null);
+
+  // Auto-restore time scale when window becomes ready during fast-forward
+  useEffect(() => {
+    if (windowReady && fastForwardRef.current != null) {
+      setTimeScale(fastForwardRef.current);
+      fastForwardRef.current = null;
+    }
+  }, [windowReady, setTimeScale]);
+
+  const handleFastForward = () => {
+    if (windowReady || fastForwardRef.current != null) return;
+    fastForwardRef.current = timeScale;
+    setTimeScale(1000000);
+  };
 
   if (exploded || !navigationPlan || activePhaseIndex < 0 || activePhaseIndex >= navigationPlan.phases.length) {
     return null;
@@ -137,6 +156,15 @@ export default function PhaseGuide() {
           {windowReady
             ? '发射窗口已就绪 · 请点火'
             : `预计等待约 ${formatWaitDetail(windowRemainingDays > 0 ? windowRemainingDays : (phase.expectedWaitDays ?? 0))}`}
+        </div>
+      )}
+      {phase.name.startsWith('等待') && !windowReady && (
+        <div
+          className="phase-guide-note"
+          style={{ cursor: 'pointer', color: '#00b8ff', marginTop: '4px', pointerEvents: 'auto' }}
+          onClick={handleFastForward}
+        >
+          ⏩ 快进到发射窗口
         </div>
       )}
       {phase.thrustDirection !== 'none' && (
