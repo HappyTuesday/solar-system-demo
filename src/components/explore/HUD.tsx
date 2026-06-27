@@ -50,6 +50,10 @@ export default function HUD() {
   let orbDistAU = Infinity;
   let orbBodyVel: [number, number, number] = [0, 0, 0];
   let orbitalPhaseDeg = 0;
+  let debugRelX = '';
+  let debugRelY = '';
+  let debugSA = '';
+  let debugCA = '';
 
   if (orbitingBodyId) {
     if (orbitingBodyId === 'sun') {
@@ -69,13 +73,10 @@ export default function HUD() {
         const sunAngle = Math.atan2(-state.position[1], -state.position[0]);
         const shipAngle = Math.atan2(position[1] - state.position[1], position[0] - state.position[0]);
         orbitalPhaseDeg = ((shipAngle - sunAngle) * 180 / Math.PI + 360) % 360;
-        (window as unknown as Record<string, unknown>).__phaseDebug = {
-          bodyX: state.position[0], bodyY: state.position[1],
-          shipX: position[0], shipY: position[1],
-          relX: position[0] - state.position[0], relY: position[1] - state.position[1],
-          sunAngleRad: sunAngle, shipAngleRad: shipAngle,
-          phase: orbitalPhaseDeg,
-        };
+        debugRelX = (position[0] - state.position[0]).toExponential(2);
+        debugRelY = (position[1] - state.position[1]).toExponential(2);
+        debugSA = sunAngle.toFixed(4);
+        debugCA = shipAngle.toFixed(4);
       }
     }
   }
@@ -135,6 +136,10 @@ export default function HUD() {
           <div className="hud-row-orbital">
             绕飞 · <span className="hud-value-blue">{orbBodyName}</span>
             <span className="hud-label">&nbsp;&nbsp;相位</span> <span className="hud-value-green">{orbitalPhaseDeg.toFixed(1)}°</span>
+            <span className="hud-label">&nbsp;&nbsp;rx:</span><span className="hud-value-green">{debugRelX}</span>
+            <span className="hud-label">&nbsp;&nbsp;ry:</span><span className="hud-value-green">{debugRelY}</span>
+            <span className="hud-label">&nbsp;&nbsp;sa:</span><span className="hud-value-green">{debugSA}</span>
+            <span className="hud-label">&nbsp;&nbsp;ca:</span><span className="hud-value-green">{debugCA}</span>
             <span className="hud-label">&nbsp;&nbsp;高度</span> <span className="hud-value-blue">{altitudeKm.toFixed(0)} km</span>
             <span className="hud-label">&nbsp;&nbsp;速度</span> <span className="hud-value-green">{relSpeedKms.toFixed(2)} km/s</span>
             <span className="hud-label">&nbsp;&nbsp;角速度</span> <span className="hud-value-yellow">{angularVelDegS.toFixed(4)} °/s</span>
