@@ -141,8 +141,7 @@ export default function HUD() {
           </div>
         )}
         <div className="hud-row-basic">
-          <span className="hud-label">绕飞天体:{orbitingBodyId || 'null'}</span>
-          <span className="hud-label">&nbsp;&nbsp;X</span> <span className="hud-value-green">{position[0].toFixed(4)}</span>
+          <span className="hud-label">X</span> <span className="hud-value-green">{position[0].toFixed(4)}</span>
           <span className="hud-label">&nbsp;&nbsp;Y</span> <span className="hud-value-green">{position[1].toFixed(4)}</span>
           <span className="hud-label">&nbsp;&nbsp;Z</span> <span className="hud-value-green">{position[2].toFixed(4)}</span>
           <span className="hud-label">&nbsp;&nbsp;速度</span> <span className="hud-value-yellow">{speedMs.toFixed(0)} km/s</span>
