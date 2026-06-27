@@ -65,51 +65,10 @@ export default function HUD() {
         orbDistAU = Math.sqrt(dx * dx + dy * dy + dz * dz);
         orbBodyVel = state.velocity;
 
-        // Orbital phase in the ship's orbital plane around the body
-        const sunDirX = -state.position[0];
-        const sunDirY = -state.position[1];
-        const sunDirZ = -state.position[2];
-        const shipRelX = position[0] - state.position[0];
-        const shipRelY = position[1] - state.position[1];
-        const shipRelZ = position[2] - state.position[2];
-
-        // Orbit normal from relative position × relative velocity
-        const shipVelRelX = velocity[0] - state.velocity[0];
-        const shipVelRelY = velocity[1] - state.velocity[1];
-        const shipVelRelZ = velocity[2] - state.velocity[2];
-        const nx = shipRelY * shipVelRelZ - shipRelZ * shipVelRelY;
-        const ny = shipRelZ * shipVelRelX - shipRelX * shipVelRelZ;
-        const nz = shipRelX * shipVelRelY - shipRelY * shipVelRelX;
-        const nMag = Math.sqrt(nx * nx + ny * ny + nz * nz);
-
-        if (nMag > 1e-15) {
-          // Project Sun direction onto the orbital plane
-          const sunMag = Math.sqrt(sunDirX * sunDirX + sunDirY * sunDirY + sunDirZ * sunDirZ);
-          if (sunMag > 1e-15) {
-            const unx = nx / nMag;
-            const uny = ny / nMag;
-            const unz = nz / nMag;
-            const sunDotN = sunDirX * unx + sunDirY * uny + sunDirZ * unz;
-            // Sun direction projected onto orbital plane
-            const projSunX = sunDirX - sunDotN * unx;
-            const projSunY = sunDirY - sunDotN * uny;
-            const projSunZ = sunDirZ - sunDotN * unz;
-            const projMag = Math.sqrt(projSunX * projSunX + projSunY * projSunY + projSunZ * projSunZ);
-
-            // Angle from projected Sun direction to ship in orbital plane
-            const relMag = Math.sqrt(shipRelX * shipRelX + shipRelY * shipRelY + shipRelZ * shipRelZ);
-            if (projMag > 1e-15 && relMag > 1e-15) {
-              const dotPhase = (projSunX * shipRelX + projSunY * shipRelY + projSunZ * shipRelZ) / (projMag * relMag);
-              orbitalPhaseDeg = Math.acos(Math.max(-1, Math.min(1, dotPhase))) * 180 / Math.PI;
-              // Determine sign: cross product of projected-sun × ship-rel projected onto normal
-              const crossX = projSunY * shipRelZ - projSunZ * shipRelY;
-              const crossY = projSunZ * shipRelX - projSunX * shipRelZ;
-              const crossZ = projSunX * shipRelY - projSunY * shipRelX;
-              const crossDotN = crossX * unx + crossY * uny + crossZ * unz;
-              if (crossDotN < 0) orbitalPhaseDeg = 360 - orbitalPhaseDeg;
-            }
-          }
-        }
+        // Orbital phase: angle from Earth→Sun direction to Earth→Ship, in ecliptic plane
+        const sunAngle = Math.atan2(-state.position[1], -state.position[0]);
+        const shipAngle = Math.atan2(position[1] - state.position[1], position[0] - state.position[0]);
+        orbitalPhaseDeg = ((shipAngle - sunAngle) * 180 / Math.PI + 360) % 360;
       }
     }
   }
