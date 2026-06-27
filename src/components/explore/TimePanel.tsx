@@ -4,8 +4,8 @@ import { useExploreStore } from '../../stores/exploreStore';
 import './TimePanel.css';
 
 const MIN_EXP = 0;
-const MAX_EXP = 5;
-const PRESETS = [1, 10, 100, 1000, 10000, 100000];
+const MAX_EXP = 6;
+const PRESETS = [1, 10, 100, 1000, 10000, 100000, 1000000];
 
 function expToScale(exp: number): number {
   return Math.round(Math.pow(10, exp));
