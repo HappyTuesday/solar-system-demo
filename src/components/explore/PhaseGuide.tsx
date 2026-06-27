@@ -1,5 +1,5 @@
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
-import { checkWindowReady } from '../../engine/navigation';
+import { checkWindowReady, getNearestBodySemiMajorAxis } from '../../engine/navigation';
 import { REAL_DATA, MU_SUN_AU } from '../../engine/constants';
 import './PhaseGuide.css';
 
@@ -68,13 +68,14 @@ export default function PhaseGuide() {
   // Debug info for waiting phase
   let debugLines: string[] = [];
   if (phase.name.startsWith('等待')) {
-    const aCurrentAU = computeOrbitalSemiMajorAxis(position, velocity, MU_SUN_AU);
+    const aOsculatingAU = computeOrbitalSemiMajorAxis(position, velocity, MU_SUN_AU);
+    const aStableAU = getNearestBodySemiMajorAxis(position);
     const destData = REAL_DATA[navigationPlan.destinationId];
     const aTargetAU = destData?.semiMajorAxis ? destData.semiMajorAxis / 1.496e11 : 0;
-    const aTransferAU = (aCurrentAU + aTargetAU) / 2;
-    const goingOutward = aTargetAU > aCurrentAU;
+    const aTransferAU = (aStableAU + aTargetAU) / 2;
+    const goingOutward = aTargetAU > aStableAU;
 
-    const omegaShip = Math.sqrt(MU_SUN_AU / (aCurrentAU * aCurrentAU * aCurrentAU));
+    const omegaShip = Math.sqrt(MU_SUN_AU / (aStableAU * aStableAU * aStableAU));
     const omegaTarget = Math.sqrt(MU_SUN_AU / (aTargetAU * aTargetAU * aTargetAU));
     const shipPeriodDays = (2 * Math.PI / omegaShip) / 86400;
     const targetPeriodDays = (2 * Math.PI / omegaTarget) / 86400;
@@ -88,7 +89,8 @@ export default function PhaseGuide() {
       : '无';
 
     debugLines = [
-      `当前轨道 a = ${aCurrentAU.toFixed(3)} AU`,
+      `参考轨道 a = ${aStableAU.toFixed(3)} AU（最近天体）`,
+      `瞬时密切轨道 a = ${aOsculatingAU.toFixed(3)} AU（波动，正常）`,
       `目标轨道 a = ${aTargetAU.toFixed(3)} AU（${destData?.name || ''}）`,
       `转移椭圆 a = ${aTransferAU.toFixed(3)} AU`,
       `转移耗时 ≈ ${Math.round(transferTimeDays)} 天`,

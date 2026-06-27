@@ -54,7 +54,7 @@ function computeOrbitalSemiMajorAxis(
 
 const BODY_IDS = ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
 
-function getNearestBodySemiMajorAxis(
+export function getNearestBodySemiMajorAxis(
   shipPosition: [number, number, number],
 ): number {
   let nearestDist = Infinity;
