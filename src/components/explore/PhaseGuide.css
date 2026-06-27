@@ -6,34 +6,105 @@
   pointer-events: none;
   font-family: 'Courier New', monospace;
   padding: 10px 14px 24px;
-  max-width: 260px;
+  max-width: 280px;
 }
 
 .phase-guide-title {
   font-size: 9px;
   color: #445566;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
-.phase-guide-phase-name {
-  font-size: 11px;
-  color: #ffcc00;
-  margin-bottom: 6px;
+.substep-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-.phase-guide-instruction {
-  font-size: 10px;
-  color: #8899bb;
-  line-height: 1.6;
+.substep-item.completed {
+  opacity: 0.45;
 }
 
-.phase-guide-instruction span {
-  display: block;
+.substep-icon {
+  font-size: 13px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  line-height: 1.4;
 }
 
-.phase-guide-note {
-  font-size: 9px;
-  color: #556677;
-  margin-top: 6px;
+.substep-icon.completed { color: #44ff88; }
+.substep-icon.active { color: #44aaff; }
+.substep-icon.pending { color: #555; }
+
+.substep-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.substep-name {
+  font-size: 12px;
+  color: #cdeeff;
   line-height: 1.5;
+}
+
+.substep-detail {
+  margin-top: 4px;
+}
+
+.substep-line {
+  display: block;
+  font-size: 10px;
+  color: #88aacc;
+  line-height: 1.5;
+}
+
+.substep-condition {
+  margin-top: 6px;
+  font-size: 10px;
+  padding: 3px 7px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.35);
+  line-height: 1.4;
+}
+
+.substep-condition.met {
+  color: #44ff88;
+  border-left: 2px solid #44ff8866;
+}
+
+.substep-condition.unmet {
+  color: #ff8866;
+  border-left: 2px solid #ff886666;
+}
+
+.substep-wait-info {
+  margin-top: 6px;
+  font-size: 10px;
+  color: #778899;
+  line-height: 1.4;
+}
+
+.substep-pending-desc {
+  font-size: 10px;
+  color: #555;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.substep-completed-desc {
+  font-size: 10px;
+  color: #334455;
+  line-height: 1.4;
+}
+
+.phase-guide-fast-forward {
+  font-size: 10px;
+  color: #00b8ff;
+  margin-top: 8px;
+  cursor: pointer;
+  pointer-events: auto;
 }
