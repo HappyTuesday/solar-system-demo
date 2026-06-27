@@ -460,7 +460,7 @@ export const SPACECRAFT_DRAGON2 = {
   defaultOrbit: {
     semiMajorAxis: 6.771e6,
     eccentricity: 0,
-    inclination: 0.9006,
+    inclination: 0,
     raan: 0,
     argPeriapsis: 0,
     trueAnomaly: 0,
