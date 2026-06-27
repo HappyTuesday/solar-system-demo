@@ -57,30 +57,30 @@ const BODY_IDS = ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn
 export function getNearestBodySemiMajorAxis(
   shipPosition: [number, number, number],
 ): number {
+  const shipDistAU = Math.sqrt(
+    shipPosition[0] ** 2 + shipPosition[1] ** 2 + shipPosition[2] ** 2,
+  );
+
   let nearestDist = Infinity;
   let nearestSemiMajorAU = 1; // default to 1 AU (Earth)
 
   for (const id of BODY_IDS) {
-    let bx: number, by: number, bz: number;
+    const data = REAL_DATA[id];
     if (id === 'sun') {
-      bx = 0; by = 0; bz = 0;
-    } else {
-      const data = REAL_DATA[id];
-      if (!data?.semiMajorAxis) continue;
-      // For approximation, place the body at its semi-major axis on the X axis
-      // This gives a rough distance; actual position varies with orbit phase
-      bx = data.semiMajorAxis / AU_TO_M;
-      by = 0;
-      bz = 0;
+      if (shipDistAU < nearestDist) {
+        nearestDist = shipDistAU;
+        nearestSemiMajorAU = 0;
+      }
+      continue;
     }
-    const dx = shipPosition[0] - bx;
-    const dy = shipPosition[1] - by;
-    const dz = shipPosition[2] - bz;
-    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    if (dist < nearestDist) {
-      nearestDist = dist;
-      const data = REAL_DATA[id];
-      nearestSemiMajorAU = id === 'sun' ? 0 : (data?.semiMajorAxis ?? 1.496e11) / AU_TO_M;
+    if (!data?.semiMajorAxis) continue;
+
+    const bodyAU = data.semiMajorAxis / AU_TO_M;
+    const diff = Math.abs(shipDistAU - bodyAU);
+
+    if (diff < nearestDist) {
+      nearestDist = diff;
+      nearestSemiMajorAU = bodyAU;
     }
   }
   return nearestSemiMajorAU;
