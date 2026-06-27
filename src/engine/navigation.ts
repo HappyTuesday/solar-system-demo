@@ -75,7 +75,7 @@ export interface NavigationPlan {
   plannedAt: number;
 }
 
-function computeBodyState(templateId: string, jd: number): { position: [number, number, number]; velocity: [number, number, number] } | null {
+export function computeBodyState(templateId: string, jd: number): { position: [number, number, number]; velocity: [number, number, number] } | null {
   const data = REAL_DATA[templateId];
   if (!data || !data.semiMajorAxis || !data.orbital) return null;
   const o = data.orbital;
@@ -99,6 +99,23 @@ function computeOrbitalSemiMajorAxis(
   const v2 = vel[0] ** 2 + vel[1] ** 2 + vel[2] ** 2;
   const a = 1 / (2 / r - v2 / mu);
   return Math.abs(a);
+}
+
+export function computeEccentricity(
+  pos: [number, number, number],
+  vel: [number, number, number],
+  mu: number,
+): number {
+  const r = Math.sqrt(pos[0] ** 2 + pos[1] ** 2 + pos[2] ** 2);
+  const hx = pos[1] * vel[2] - pos[2] * vel[1];
+  const hy = pos[2] * vel[0] - pos[0] * vel[2];
+  const hz = pos[0] * vel[1] - pos[1] * vel[0];
+  const h2 = hx * hx + hy * hy + hz * hz;
+  if (h2 < 1e-30) return 0;
+  const eVecX = (vel[1] * hz - vel[2] * hy) / mu - pos[0] / r;
+  const eVecY = (vel[2] * hx - vel[0] * hz) / mu - pos[1] / r;
+  const eVecZ = (vel[0] * hy - vel[1] * hx) / mu - pos[2] / r;
+  return Math.sqrt(eVecX * eVecX + eVecY * eVecY + eVecZ * eVecZ);
 }
 
 const BODY_IDS = ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
@@ -535,4 +552,153 @@ export function checkWindowReady(
     windowReady: orbitalAligned && departureReady,
     remainingDays,
   };
+}
+
+// ===== Sub-step condition evaluation =====
+
+function evaluatePhaseAngle(
+  shipPosition: [number, number, number],
+  simulatedTime: number,
+  cond: NavSubStepCondition,
+): boolean {
+  const jd = julianDate(simulatedTime);
+  const orbitingId = getOrbitingBodyId(shipPosition, simulatedTime);
+  if (orbitingId === 'sun') return true;
+  const bodyState = computeBodyState(orbitingId, jd);
+  if (!bodyState) return false;
+  const rx = shipPosition[0] - bodyState.position[0];
+  const ry = shipPosition[1] - bodyState.position[1];
+  const bv = bodyState.velocity;
+  const bvLen = Math.sqrt(bv[0] ** 2 + bv[1] ** 2 + bv[2] ** 2);
+  if (bvLen < 1e-15) return true;
+  const dot = (rx * bv[0] + ry * bv[1]) / bvLen;
+  const rr = Math.sqrt(rx * rx + ry * ry);
+  if (rr < 1e-15) return true;
+  const cosAngle = dot / rr;
+  const phaseAngleDeg = Math.acos(Math.max(-1, Math.min(1, cosAngle))) * 180 / Math.PI;
+  const minDeg = cond.min ?? 30;
+  const maxDeg = cond.max ?? 150;
+  return phaseAngleDeg >= minDeg && phaseAngleDeg <= maxDeg;
+}
+
+function evaluateSemiMajorAxisCondition(
+  shipPosition: [number, number, number],
+  shipVelocity: [number, number, number],
+  cond: NavSubStepCondition,
+): boolean {
+  const a = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN_AU);
+  const targetAU = cond.max ?? cond.min ?? 0;
+  return Math.abs(a - targetAU) < NAVIGATION_CONFIG.phaseCompletionThresholdAU;
+}
+
+export function evaluateSubStepCondition(
+  subStep: NavSubStep,
+  shipPosition: [number, number, number],
+  shipVelocity: [number, number, number],
+  simulatedTime: number,
+): boolean {
+  const cond = subStep.condition;
+  switch (cond.type) {
+    case 'always':
+    case 'immediate':
+      return true;
+    case 'phase_angle_range':
+      return evaluatePhaseAngle(shipPosition, simulatedTime, cond);
+    case 'semi_major_axis_range':
+      return evaluateSemiMajorAxisCondition(shipPosition, shipVelocity, cond);
+    case 'window_ready':
+      return false; // handled externally by checkWindowReady
+    default:
+      return false;
+  }
+}
+
+// ===== Sub-step completion check =====
+
+export function checkWaitWindowComplete(
+  shipPosition: [number, number, number],
+  destinationId: string,
+  simulatedTime: number,
+): boolean {
+  const jd = julianDate(simulatedTime);
+  const targetState = computeBodyState(destinationId, jd);
+  if (!targetState) return false;
+  const shipAngle = Math.atan2(shipPosition[1], shipPosition[0]);
+  const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
+  const aCurrentAU = getNearestBodySemiMajorAxis(shipPosition, simulatedTime);
+  const destData = REAL_DATA[destinationId];
+  if (!destData || !destData.semiMajorAxis) return false;
+  const aTargetAU = destData.semiMajorAxis;
+  const goingOutward = aTargetAU > aCurrentAU;
+  const muSun = MU_SUN_AU;
+  const omegaTarget = Math.sqrt(muSun / (aTargetAU * aTargetAU * aTargetAU));
+  const aTransferAU = (aCurrentAU + aTargetAU) / 2;
+  const transferTimeSec = Math.PI * Math.sqrt((aTransferAU * aTransferAU * aTransferAU) / muSun);
+  const targetTravelAngle = omegaTarget * transferTimeSec;
+  let currentPhaseAngle: number;
+  let requiredPhaseAngle: number;
+  if (goingOutward) {
+    requiredPhaseAngle = Math.PI - targetTravelAngle;
+    currentPhaseAngle = shipAngle - targetAngle;
+  } else {
+    requiredPhaseAngle = targetTravelAngle - Math.PI;
+    currentPhaseAngle = targetAngle - shipAngle;
+  }
+  const TWO_PI = 2 * Math.PI;
+  const currentNorm = ((currentPhaseAngle % TWO_PI) + TWO_PI) % TWO_PI;
+  const requiredNorm = ((requiredPhaseAngle % TWO_PI) + TWO_PI) % TWO_PI;
+  const diff = Math.abs(currentNorm - requiredNorm);
+  return diff < 0.05 || Math.abs(diff - TWO_PI) < 0.05;
+}
+
+export function checkSubStepCompletion(
+  subStep: NavSubStep,
+  shipPosition: [number, number, number],
+  shipVelocity: [number, number, number],
+  attitudeMode: string,
+  destinationId: string,
+  simulatedTime: number,
+): boolean {
+  switch (subStep.type) {
+    case 'orient_prograde':
+      return attitudeMode === 'prograde';
+    case 'orient_target':
+      return attitudeMode === 'target';
+    case 'burn_prograde':
+    case 'burn_retrograde': {
+      const targetAU = subStep.action.targetSemiMajorAxisAU;
+      if (targetAU == null) return false;
+      const aCurrent = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN_AU);
+      return Math.abs(aCurrent - targetAU) < NAVIGATION_CONFIG.phaseCompletionThresholdAU;
+    }
+    case 'burn_circularize': {
+      const ecc = computeEccentricity(shipPosition, shipVelocity, MU_SUN_AU);
+      return ecc < NAVIGATION_CONFIG.orbitCircularizationEcc;
+    }
+    case 'coast_transfer':
+    case 'coast_approach': {
+      const jd = julianDate(simulatedTime);
+      const destState = computeBodyState(destinationId, jd);
+      if (!destState) return false;
+      const dx = destState.position[0] - shipPosition[0];
+      const dy = destState.position[1] - shipPosition[1];
+      const dz = destState.position[2] - shipPosition[2];
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      return dist < NAVIGATION_CONFIG.approachDistanceAU;
+    }
+    case 'arrival': {
+      const ecc = computeEccentricity(shipPosition, shipVelocity, MU_SUN_AU);
+      if (ecc >= NAVIGATION_CONFIG.orbitCircularizationEcc) return false;
+      const jd = julianDate(simulatedTime);
+      const destState = computeBodyState(destinationId, jd);
+      if (!destState) return false;
+      const dx = destState.position[0] - shipPosition[0];
+      const dy = destState.position[1] - shipPosition[1];
+      const dz = destState.position[2] - shipPosition[2];
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      return dist < NAVIGATION_CONFIG.arrivalDistanceAU;
+    }
+    default:
+      return false;
+  }
 }
