@@ -228,6 +228,25 @@
   background: rgba(0, 255, 128, 0.08);
 }
 
+.dashboard-nav-dest {
+  font-size: 10px;
+  color: #00ff88;
+  cursor: pointer;
+  user-select: none;
+  text-align: left;
+  padding: 3px 0;
+  transition: all 0.12s;
+}
+
+.dashboard-nav-dest:hover {
+  opacity: 0.8;
+}
+
+.dashboard-nav-dest-sub {
+  font-size: 7px;
+  color: #556677;
+}
+
 .dashboard-nav-phases {
   display: flex;
   flex-direction: column;

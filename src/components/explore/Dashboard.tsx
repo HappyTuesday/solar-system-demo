@@ -217,11 +217,12 @@ function Dashboard() {
             <div className="dashboard-column">
               <div className="dashboard-column-title">导航路线</div>
               {targetBodyId ? (
-                <div className="dashboard-nav-set-btn"
+                <div className="dashboard-nav-dest"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => setShowTargetModal(true)}
                 >
-                  目的地：{REAL_DATA[targetBodyId]?.name || targetBodyId} <span style={{ fontSize: 7, color: '#556677' }}>(修改)</span>
+                  目的地：{REAL_DATA[targetBodyId]?.name || targetBodyId}
+                  <span className="dashboard-nav-dest-sub">（修改）</span>
                 </div>
               ) : (
                 <div className="dashboard-nav-set-btn"
