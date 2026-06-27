@@ -41,52 +41,46 @@ export default function HUD() {
   const effectiveSpeedKms = (velocity[0] * direction[0] + velocity[1] * direction[1] + velocity[2] * direction[2]) * AU_TO_KM;
   const jd = julianDate(simulatedTime);
 
-  // Use nearest body from store (updated each frame in ExploreCanvas)
+  // Nearest body: used only for "距XXX" distance display
   const nearestBodyName = nearestBodyId ? (REAL_DATA[nearestBodyId]?.name || '') : '';
-  const nearestBodyRadiusKm = nearestBodyId ? (REAL_DATA[nearestBodyId]?.radius ?? 0) / 1000 : 0;
 
-  let nearestDistAU = Infinity;
-  let nearestBodyVel: [number, number, number] = [0, 0, 0];
+  // Orbiting body: used for all orbital parameters (distance, velocity, phase, altitude)
+  const orbBodyName = orbitingBodyId ? (REAL_DATA[orbitingBodyId]?.name || '') : '';
+  const orbBodyRadiusKm = orbitingBodyId ? (REAL_DATA[orbitingBodyId]?.radius ?? 0) / 1000 : 0;
 
-  if (nearestBodyId) {
-    if (nearestBodyId === 'sun') {
+  let orbDistAU = Infinity;
+  let orbBodyVel: [number, number, number] = [0, 0, 0];
+  let orbitalPhaseDeg = 0;
+
+  if (orbitingBodyId) {
+    if (orbitingBodyId === 'sun') {
       const dx2 = position[0] ** 2 + position[1] ** 2 + position[2] ** 2;
-      nearestDistAU = Math.sqrt(dx2);
-      nearestBodyVel = [0, 0, 0];
+      orbDistAU = Math.sqrt(dx2);
+      orbBodyVel = [0, 0, 0];
     } else {
-      const state = computeBodyStateFull(nearestBodyId, jd);
+      const state = computeBodyStateFull(orbitingBodyId, jd);
       if (state) {
         const dx = state.position[0] - position[0];
         const dy = state.position[1] - position[1];
         const dz = state.position[2] - position[2];
-        nearestDistAU = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        nearestBodyVel = state.velocity;
+        orbDistAU = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        orbBodyVel = state.velocity;
+
+        // Orbital phase: 0° = direction from orbiting body toward the Sun
+        const sunDirX = -state.position[0];
+        const sunDirY = -state.position[1];
+        const shipRelX = position[0] - state.position[0];
+        const shipRelY = position[1] - state.position[1];
+        const sunAngle = Math.atan2(sunDirY, sunDirX);
+        const shipAngle = Math.atan2(shipRelY, shipRelX);
+        orbitalPhaseDeg = ((shipAngle - sunAngle) * 180 / Math.PI + 360) % 360;
       }
     }
   }
 
-  const nearestDistKm = nearestDistAU * AU_TO_KM;
-  const altitudeKm = nearestDistKm - nearestBodyRadiusKm;
-  const isOrbiting = nearestDistAU < ORBIT_THRESHOLD_AU && nearestDistAU > 1e-12;
-
-  // Compute orbital phase (0° = direction from orbiting body toward the Sun)
-  let orbitalPhaseDeg = 0;
-  if (isOrbiting && nearestBodyId !== 'sun') {
-    const sv = computeBodyStateFull(nearestBodyId ?? '', jd);
-    if (sv) {
-      // Body's position (AU), Sun is at (0,0,0)
-      // Direction from body toward Sun = (0 - bodyX, 0 - bodyY, 0 - bodyZ)
-      const sunDirX = -sv.position[0];
-      const sunDirY = -sv.position[1];
-      // Ship position relative to body
-      const shipRelX = position[0] - sv.position[0];
-      const shipRelY = position[1] - sv.position[1];
-      // Angle from sun-direction to ship position (2D in orbital plane)
-      const sunAngle = Math.atan2(sunDirY, sunDirX);
-      const shipAngle = Math.atan2(shipRelY, shipRelX);
-      orbitalPhaseDeg = ((shipAngle - sunAngle) * 180 / Math.PI + 360) % 360;
-    }
-  }
+  const orbDistKm = orbDistAU * AU_TO_KM;
+  const altitudeKm = orbDistKm - orbBodyRadiusKm;
+  const isOrbiting = orbDistAU < ORBIT_THRESHOLD_AU && orbDistAU > 1e-12 && orbitingBodyId !== 'sun';
 
   // Orbital params (only when orbiting)
   let relSpeedKms = 0;
@@ -95,13 +89,13 @@ export default function HUD() {
   let headingAngleDeg = 0;
 
   if (isOrbiting) {
-    const relVelX = velocity[0] - nearestBodyVel[0];
-    const relVelY = velocity[1] - nearestBodyVel[1];
-    const relVelZ = velocity[2] - nearestBodyVel[2];
+    const relVelX = velocity[0] - orbBodyVel[0];
+    const relVelY = velocity[1] - orbBodyVel[1];
+    const relVelZ = velocity[2] - orbBodyVel[2];
     const relSpeedAU = Math.sqrt(relVelX ** 2 + relVelY ** 2 + relVelZ ** 2);
     relSpeedKms = relSpeedAU * AU_TO_KM;
-    angularVelDegS = nearestDistAU > 1e-12 ? (relSpeedAU / nearestDistAU) * 180 / Math.PI : 0;
-    orbitalPeriodMin = relSpeedKms > 1e-6 ? (2 * Math.PI * nearestDistKm / relSpeedKms) / 60 : 0;
+    angularVelDegS = orbDistAU > 1e-12 ? (relSpeedAU / orbDistAU) * 180 / Math.PI : 0;
+    orbitalPeriodMin = relSpeedKms > 1e-6 ? (2 * Math.PI * orbDistKm / relSpeedKms) / 60 : 0;
 
     const velLen = Math.sqrt(relVelX ** 2 + relVelY ** 2 + relVelZ ** 2);
     const dirLen = Math.sqrt(direction[0] ** 2 + direction[1] ** 2 + direction[2] ** 2);
@@ -137,7 +131,7 @@ export default function HUD() {
       <div className="hud-row">
         {isOrbiting && (
           <div className="hud-row-orbital">
-            绕飞 · <span className="hud-value-blue">{orbitingBodyId ? (REAL_DATA[orbitingBodyId]?.name || '') : nearestBodyName}</span>
+            绕飞 · <span className="hud-value-blue">{orbBodyName}</span>
             <span className="hud-label">&nbsp;&nbsp;相位</span> <span className="hud-value-green">{orbitalPhaseDeg.toFixed(0)}°</span>
             <span className="hud-label">&nbsp;&nbsp;速度</span> <span className="hud-value-green">{relSpeedKms.toFixed(2)} km/s</span>
             <span className="hud-label">&nbsp;&nbsp;高度</span> <span className="hud-value-blue">{altitudeKm.toFixed(0)} km</span>
@@ -153,7 +147,7 @@ export default function HUD() {
           <span className="hud-label">&nbsp;&nbsp;速度</span> <span className="hud-value-yellow">{speedMs.toFixed(0)} km/s</span>
           <span className="hud-label">&nbsp;&nbsp;有效速度</span> <span className="hud-value-green">{effectiveSpeedKms.toFixed(0)} km/s</span>
           <span className="hud-label">&nbsp;&nbsp;推力</span> <span className="hud-value-cyan">{thrustMagnitude} MN</span>
-          <span className="hud-label">&nbsp;&nbsp;距{nearestBodyName}</span> <span className="hud-value-brown">{nearestDistAU < 0.1 ? `${nearestDistKm.toFixed(0)} km` : `${nearestDistAU.toFixed(3)} AU`}</span>
+          <span className="hud-label">&nbsp;&nbsp;距{nearestBodyName}</span> <span className="hud-value-brown">{orbDistAU < 0.1 ? `${orbDistKm.toFixed(0)} km` : `${orbDistAU.toFixed(3)} AU`}</span>
           {targetBodyId && (
             <>
               <span className="hud-label">&nbsp;&nbsp;距{REAL_DATA[targetBodyId]?.name || ''}</span> <span className="hud-value-green">{targetDistAU < 0.1 ? `${targetDistKm.toFixed(0)} km` : `${targetDistAU.toFixed(3)} AU`}</span>
