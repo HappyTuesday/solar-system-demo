@@ -1,15 +1,11 @@
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { REAL_DATA } from '../../engine/constants';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
-import { useRef, useEffect } from 'react';
 import './HUD.css';
 
 const SCALE = 1 / 1.496e11;
 const AU_TO_KM = 1.496e8;
 const MU_SUN_VALUE = 1.32712440018e20;
-const ORBIT_THRESHOLD_AU = 0.005;
-
-let globalRenderCount = 0;
 
 function computeBodyStateFull(templateId: string, jd: number) {
   const data = REAL_DATA[templateId];
@@ -182,10 +178,7 @@ export default function HUD() {
           </div>
         )}
         <div className="hud-row-basic">
-          <span className="hud-label">R:{++globalRenderCount}</span>
-          <span className="hud-label">&nbsp;&nbsp;p[0]:{position[0].toFixed(6)}</span>
-          <span className="hud-label">&nbsp;&nbsp;d:{orbDistAU.toExponential(2)}</span>
-          <span className="hud-label">&nbsp;&nbsp;相位({orbitalPhaseDeg.toFixed(1)}°)</span>
+          <span className="hud-label">X</span> <span className="hud-value-green">{position[0].toFixed(4)}</span>
           <span className="hud-label">&nbsp;&nbsp;Y</span> <span className="hud-value-green">{position[1].toFixed(4)}</span>
           <span className="hud-label">&nbsp;&nbsp;Z</span> <span className="hud-value-green">{position[2].toFixed(4)}</span>
           <span className="hud-label">&nbsp;&nbsp;速度</span> <span className="hud-value-yellow">{speedMs.toFixed(0)} km/s</span>
