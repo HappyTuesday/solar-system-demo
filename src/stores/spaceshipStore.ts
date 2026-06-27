@@ -2,8 +2,8 @@ import { create } from 'zustand';
 import type { SpaceshipState, AttitudeMode } from '../types';
 import { createSpaceshipState } from '../engine/orbitalInjection';
 import type { NavigationPlan } from '../engine/navigation';
-import { planHohmannTransfer, checkPhaseCompletion, checkDeviation, checkWindowReady } from '../engine/navigation';
-import { NAVIGATION_CONFIG } from '../engine/constants';
+import { planHohmannTransfer, checkDeviation, checkWindowReady, checkSubStepCompletion, evaluateSubStepCondition, generateSubSteps, getNearestBodySemiMajorAxis } from '../engine/navigation';
+import { NAVIGATION_CONFIG, REAL_DATA, MU_SUN_AU } from '../engine/constants';
 
 export type ExplosionPhase = 'none' | 'exploding' | 'complete';
 
@@ -16,9 +16,9 @@ export interface SpaceshipStore extends SpaceshipState {
   nearestBodyId: string | null;
   orbitingBodyId: string | null;
 
-  // 导航
   navigationPlan: NavigationPlan | null;
   activePhaseIndex: number;
+  activeSubStepIndex: number;
   deviationWarning: string | null;
   lastDeviationCheckTime: number;
   lastReplanTime: number;
@@ -94,6 +94,31 @@ function rotatePitch(dir: [number, number, number], angle: number): [number, num
   ];
 }
 
+function regeneratePhaseSubSteps(
+  position: [number, number, number],
+  velocity: [number, number, number],
+  attitudeMode: string,
+  phase: import('../engine/navigation').NavigationPhase,
+  destinationId: string,
+  simulatedTime: number,
+): void {
+  const aCurrentAU = getNearestBodySemiMajorAxis(position, simulatedTime);
+  const destData = REAL_DATA[destinationId];
+  if (!destData?.semiMajorAxis) return;
+  const aTargetAU = destData.semiMajorAxis;
+  const aTransferAU = (aCurrentAU + aTargetAU) / 2;
+  const goingOutward = aTargetAU > aCurrentAU;
+  const deltaV1 = Math.abs(Math.sqrt(MU_SUN_AU / aCurrentAU) *
+    (Math.sqrt(2 * aTargetAU / (aCurrentAU + aTargetAU)) - 1));
+  phase.subSteps = generateSubSteps(
+    position, velocity, attitudeMode,
+    phase, destinationId,
+    aCurrentAU, aTargetAU, aTransferAU,
+    goingOutward, deltaV1,
+    simulatedTime,
+  );
+}
+
 const now = Date.now();
 const initialSpaceship = createSpaceshipState('earth', undefined, now);
 
@@ -108,6 +133,7 @@ const initialState = {
   orbitingBodyId: 'earth' as string | null,
   navigationPlan: null as NavigationPlan | null,
   activePhaseIndex: -1 as number,
+  activeSubStepIndex: 0 as number,
   deviationWarning: null as string | null,
   lastDeviationCheckTime: now as number,
   lastReplanTime: 0 as number,
@@ -118,6 +144,8 @@ const initialState = {
   crashBodyId: null as string | null,
   crashPosition: [0, 0, 0] as [number, number, number],
   crashBodyPosition: [0, 0, 0] as [number, number, number],
+  windowReady: false,
+  windowRemainingDays: 0,
 };
 
 export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
@@ -156,11 +184,12 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     orbitingBodyId: 'earth' as string | null,
     navigationPlan: null as NavigationPlan | null,
     activePhaseIndex: -1 as number,
+    activeSubStepIndex: 0 as number,
     deviationWarning: null as string | null,
     lastDeviationCheckTime: Date.now() as number,
-  lastReplanTime: 0 as number,
-  windowReady: false as boolean,
-  windowRemainingDays: 0 as number,
+    lastReplanTime: 0 as number,
+    windowReady: false as boolean,
+    windowRemainingDays: 0 as number,
     explosionPhase: 'none' as ExplosionPhase,
     totalDistanceKm: 0,
     maxSpeedKms: 0,
@@ -181,6 +210,7 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
         targetBodyId: id,
         navigationPlan: plan.phases.length > 0 ? plan : null,
         activePhaseIndex: plan.phases.length > 0 ? 0 : -1,
+        activeSubStepIndex: 0,
         deviationWarning: null,
         windowReady: false,
         windowRemainingDays: 0,
@@ -191,6 +221,7 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
       targetBodyId: null,
       navigationPlan: null,
       activePhaseIndex: -1,
+      activeSubStepIndex: 0,
       deviationWarning: null,
     };
   }),
@@ -203,37 +234,73 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     if (!s.navigationPlan || s.activePhaseIndex < 0) return;
 
     const currentPhase = s.navigationPlan.phases[s.activePhaseIndex];
-    const isWaitingPhase = currentPhase && currentPhase.name.startsWith('等待');
+    if (!currentPhase || currentPhase.subSteps.length === 0) return;
 
-    // For waiting phases: check window status, complete only on thrust
-    if (isWaitingPhase) {
+    const ssIdx = s.activeSubStepIndex;
+
+    // All sub-steps complete for this phase → advance to next phase
+    if (ssIdx >= currentPhase.subSteps.length) {
+      const nextPhaseIdx = s.activePhaseIndex + 1;
+      if (nextPhaseIdx < s.navigationPlan.phases.length) {
+        const nextPhase = s.navigationPlan.phases[nextPhaseIdx];
+        regeneratePhaseSubSteps(s.position, s.velocity, s.attitudeMode, nextPhase, s.navigationPlan.destinationId, s.simulatedTime);
+        useSpaceshipStore.setState({
+          activePhaseIndex: nextPhaseIdx,
+          activeSubStepIndex: 0,
+          deviationWarning: null,
+          windowReady: false,
+          windowRemainingDays: 0,
+        });
+      }
+      return;
+    }
+
+    const currentSubStep = currentPhase.subSteps[ssIdx];
+    if (!currentSubStep) return;
+
+    // Handle wait_window sub-step: check window readiness
+    if (currentSubStep.type === 'wait_window') {
       const window = checkWindowReady(s.position, s.velocity, s.navigationPlan, s.activePhaseIndex, s.simulatedTime);
-      if (window.windowReady && s.thrustMagnitude > 0) {
-        const nextIdx = s.activePhaseIndex + 1;
-        if (nextIdx < s.navigationPlan.phases.length) {
-          useSpaceshipStore.setState({ activePhaseIndex: nextIdx, deviationWarning: null, windowReady: false, windowRemainingDays: 0 });
+      currentSubStep.condition.met = window.windowReady;
+      useSpaceshipStore.setState({
+        windowReady: window.windowReady,
+        windowRemainingDays: window.remainingDays,
+      });
+      if (window.windowReady) {
+        // Window reached, advance to next sub-step
+        const nextSSIdx = ssIdx + 1;
+        if (nextSSIdx < currentPhase.subSteps.length) {
+          regeneratePhaseSubSteps(s.position, s.velocity, s.attitudeMode, currentPhase, s.navigationPlan.destinationId, s.simulatedTime);
         }
-      } else {
-        useSpaceshipStore.setState({ windowReady: window.windowReady, windowRemainingDays: window.remainingDays });
+        useSpaceshipStore.setState({ activeSubStepIndex: nextSSIdx, windowReady: false, windowRemainingDays: 0 });
       }
       return;
     }
 
-    // For non-waiting phases: auto-detect completion
-    if (checkPhaseCompletion(s.position, s.velocity, s.navigationPlan, s.activePhaseIndex, s.simulatedTime)) {
-      const nextIdx = s.activePhaseIndex + 1;
-      if (nextIdx < s.navigationPlan.phases.length) {
-        useSpaceshipStore.setState({ activePhaseIndex: nextIdx, deviationWarning: null, windowReady: false, windowRemainingDays: 0 });
+    // Check if current sub-step is complete
+    if (checkSubStepCompletion(currentSubStep, s.position, s.velocity, s.attitudeMode, s.navigationPlan.destinationId, s.simulatedTime)) {
+      const nextSSIdx = ssIdx + 1;
+      if (nextSSIdx < currentPhase.subSteps.length) {
+        regeneratePhaseSubSteps(s.position, s.velocity, s.attitudeMode, currentPhase, s.navigationPlan.destinationId, s.simulatedTime);
       }
+      useSpaceshipStore.setState({ activeSubStepIndex: nextSSIdx });
       return;
     }
 
-    const result = checkDeviation(s.position, s.velocity, s.navigationPlan, s.activePhaseIndex, s.simulatedTime);
-    if (result.deviated) {
-      const cooldown = s.simulatedTime - s.lastReplanTime;
-      if (cooldown > NAVIGATION_CONFIG.rePlanCooldownSec * 1000) {
-        useSpaceshipStore.setState({ deviationWarning: `偏离预定轨道 ${result.deviationKms.toFixed(0)} km，正在重规划...` });
-        useSpaceshipStore.getState().replanNavigation();
+    // Update condition met status for active sub-step
+    currentSubStep.condition.met = evaluateSubStepCondition(
+      currentSubStep, s.position, s.velocity, s.simulatedTime,
+    );
+
+    // Deviation check for non-waiting, non-coast phases
+    if (!currentPhase.name.startsWith('等待') && currentPhase.name !== '转移轨道滑行') {
+      const result = checkDeviation(s.position, s.velocity, s.navigationPlan, s.activePhaseIndex, s.simulatedTime);
+      if (result.deviated) {
+        const cooldown = s.simulatedTime - s.lastReplanTime;
+        if (cooldown > NAVIGATION_CONFIG.rePlanCooldownSec * 1000) {
+          useSpaceshipStore.setState({ deviationWarning: `偏离预定轨道 ${result.deviationKms.toFixed(0)} km，正在重规划...` });
+          useSpaceshipStore.getState().replanNavigation();
+        }
       }
     }
   },
@@ -241,19 +308,12 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     const s = useSpaceshipStore.getState();
     if (!s.navigationPlan || s.activePhaseIndex < 0) return;
     const plan = planHohmannTransfer(s.position, s.velocity, s.navigationPlan.destinationId, s.simulatedTime);
-    if (plan.phases.length <= s.activePhaseIndex) {
-      useSpaceshipStore.setState({
-        navigationPlan: { ...plan, phases: plan.phases },
-        activePhaseIndex: 0,
-        deviationWarning: '路线已重规划',
-        lastReplanTime: s.simulatedTime,
-      });
-    } else {
-      useSpaceshipStore.setState({
-        navigationPlan: { ...plan, phases: plan.phases },
-        deviationWarning: '路线已重规划',
-        lastReplanTime: s.simulatedTime,
-      });
-    }
+    useSpaceshipStore.setState({
+      navigationPlan: { ...plan, phases: plan.phases },
+      activePhaseIndex: 0,
+      activeSubStepIndex: 0,
+      deviationWarning: '路线已重规划',
+      lastReplanTime: s.simulatedTime,
+    });
   },
 }));
