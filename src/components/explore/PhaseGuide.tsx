@@ -69,7 +69,7 @@ export default function PhaseGuide() {
   let debugLines: string[] = [];
   if (phase.name.startsWith('等待')) {
     const aOsculatingAU = computeOrbitalSemiMajorAxis(position, velocity, MU_SUN_AU);
-    const aStableAU = getNearestBodySemiMajorAxis(position);
+    const aStableAU = getNearestBodySemiMajorAxis(position, simulatedTime);
     const destData = REAL_DATA[navigationPlan.destinationId];
     const aTargetAU = destData?.semiMajorAxis ? destData.semiMajorAxis / 1.496e11 : 0;
     const aTransferAU = (aStableAU + aTargetAU) / 2;

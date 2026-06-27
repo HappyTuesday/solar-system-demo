@@ -56,31 +56,33 @@ const BODY_IDS = ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn
 
 export function getNearestBodySemiMajorAxis(
   shipPosition: [number, number, number],
+  simulatedTime: number,
 ): number {
-  const shipDistAU = Math.sqrt(
-    shipPosition[0] ** 2 + shipPosition[1] ** 2 + shipPosition[2] ** 2,
-  );
+  const jd = julianDate(simulatedTime);
 
   let nearestDist = Infinity;
-  let nearestSemiMajorAU = 1; // default to 1 AU (Earth)
+  let nearestSemiMajorAU = 1;
 
   for (const id of BODY_IDS) {
-    const data = REAL_DATA[id];
+    let bx: number; let by: number; let bz: number;
     if (id === 'sun') {
-      if (shipDistAU < nearestDist) {
-        nearestDist = shipDistAU;
-        nearestSemiMajorAU = 0;
-      }
-      continue;
+      bx = 0; by = 0; bz = 0;
+    } else {
+      const state = computeBodyState(id, jd);
+      if (!state) continue;
+      bx = state.position[0] * SCALE;
+      by = state.position[1] * SCALE;
+      bz = state.position[2] * SCALE;
     }
-    if (!data?.semiMajorAxis) continue;
+    const dx = shipPosition[0] - bx;
+    const dy = shipPosition[1] - by;
+    const dz = shipPosition[2] - bz;
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-    const bodyAU = data.semiMajorAxis / AU_TO_M;
-    const diff = Math.abs(shipDistAU - bodyAU);
-
-    if (diff < nearestDist) {
-      nearestDist = diff;
-      nearestSemiMajorAU = bodyAU;
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      const data = REAL_DATA[id];
+      nearestSemiMajorAU = id === 'sun' ? 0 : (data?.semiMajorAxis ?? 1.496e11) / AU_TO_M;
     }
   }
   return nearestSemiMajorAU;
@@ -92,7 +94,7 @@ export function planHohmannTransfer(
   destinationId: string,
   simulatedTime: number,
 ): NavigationPlan {
-  const aCurrentAU = getNearestBodySemiMajorAxis(shipPosition);
+  const aCurrentAU = getNearestBodySemiMajorAxis(shipPosition, simulatedTime);
 
   if (destinationId === 'sun') {
     return { phases: [], method: 'hohmann', destinationId, plannedAt: simulatedTime };
