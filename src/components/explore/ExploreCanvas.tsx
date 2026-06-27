@@ -711,7 +711,11 @@ function ExploreCanvas() {
               } else {
                 const bs = computeBodyState(id, finalJd);
                 if (!bs) continue;
-                const dx = bs.position[0] - shipState.position[0], dy = bs.position[1] - shipState.position[1], dz = bs.position[2] - shipState.position[2];
+                // Convert body position from meters to AU
+                const bAU = SCALE;
+                const dx = bs.position[0] * bAU - shipState.position[0];
+                const dy = bs.position[1] * bAU - shipState.position[1];
+                const dz = bs.position[2] * bAU - shipState.position[2];
                 const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 if (dist < nearestDist) { nearestDist = dist; nearestId = id; }
 
@@ -744,9 +748,10 @@ function ExploreCanvas() {
               } else {
                 const bs = computeBodyState(id, finalJd);
                 if (!bs) continue;
-                const dx = bs.position[0] - spPos[0], dy = bs.position[1] - spPos[1], dz = bs.position[2] - spPos[2];
+                const bAU = SCALE;
+                const dx = bs.position[0] * bAU - spPos[0], dy = bs.position[1] * bAU - spPos[1], dz = bs.position[2] * bAU - spPos[2];
                 const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (dist < nearestDist) { nearestDist = dist; nearestPos = bs.position; nearestVel = bs.velocity; }
+                if (dist < nearestDist) { nearestDist = dist; nearestPos = [bs.position[0] * bAU, bs.position[1] * bAU, bs.position[2] * bAU]; nearestVel = [bs.velocity[0] * bAU, bs.velocity[1] * bAU, bs.velocity[2] * bAU]; }
               }
             }
 
@@ -772,7 +777,7 @@ function ExploreCanvas() {
                 targetPos = [0, 0, 0];
               } else {
                 const bs = computeBodyState(store.targetBodyId, finalJd);
-                if (bs) targetPos = bs.position;
+                if (bs) targetPos = [bs.position[0] * SCALE, bs.position[1] * SCALE, bs.position[2] * SCALE];
               }
               if (targetPos) {
                 const dx = targetPos[0] - spPos[0];
