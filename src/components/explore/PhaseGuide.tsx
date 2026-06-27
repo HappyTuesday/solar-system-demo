@@ -108,7 +108,6 @@ export default function PhaseGuide() {
 
     const window = checkWindowReady(position, velocity, navigationPlan, activePhaseIndex, simulatedTime);
 
-    // Phase angle calculations in degrees
     const jd = julianDate(simulatedTime);
     const shipAngleDeg = ((Math.atan2(position[1], position[0]) * 180 / Math.PI) + 360) % 360;
 
@@ -127,16 +126,63 @@ export default function PhaseGuide() {
       ? (180 - targetTravelAngleDeg + 360) % 360
       : (targetTravelAngleDeg - 180 + 360) % 360;
 
+    // Planetary alignment: how long until phase match, and window duration
+    let phaseWaitDays = 0;
+    const phaseDiff = Math.abs(currentPhaseDiffDeg - requiredPhaseDeg);
+    const wrapDiff = Math.min(phaseDiff, 360 - phaseDiff);
+    if (wrapDiff > 6) {
+      phaseWaitDays = (wrapDiff / 360) * synodicPeriodDays;
+    }
+    // Window stays open for ~12° of phase = 12/360 * synodicPeriod days
+    const windowDurationDays = (12 / 360) * synodicPeriodDays;
+
+    // Ship departure tangent: time until ship is on correct side of orbit
+    let departureWaitMins = 0;
+    let departureReady = true;
+    if (orbitingBodyId && orbitingBodyId !== 'sun' && orbitingBodyId !== navigationPlan.destinationId) {
+      const bodyState = computeBodyStateAU(orbitingBodyId, jd);
+      if (bodyState) {
+        const rx = position[0] - bodyState.x;
+        const ry = position[1] - bodyState.y;
+        const bodyAngle = Math.atan2(bodyState.y, bodyState.x);
+        const bodyVelDirX = -Math.sin(bodyAngle);
+        const bodyVelDirY = Math.cos(bodyAngle);
+        const dot = rx * bodyVelDirX + ry * bodyVelDirY;
+        const rr = Math.sqrt(rx * rx + ry * ry);
+        const cosAngle = rr > 1e-12 ? dot / rr : 0;
+
+        departureReady = goingOutward ? cosAngle > -0.3 : cosAngle < 0.3;
+
+        if (!departureReady) {
+          const bodyData = REAL_DATA[orbitingBodyId];
+          const muBody = 6.674e-11 * (bodyData?.mass ?? 0) / (1.496e11 * 1.496e11 * 1.496e11);
+          if (muBody > 0 && rr > 0) {
+            const bodyOmega = Math.sqrt(muBody / (rr * rr * rr));
+            const targetCos = goingOutward ? 1.0 : -1.0;
+            const curAngle = Math.acos(Math.max(-1, Math.min(1, cosAngle)));
+            const tgtAngle = Math.acos(Math.max(-1, Math.min(1, targetCos)));
+            const waitSec = Math.abs(tgtAngle - curAngle) / bodyOmega;
+            departureWaitMins = Math.max(0, waitSec / 60);
+          }
+        }
+      }
+    }
+
     const departureName = orbitingBodyId ? (REAL_DATA[orbitingBodyId]?.name || '飞船') : '飞船';
     const destName = destData?.name || '目标';
 
     debugLines = [
-      `${departureName} 日心角：${shipAngleDeg.toFixed(2)}°`,
-      `${destName} 日心角：${targetAngleDeg.toFixed(1)}°`,
-      `相位差：${currentPhaseDiffDeg.toFixed(2)}°（窗口需 ≈ ${requiredPhaseDeg.toFixed(1)}° ± 6°）`,
+      `【行星对齐窗口】${departureName}→${destName}`,
+      `${destName} 日心角：${targetAngleDeg.toFixed(1)}°，${departureName}日心角：${shipAngleDeg.toFixed(1)}°`,
+      `相位差：${currentPhaseDiffDeg.toFixed(1)}° / 需 ≈ ${requiredPhaseDeg.toFixed(0)}°`,
+      phaseWaitDays > 0
+        ? `预计 ${Math.round(phaseDiff < 180 ? phaseWaitDays : synodicPeriodDays - phaseWaitDays)} 天后进入窗口`
+        : `已进入窗口 · 剩余约 ${Math.round(windowDurationDays)} 天`,
+      `【飞船出发条件】绕${departureName}轨道相位`,
+      departureReady ? '✓ 出发切线已就绪' : `✗ 需到达正确出发位置 · 最多等待约 ${departureWaitMins > 0 ? Math.round(departureWaitMins) : 1} 分`,
       `转移耗时 ≈ ${Math.round(transferTimeDays)} 天，会合周期 ≈ ${Math.round(synodicPeriodDays)} 天`,
       `方向：${goingOutward ? '向外' : '向内'}转移`,
-      `实时剩余 ≈ ${formatWaitDetail(window.remainingDays)}`,
+      `综合剩余 ≈ ${formatWaitDetail(window.remainingDays)}`,
     ];
   }
 
