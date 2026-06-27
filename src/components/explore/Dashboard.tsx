@@ -9,12 +9,10 @@ import './Dashboard.css';
 const RotationRate = Math.PI / 3;
 
 function formatWaitDays(days: number): string {
-  if (days <= 0) return '即将就绪';
-  const totalSeconds = days * 86400;
-  if (totalSeconds < 60) return `${Math.max(1, Math.round(totalSeconds))} 秒`;
-  if (totalSeconds < 3600) return `${Math.round(totalSeconds / 60)} 分`;
-  if (totalSeconds < 86400) return `${Math.round(totalSeconds / 3600)} 小时`;
-  return `${Math.round(days)} 天`;
+  if (days <= 0.0001) return '即将就绪';
+  if (days < 0.05) return `${Math.round(days * 86400)} 秒`;
+  if (days < 1) return `${(days * 24).toFixed(1)} 小时`;
+  return `${days.toFixed(1)} 天`;
 }
 
 function Dashboard() {
