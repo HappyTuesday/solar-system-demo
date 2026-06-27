@@ -1,19 +1,24 @@
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { checkWindowReady, getOrbitingBodySemiMajorAxis } from '../../engine/navigation';
 import { REAL_DATA, MU_SUN_AU } from '../../engine/constants';
+import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
 import './PhaseGuide.css';
 
+const SCALE = 1 / 1.496e11;
+const MU_SUN_VALUE = 1.32712440018e20;
 const AU_TO_KM = 1.496e8;
 
-function computeOrbitalSemiMajorAxis(
-  pos: [number, number, number],
-  vel: [number, number, number],
-  mu: number,
-): number {
-  const r = Math.sqrt(pos[0] ** 2 + pos[1] ** 2 + pos[2] ** 2);
-  const v2 = vel[0] ** 2 + vel[1] ** 2 + vel[2] ** 2;
-  const a = 1 / (2 / r - v2 / mu);
-  return Math.abs(a);
+function computeBodyStateAU(templateId: string, jd: number): { x: number; y: number } | null {
+  const data = REAL_DATA[templateId];
+  if (!data?.semiMajorAxis || !data?.orbital) return null;
+  const o = data.orbital;
+  const period = orbitalPeriod(data.semiMajorAxis, MU_SUN_VALUE);
+  const M = meanAnomalyAtTime(o.meanAnomalyAtEpoch, period, o.epoch, jd);
+  const Mmod = ((M % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  const E = solveKepler(Mmod, o.eccentricity);
+  const nu = trueAnomaly(E, o.eccentricity);
+  const sv = stateVectors(data.semiMajorAxis, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN_VALUE);
+  return { x: sv.position[0] * SCALE, y: sv.position[1] * SCALE };
 }
 
 function getPhaseGuide(phaseName: string, windowReady: boolean): string {
@@ -55,6 +60,7 @@ export default function PhaseGuide() {
   const activePhaseIndex = useSpaceshipStore(s => s.activePhaseIndex);
   const windowReady = useSpaceshipStore(s => s.windowReady);
   const windowRemainingDays = useSpaceshipStore(s => s.windowRemainingDays);
+  const orbitingBodyId = useSpaceshipStore(s => s.orbitingBodyId);
   const position = useSpaceshipStore(s => s.position);
   const velocity = useSpaceshipStore(s => s.velocity);
   const simulatedTime = useSpaceshipStore(s => s.simulatedTime);
@@ -70,7 +76,6 @@ export default function PhaseGuide() {
   // Debug info for waiting phase
   let debugLines: string[] = [];
   if (phase.name.startsWith('等待')) {
-    const aOsculatingAU = computeOrbitalSemiMajorAxis(position, velocity, MU_SUN_AU);
     const aStableAU = getOrbitingBodySemiMajorAxis(position, simulatedTime);
     const destData = REAL_DATA[navigationPlan.destinationId];
     const aTargetAU = destData?.semiMajorAxis ? destData.semiMajorAxis / 1.496e11 : 0;
@@ -79,24 +84,40 @@ export default function PhaseGuide() {
 
     const omegaShip = Math.sqrt(MU_SUN_AU / (aStableAU * aStableAU * aStableAU));
     const omegaTarget = Math.sqrt(MU_SUN_AU / (aTargetAU * aTargetAU * aTargetAU));
-    const shipPeriodDays = (2 * Math.PI / omegaShip) / 86400;
-    const targetPeriodDays = (2 * Math.PI / omegaTarget) / 86400;
     const transferTimeDays = (Math.PI * Math.sqrt((aTransferAU * aTransferAU * aTransferAU) / MU_SUN_AU)) / 86400;
     const synodicPeriodDays = (2 * Math.PI / Math.abs(omegaShip - omegaTarget)) / 86400;
 
     const window = checkWindowReady(position, velocity, navigationPlan, activePhaseIndex, simulatedTime);
 
+    // Phase angle calculations in degrees
+    const jd = julianDate(simulatedTime);
+    const shipAngleDeg = ((Math.atan2(position[1], position[0]) * 180 / Math.PI) + 360) % 360;
+
+    const targetPos = computeBodyStateAU(navigationPlan.destinationId, jd);
+    const targetAngleDeg = targetPos
+      ? ((Math.atan2(targetPos.y, targetPos.x) * 180 / Math.PI) + 360) % 360
+      : 0;
+
+    const currentPhaseDiffDeg = goingOutward
+      ? ((shipAngleDeg - targetAngleDeg + 360) % 360)
+      : ((targetAngleDeg - shipAngleDeg + 360) % 360);
+
+    const targetTravelAngleDeg = (omegaTarget *
+      Math.PI * Math.sqrt((aTransferAU * aTransferAU * aTransferAU) / MU_SUN_AU)) * 180 / Math.PI;
+    const requiredPhaseDeg = goingOutward
+      ? (180 - targetTravelAngleDeg + 360) % 360
+      : (targetTravelAngleDeg - 180 + 360) % 360;
+
+    const departureName = orbitingBodyId ? (REAL_DATA[orbitingBodyId]?.name || '飞船') : '飞船';
+    const destName = destData?.name || '目标';
+
     debugLines = [
-      `参考轨道 a = ${aStableAU.toFixed(3)} AU（绕飞天体）`,
-      `瞬时密切轨道 a = ${aOsculatingAU.toFixed(3)} AU（波动，正常）`,
-      `目标轨道 a = ${aTargetAU.toFixed(3)} AU（${destData?.name || ''}）`,
-      `转移椭圆 a = ${aTransferAU.toFixed(3)} AU`,
-      `转移耗时 ≈ ${Math.round(transferTimeDays)} 天`,
-      `会合周期 ≈ ${Math.round(synodicPeriodDays)} 天`,
-      `飞船周期 ≈ ${Math.round(shipPeriodDays)} 天，目标周期 ≈ ${Math.round(targetPeriodDays)} 天`,
+      `${departureName} 日心角：${shipAngleDeg.toFixed(2)}°`,
+      `${destName} 日心角：${targetAngleDeg.toFixed(1)}°`,
+      `相位差：${currentPhaseDiffDeg.toFixed(2)}°（窗口需 ≈ ${requiredPhaseDeg.toFixed(1)}° ± 6°）`,
+      `转移耗时 ≈ ${Math.round(transferTimeDays)} 天，会合周期 ≈ ${Math.round(synodicPeriodDays)} 天`,
       `方向：${goingOutward ? '向外' : '向内'}转移`,
       `实时剩余 ≈ ${formatWaitDetail(window.remainingDays)}`,
-      `(Store剩余：${formatWaitDetail(windowRemainingDays)})`,
     ];
   }
 
