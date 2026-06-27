@@ -582,34 +582,31 @@ function ExploreCanvas() {
         }
 
         const finalJd = julianDate(simulatedTime);
+        const screenH = sizeRef.current.h || 800;
+        const MIN_BODY_PX = 10;
+
         for (const id of allIds) {
           if (id === 'sun') continue;
           const mesh = bodyMeshes.get(id);
           if (!mesh) continue;
+          const data = REAL_DATA[id];
+          if (!data) continue;
           const pos = computeBodyPosition(id, finalJd);
           if (pos) {
             mesh.position.set(pos[0], pos[1], pos[2]);
-            // Minimum visible size: every body visible at least as a tiny dot
             const dist = camera.position.distanceTo(mesh.position);
-            const minVisibleAU = 0.003; // ~1 pixel equivalent at 1 AU
-            if (dist > minVisibleAU) {
-              mesh.scale.setScalar(dist / minVisibleAU);
-            } else {
-              mesh.scale.setScalar(1);
-            }
+            const bodyR = data.radius * SCALE;
+            const pixelSize = screenH * bodyR / Math.max(dist, 1e-10);
+            mesh.scale.setScalar(pixelSize < MIN_BODY_PX ? MIN_BODY_PX / pixelSize : 1);
           }
         }
 
-        // Sun minimum visible size
         const sunMesh = bodyMeshes.get('sun');
         if (sunMesh) {
           const sunDist = camera.position.length();
-          const minVisibleAU = 0.003;
-          if (sunDist > minVisibleAU) {
-            sunMesh.scale.setScalar(sunDist / minVisibleAU);
-          } else {
-            sunMesh.scale.setScalar(1);
-          }
+          const sunR = REAL_DATA.sun.radius * SCALE;
+          const sunPx = screenH * sunR / Math.max(sunDist, 1e-10);
+          sunMesh.scale.setScalar(sunPx < MIN_BODY_PX ? MIN_BODY_PX / sunPx : 1);
         }
 
         const bodyInfos: BodyInfo[] = [];
