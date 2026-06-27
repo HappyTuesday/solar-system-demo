@@ -359,6 +359,18 @@ export function planHohmannTransfer(
     },
   );
 
+  // Populate sub-steps for each phase
+  for (const phase of phases) {
+    const deltaV1AUs = Math.abs(deltaV1);
+    phase.subSteps = generateSubSteps(
+      shipPosition, shipVelocity, 'prograde',
+      phase, destinationId,
+      aCurrentAU, aTargetAU, aTransferAU,
+      goingOutward, deltaV1AUs,
+      simulatedTime,
+    );
+  }
+
   return { phases, method: 'hohmann', destinationId, plannedAt: simulatedTime };
 }
 
@@ -700,5 +712,223 @@ export function checkSubStepCompletion(
     }
     default:
       return false;
+  }
+}
+
+// ===== Sub-step generation =====
+
+function generateWaitWindowSubSteps(phase: NavigationPhase): NavSubStep[] {
+  const phaseId = phase.index;
+  return [{
+    id: `phase${phaseId}_wait`, phaseId, order: 0, type: 'wait_window', status: 'pending',
+    condition: { type: 'window_ready', met: false, description: '日心相位差达到霍曼转移要求（±3°）' },
+    action: {
+      thrustDirection: 'off', thrustMagnitude: 0, attitudeMode: 'inertial',
+      description: '保持当前轨道惯性飞行\n无需推力操作\n窗口到达后自动进入下一阶段',
+      completionCriteria: '日心相位差满足霍曼要求',
+    },
+  }];
+}
+
+function generateOrbitalManeuverSubSteps(
+  shipPosition: [number, number, number],
+  shipVelocity: [number, number, number],
+  attitudeMode: string,
+  phase: NavigationPhase,
+  aTransferAU: number,
+  goingOutward: boolean,
+  deltaV1AUs: number,
+): NavSubStep[] {
+  const phaseId = phase.index;
+  const vCurrentAUs = Math.sqrt(shipVelocity[0] ** 2 + shipVelocity[1] ** 2 + shipVelocity[2] ** 2);
+  const targetSpeedAUs = vCurrentAUs + deltaV1AUs;
+  const targetSpeedKmS = targetSpeedAUs * AU_TO_KM;
+  const subSteps: NavSubStep[] = [];
+
+  if (attitudeMode !== 'prograde') {
+    subSteps.push({
+      id: `phase${phaseId}_orient`, phaseId, order: 0, type: 'orient_prograde', status: 'pending',
+      condition: { type: 'immediate', met: true, description: '切换姿态模式为顺向保持' },
+      action: {
+        thrustDirection: 'off', thrustMagnitude: 0, attitudeMode: 'prograde',
+        description: '点击「顺向保持」按钮\n飞船方向自动对准速度矢量',
+        completionCriteria: '姿态模式切换为顺向',
+      },
+    });
+  }
+
+  const orderOffset = subSteps.length;
+  subSteps.push({
+    id: `phase${phaseId}_burn`, phaseId, order: orderOffset,
+    type: goingOutward ? 'burn_prograde' : 'burn_retrograde', status: 'pending',
+    condition: {
+      type: 'phase_angle_range',
+      min: NAVIGATION_CONFIG.thrustWindowMinDeg,
+      max: NAVIGATION_CONFIG.thrustWindowMaxDeg,
+      met: false,
+      description: `飞船相位角在 ${NAVIGATION_CONFIG.thrustWindowMinDeg}°~${NAVIGATION_CONFIG.thrustWindowMaxDeg}° 范围`,
+    },
+    action: {
+      thrustDirection: 'forward', thrustMagnitude: 100, attitudeMode: 'prograde',
+      targetSpeedKmS, targetSpeedAUs, targetSemiMajorAxisAU: aTransferAU,
+      description: `正向推力 100MN · 保持顺向模式\n推力方向与飞船速度方向一致\n目标日心速度：${targetSpeedKmS.toFixed(2)} km/s（当前 ${(vCurrentAUs * AU_TO_KM).toFixed(2)} km/s）\n目标半长轴：${aTransferAU.toFixed(3)} AU`,
+      completionCriteria: `日心半长轴达到 ${aTransferAU.toFixed(3)} AU`,
+    },
+  });
+
+  return subSteps;
+}
+
+function generateCoastSubSteps(phase: NavigationPhase): NavSubStep[] {
+  const phaseId = phase.index;
+  return [{
+    id: `phase${phaseId}_coast`, phaseId, order: 0, type: 'coast_transfer', status: 'pending',
+    condition: { type: 'always', met: true, description: '沿转移轨道惯性滑行' },
+    action: {
+      thrustDirection: 'off', thrustMagnitude: 0, attitudeMode: 'inertial',
+      description: '关闭推力，沿转移椭圆轨道惯性滑行\n无需任何操作\n耐心等待约半个转移周期',
+      completionCriteria: `距目标天体距离 < ${NAVIGATION_CONFIG.approachDistanceAU} AU`,
+    },
+  }];
+}
+
+function generateCaptureSubSteps(
+  attitudeMode: string,
+  phase: NavigationPhase,
+  aTargetAU: number,
+  goingOutward: boolean,
+): NavSubStep[] {
+  const phaseId = phase.index;
+  const vTargetOrbitAUs = Math.sqrt(MU_SUN_AU / aTargetAU);
+  const targetSpeedKmS = vTargetOrbitAUs * AU_TO_KM;
+  const subSteps: NavSubStep[] = [];
+
+  if (attitudeMode !== 'prograde') {
+    subSteps.push({
+      id: `phase${phaseId}_orient`, phaseId, order: 0, type: 'orient_prograde', status: 'pending',
+      condition: { type: 'immediate', met: true, description: '切换姿态模式为顺向保持' },
+      action: {
+        thrustDirection: 'off', thrustMagnitude: 0, attitudeMode: 'prograde',
+        description: '点击「顺向保持」按钮', completionCriteria: '姿态模式切换为顺向',
+      },
+    });
+  }
+
+  const orderOffset = subSteps.length;
+  subSteps.push({
+    id: `phase${phaseId}_capture`, phaseId, order: orderOffset,
+    type: goingOutward ? 'burn_retrograde' : 'burn_prograde', status: 'pending',
+    condition: { type: 'always', met: true, description: '接近目标天体，执行捕获机动' },
+    action: {
+      thrustDirection: goingOutward ? 'backward' : 'forward',
+      thrustMagnitude: 100, attitudeMode: 'prograde',
+      targetSpeedKmS, targetSpeedAUs: vTargetOrbitAUs, targetSemiMajorAxisAU: aTargetAU,
+      description: `${goingOutward ? '逆向推力减速制动' : '正向推力加速'} · 推力 100MN\n保持顺向模式\n目标日心速度：${targetSpeedKmS.toFixed(2)} km/s（目标天体轨道速度）`,
+      completionCriteria: `日心半长轴达到 ${aTargetAU.toFixed(3)} AU`,
+    },
+  });
+
+  return subSteps;
+}
+
+function generateCircularizeSubSteps(
+  shipPosition: [number, number, number],
+  shipVelocity: [number, number, number],
+  attitudeMode: string,
+  phase: NavigationPhase,
+  aTargetAU: number,
+): NavSubStep[] {
+  const phaseId = phase.index;
+  const ecc = computeEccentricity(shipPosition, shipVelocity, MU_SUN_AU);
+  const aCurrent = computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN_AU);
+  const needsSemiMajorAdjust = Math.abs(aCurrent - aTargetAU) > NAVIGATION_CONFIG.phaseCompletionThresholdAU;
+  const mag = needsSemiMajorAdjust ? 50 : 30;
+  const subSteps: NavSubStep[] = [];
+
+  if (attitudeMode !== 'prograde') {
+    subSteps.push({
+      id: `phase${phaseId}_orient`, phaseId, order: 0, type: 'orient_prograde', status: 'pending',
+      condition: { type: 'immediate', met: true, description: '切换姿态模式为顺向保持' },
+      action: {
+        thrustDirection: 'off', thrustMagnitude: 0, attitudeMode: 'prograde',
+        description: '点击「顺向保持」按钮', completionCriteria: '姿态模式切换为顺向',
+      },
+    });
+  }
+
+  const orderOffset = subSteps.length;
+  subSteps.push({
+    id: `phase${phaseId}_circ`, phaseId, order: orderOffset,
+    type: 'burn_circularize', status: 'pending',
+    condition: { type: 'always', met: true, description: '轨道接近目标，开始圆化' },
+    action: {
+      thrustDirection: 'forward', thrustMagnitude: mag, attitudeMode: 'prograde',
+      targetSemiMajorAxisAU: aTargetAU,
+      description: `微调推力 ${mag}MN · 保持顺向模式\n目标偏心率 < ${NAVIGATION_CONFIG.orbitCircularizationEcc}\n当前偏心率：${ecc.toFixed(4)}`,
+      completionCriteria: `偏心率 < ${NAVIGATION_CONFIG.orbitCircularizationEcc}`,
+    },
+  });
+
+  subSteps.push({
+    id: `phase${phaseId}_arrival`, phaseId, order: orderOffset + 1,
+    type: 'arrival', status: 'pending',
+    condition: { type: 'always', met: false, description: '轨道已圆化，接近目标天体' },
+    action: {
+      thrustDirection: 'off', thrustMagnitude: 0, attitudeMode: 'inertial',
+      description: '已到达目标天体，关闭推力', completionCriteria: `偏心率 < ${NAVIGATION_CONFIG.orbitCircularizationEcc} 且距离 < ${NAVIGATION_CONFIG.arrivalDistanceAU} AU`,
+    },
+  });
+
+  return subSteps;
+}
+
+export function generateSubSteps(
+  shipPosition: [number, number, number],
+  shipVelocity: [number, number, number],
+  attitudeMode: string,
+  phase: NavigationPhase,
+  destinationId: string,
+  aCurrentAU: number,
+  aTargetAU: number,
+  aTransferAU: number,
+  goingOutward: boolean,
+  deltaV1AUs: number,
+  _simulatedTime: number,
+): NavSubStep[] {
+  switch (phase.name) {
+    case '等待发射窗口':
+      return generateWaitWindowSubSteps(phase);
+    case '提升远日点':
+    case '降低近日点':
+      return generateOrbitalManeuverSubSteps(shipPosition, shipVelocity, attitudeMode, phase, aTransferAU, goingOutward, deltaV1AUs);
+    case '转移轨道滑行':
+      return generateCoastSubSteps(phase);
+    case '目标捕获制动':
+    case '目标捕获加速':
+      return generateCaptureSubSteps(attitudeMode, phase, aTargetAU, goingOutward);
+    case '绕飞圆化':
+      return generateCircularizeSubSteps(shipPosition, shipVelocity, attitudeMode, phase, aTargetAU);
+    default:
+      return [];
+  }
+}
+
+export function getSubStepTargetOrbit(
+  subStep: NavSubStep,
+  aTransferAU: number,
+  aTargetAU: number,
+  destEcc: number,
+): { semiMajorAxis: number; eccentricity: number } | null {
+  switch (subStep.type) {
+    case 'burn_prograde':
+      return { semiMajorAxis: aTransferAU, eccentricity: 0.3 };
+    case 'burn_retrograde':
+      return { semiMajorAxis: aTargetAU, eccentricity: destEcc };
+    case 'burn_circularize':
+      return { semiMajorAxis: aTargetAU, eccentricity: 0 };
+    case 'coast_transfer':
+      return { semiMajorAxis: aTransferAU, eccentricity: 0.3 };
+    default:
+      return null;
   }
 }
