@@ -69,6 +69,13 @@ export default function HUD() {
         const sunAngle = Math.atan2(-state.position[1], -state.position[0]);
         const shipAngle = Math.atan2(position[1] - state.position[1], position[0] - state.position[0]);
         orbitalPhaseDeg = ((shipAngle - sunAngle) * 180 / Math.PI + 360) % 360;
+        (window as unknown as Record<string, unknown>).__phaseDebug = {
+          bodyX: state.position[0], bodyY: state.position[1],
+          shipX: position[0], shipY: position[1],
+          relX: position[0] - state.position[0], relY: position[1] - state.position[1],
+          sunAngleRad: sunAngle, shipAngleRad: shipAngle,
+          phase: orbitalPhaseDeg,
+        };
       }
     }
   }
