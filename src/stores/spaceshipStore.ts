@@ -4,6 +4,7 @@ import { createSpaceshipState } from '../engine/orbitalInjection';
 import type { NavigationPlan } from '../engine/navigation';
 import { planHohmannTransfer, checkDeviation, checkWindowReady, checkSubStepCompletion, evaluateSubStepCondition, generateSubSteps, getNearestBodySemiMajorAxis } from '../engine/navigation';
 import { NAVIGATION_CONFIG, REAL_DATA, MU_SUN_AU } from '../engine/constants';
+import { jumpSpaceshipState } from '../engine/timeJump';
 
 export type ExplosionPhase = 'none' | 'exploding' | 'complete';
 
@@ -58,6 +59,7 @@ export interface SpaceshipStore extends SpaceshipState {
   checkNavigationalDeviation: () => void;
   replanNavigation: () => void;
   setWindowReady: (ready: boolean, remainingDays: number) => void;
+  timeJump: (targetTime: number) => void;
 }
 
 function rotateYaw(dir: [number, number, number], angle: number): [number, number, number] {
@@ -94,29 +96,39 @@ function rotatePitch(dir: [number, number, number], angle: number): [number, num
   ];
 }
 
-function regeneratePhaseSubSteps(
+function generatePhaseNextSubSteps(
   position: [number, number, number],
   velocity: [number, number, number],
   attitudeMode: string,
   phase: import('../engine/navigation').NavigationPhase,
   destinationId: string,
   simulatedTime: number,
-): void {
+): import('../engine/navigation').NavSubStep[] {
   const aCurrentAU = getNearestBodySemiMajorAxis(position, simulatedTime);
   const destData = REAL_DATA[destinationId];
-  if (!destData?.semiMajorAxis) return;
+  if (!destData?.semiMajorAxis) return [];
   const aTargetAU = destData.semiMajorAxis;
   const aTransferAU = (aCurrentAU + aTargetAU) / 2;
   const goingOutward = aTargetAU > aCurrentAU;
   const deltaV1 = Math.abs(Math.sqrt(MU_SUN_AU / aCurrentAU) *
     (Math.sqrt(2 * aTargetAU / (aCurrentAU + aTargetAU)) - 1));
-  phase.subSteps = generateSubSteps(
+  return generateSubSteps(
     position, velocity, attitudeMode,
     phase, destinationId,
     aCurrentAU, aTargetAU, aTransferAU,
     goingOutward, deltaV1,
     simulatedTime,
   );
+}
+
+export function mergeCompletedAndNextSubSteps(
+  phase: import('../engine/navigation').NavigationPhase,
+  completedCount: number,
+  nextSubSteps: import('../engine/navigation').NavSubStep[],
+) {
+  const completed = phase.subSteps.slice(0, completedCount);
+  for (const c of completed) c.status = 'completed';
+  phase.subSteps = [...completed, ...nextSubSteps];
 }
 
 const now = Date.now();
@@ -243,7 +255,7 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
       const nextPhaseIdx = s.activePhaseIndex + 1;
       if (nextPhaseIdx < s.navigationPlan.phases.length) {
         const nextPhase = s.navigationPlan.phases[nextPhaseIdx];
-        regeneratePhaseSubSteps(s.position, s.velocity, s.attitudeMode, nextPhase, s.navigationPlan.destinationId, s.simulatedTime);
+        nextPhase.subSteps = generatePhaseNextSubSteps(s.position, s.velocity, s.attitudeMode, nextPhase, s.navigationPlan.destinationId, s.simulatedTime);
         useSpaceshipStore.setState({
           activePhaseIndex: nextPhaseIdx,
           activeSubStepIndex: 0,
@@ -258,7 +270,7 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     const currentSubStep = currentPhase.subSteps[ssIdx];
     if (!currentSubStep) return;
 
-    // Handle wait_window sub-step: check window readiness
+    // Handle wait_window sub-step: check window readiness, require thrust to complete
     if (currentSubStep.type === 'wait_window') {
       const window = checkWindowReady(s.position, s.velocity, s.navigationPlan, s.activePhaseIndex, s.simulatedTime);
       currentSubStep.condition.met = window.windowReady;
@@ -266,11 +278,12 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
         windowReady: window.windowReady,
         windowRemainingDays: window.remainingDays,
       });
-      if (window.windowReady) {
-        // Window reached, advance to next sub-step
+      // Window reached AND user applying thrust → complete wait sub-step
+      if (window.windowReady && s.thrustMagnitude > 0) {
         const nextSSIdx = ssIdx + 1;
         if (nextSSIdx < currentPhase.subSteps.length) {
-          regeneratePhaseSubSteps(s.position, s.velocity, s.attitudeMode, currentPhase, s.navigationPlan.destinationId, s.simulatedTime);
+          const next = generatePhaseNextSubSteps(s.position, s.velocity, s.attitudeMode, currentPhase, s.navigationPlan.destinationId, s.simulatedTime);
+          mergeCompletedAndNextSubSteps(currentPhase, nextSSIdx, next);
         }
         useSpaceshipStore.setState({ activeSubStepIndex: nextSSIdx, windowReady: false, windowRemainingDays: 0 });
       }
@@ -281,7 +294,8 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     if (checkSubStepCompletion(currentSubStep, s.position, s.velocity, s.attitudeMode, s.navigationPlan.destinationId, s.simulatedTime)) {
       const nextSSIdx = ssIdx + 1;
       if (nextSSIdx < currentPhase.subSteps.length) {
-        regeneratePhaseSubSteps(s.position, s.velocity, s.attitudeMode, currentPhase, s.navigationPlan.destinationId, s.simulatedTime);
+        const next = generatePhaseNextSubSteps(s.position, s.velocity, s.attitudeMode, currentPhase, s.navigationPlan.destinationId, s.simulatedTime);
+        mergeCompletedAndNextSubSteps(currentPhase, nextSSIdx, next);
       }
       useSpaceshipStore.setState({ activeSubStepIndex: nextSSIdx });
       return;
@@ -314,6 +328,22 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
       activeSubStepIndex: 0,
       deviationWarning: '路线已重规划',
       lastReplanTime: s.simulatedTime,
+    });
+  },
+  timeJump: (targetTime) => {
+    const s = useSpaceshipStore.getState();
+    if (!s.orbitingBodyId) return;
+    const newShip = jumpSpaceshipState(
+      { position: s.position, velocity: s.velocity, direction: s.direction, thrust: s.thrust, thrustMagnitude: s.thrustMagnitude, exploded: s.exploded },
+      s.orbitingBodyId,
+      s.simulatedTime,
+      targetTime,
+    );
+    set({
+      position: newShip.position,
+      velocity: newShip.velocity,
+      direction: newShip.direction,
+      simulatedTime: targetTime,
     });
   },
 }));
