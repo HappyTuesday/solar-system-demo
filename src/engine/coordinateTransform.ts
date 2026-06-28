@@ -1,11 +1,11 @@
-import { SIMPLIFIED_RADII } from './constants';
+import { SIMPLIFIED_RADII, AU_TO_M } from './constants';
 
 // src/engine/coordinateTransform.ts
 // 纯函数，无 React/Three.js 依赖，属于 engine/ 层
 //
 // 坐标转换模型 —— 线性映射
 // ========================
-// 太阳系物理坐标（m）与渲染坐标系之间的双向转换，全部使用线性缩放。
+// 太阳系物理坐标（AU）与渲染坐标系之间的双向转换，全部使用线性缩放。
 //
 // 1. 位置缩放
 //    r_render = r_physical * linearScale
@@ -17,7 +17,7 @@ import { SIMPLIFIED_RADII } from './constants';
 const M_SUN = 1.989e30;
 const MASS_RENDER_SCALE = 10000 / M_SUN;
 
-let _linearScale = 1e-8;
+let _linearScale = 1500;
 export function getLinearScale(): number { return _linearScale; }
 export function setLinearScale(v: number): void { _linearScale = v; }
 

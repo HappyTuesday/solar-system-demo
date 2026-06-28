@@ -68,13 +68,15 @@ export default function TimePanel() {
 
   return (
     <div className="time-panel">
-      <div
-        className={`time-panel-left${canTimeJump ? ' time-panel-left-clickable' : ''}`}
-        onClick={canTimeJump ? () => setShowJumpPanel(v => !v) : undefined}
-        title={canTimeJump ? '点击修改日期/时间' : undefined}
-      >
+      <div className="time-panel-left">
         <div className="time-panel-date">{formatDate(simulatedTime)}</div>
         <div className="time-panel-time">{formatTime(simulatedTime)}</div>
+        {canTimeJump && (
+          <button className="time-panel-jump-btn" onClick={() => setShowJumpPanel(v => !v)}>
+            <span className="time-panel-jump-icon">⏱</span>
+            <span className="time-panel-jump-text">跳转到</span>
+          </button>
+        )}
       </div>
       <div className="time-panel-right">
         <div className="time-panel-ratio">

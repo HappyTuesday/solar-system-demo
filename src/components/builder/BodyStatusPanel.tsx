@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
 import { BUILD_CELESTIAL_TEMPLATES } from '../../engine/buildData';
+import { AU_TO_KM, AU_TO_M } from '../../engine/constants';
 import type { CelestialBody } from '../../types';
 import './BodyStatusPanel.css';
 
@@ -33,16 +34,15 @@ interface BodyDisplayData {
   speed: string;
 }
 
-function formatDistance(meters: number): string {
-  if (meters >= 1e12) return `${(meters / 1.495978707e11).toFixed(1)} AU`;
-  if (meters >= 1e9) return `${(meters / 1e9).toFixed(1)} 百万 km`;
-  if (meters >= 1e6) return `${(meters / 1e3).toFixed(0)} km`;
-  return `${meters.toFixed(0)} m`;
+function formatDistance(au: number): string {
+  if (au >= 0.01) return `${au.toFixed(au < 1 ? 3 : 1)} AU`;
+  if (au * AU_TO_KM >= 1) return `${(au * AU_TO_KM).toFixed(0)} km`;
+  return `${(au * AU_TO_M).toFixed(0)} m`;
 }
 
-function formatSpeed(mps: number): string {
-  if (mps >= 1000) return `${(mps / 1000).toFixed(1)} km/s`;
-  return `${mps.toFixed(0)} m/s`;
+function formatSpeed(auPerS: number): string {
+  if (auPerS * AU_TO_KM >= 1) return `${(auPerS * AU_TO_KM).toFixed(1)} km/s`;
+  return `${(auPerS * AU_TO_M).toFixed(0)} m/s`;
 }
 
 function computeDisplayData(bodies: CelestialBody[]): BodyDisplayData[] {

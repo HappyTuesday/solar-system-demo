@@ -1,6 +1,5 @@
-import { REAL_DATA, PHYSICAL_CONSTANTS, AU_TO_M, SPACECRAFT_CONFIG } from './constants';
+import { REAL_DATA, PHYSICAL_CONSTANTS, G_AU, SPACECRAFT_CONFIG, MU_SUN_AU } from './constants';
 import { stateVectors, julianDate, solveKepler, trueAnomaly, orbitalPeriod, meanAnomalyAtTime } from './orbital';
-import { MU_SUN } from './constants';
 import type { SpaceshipState } from '../types';
 
 export interface OrbitElements {
@@ -34,14 +33,14 @@ function computeBodyState(
   const data = REAL_DATA[templateId];
   if (!data || !data.semiMajorAxis || !data.orbital) return null;
   const o = data.orbital;
-  const period = orbitalPeriod(data.semiMajorAxis, MU_SUN);
+  const period = orbitalPeriod(data.semiMajorAxis, MU_SUN_AU);
   const M = meanAnomalyAtTime(o.meanAnomalyAtEpoch, period, o.epoch, jd);
   const Mmod = ((M % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
   const E = solveKepler(Mmod, o.eccentricity);
   const nu = trueAnomaly(E, o.eccentricity);
   return stateVectors(
     data.semiMajorAxis, o.eccentricity, o.inclination,
-    o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN,
+    o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN_AU,
   );
 }
 
@@ -58,7 +57,7 @@ export function createSpaceshipState(
   }
 
   const targetData = REAL_DATA[targetBodyId];
-  const muTarget = PHYSICAL_CONSTANTS.G * targetData.mass;
+  const muTarget = G_AU * targetData.mass;
   const def = SPACECRAFT_CONFIG.defaultOrbit;
 
   const elements: OrbitElements = {
@@ -72,18 +71,16 @@ export function createSpaceshipState(
 
   const rel = keplerToRelativeState(elements, muTarget);
 
-  const SCALE = 1 / AU_TO_M;
-
   const position: [number, number, number] = [
-    (bodyState.position[0] + rel.position[0]) * SCALE,
-    (bodyState.position[1] + rel.position[1]) * SCALE,
-    (bodyState.position[2] + rel.position[2]) * SCALE,
+    bodyState.position[0] + rel.position[0],
+    bodyState.position[1] + rel.position[1],
+    bodyState.position[2] + rel.position[2],
   ];
 
   const velocity: [number, number, number] = [
-    (bodyState.velocity[0] + rel.velocity[0]) * SCALE,
-    (bodyState.velocity[1] + rel.velocity[1]) * SCALE,
-    (bodyState.velocity[2] + rel.velocity[2]) * SCALE,
+    bodyState.velocity[0] + rel.velocity[0],
+    bodyState.velocity[1] + rel.velocity[1],
+    bodyState.velocity[2] + rel.velocity[2],
   ];
 
   const relSpeed = Math.sqrt(

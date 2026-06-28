@@ -1,4 +1,4 @@
-import { REAL_DATA } from '../../engine/constants';
+import { REAL_DATA, AU_TO_KM } from '../../engine/constants';
 import { BUILD_DATA } from '../../engine/buildData';
 import type { BuildBodyData } from '../../engine/buildData';
 import './BodyCatalogModal.css';
@@ -9,29 +9,15 @@ interface BodyCatalogModalProps {
   onClose: () => void;
 }
 
-const SUPERSCRIPTS: Record<string, string> = {
-  '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³',
-  '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
-};
-
-function toSuperscript(exp: number): string {
-  const s = String(exp);
-  return s.split('').map(c => SUPERSCRIPTS[c] ?? c).join('');
-}
-
-function fmtKm(value: number): string {
-  if (value === 0) return '0 km';
-  const km = value / 1000;
-  if (km >= 100000) {
-    const n = Math.floor(Math.log10(km));
-    const m = km / Math.pow(10, n);
-    return `${m.toFixed(1)}×10${toSuperscript(n)} km`;
-  }
+function fmtKm(au: number): string {
+  if (au === 0) return '0 km';
+  if (au >= 0.01) return `${au.toFixed(au < 1 ? 3 : 1)} AU`;
+  const km = au * AU_TO_KM;
   return `${km.toFixed(1)} km`;
 }
 
-function fmtKms(value: number): string {
-  return (value / 1000).toFixed(1);
+function fmtKms(auPerS: number): string {
+  return (auPerS * AU_TO_KM).toFixed(1);
 }
 
 export default function BodyCatalogModal({ onClose }: BodyCatalogModalProps) {

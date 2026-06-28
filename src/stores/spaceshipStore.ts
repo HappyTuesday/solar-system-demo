@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { SpaceshipState, AttitudeMode } from '../types';
 import { createSpaceshipState } from '../engine/orbitalInjection';
 import type { NavigationPlan } from '../engine/navigation';
-import { planHohmannTransfer, checkDeviation, checkWindowReady, checkSubStepCompletion, evaluateSubStepCondition, generateSubSteps, getNearestBodySemiMajorAxis } from '../engine/navigation';
+import { planHohmannTransfer, checkDeviation, checkWindowReady, checkSubStepCompletion, evaluateSubStepCondition, generateSubSteps, getStableReferenceSemiMajorAxis } from '../engine/navigation';
 import { NAVIGATION_CONFIG, REAL_DATA, MU_SUN_AU } from '../engine/constants';
 import { jumpSpaceshipState } from '../engine/timeJump';
 
@@ -104,7 +104,7 @@ function generatePhaseNextSubSteps(
   destinationId: string,
   simulatedTime: number,
 ): import('../engine/navigation').NavSubStep[] {
-  const aCurrentAU = getNearestBodySemiMajorAxis(position, simulatedTime);
+  const aCurrentAU = getStableReferenceSemiMajorAxis(position, velocity, simulatedTime);
   const destData = REAL_DATA[destinationId];
   if (!destData?.semiMajorAxis) return [];
   const aTargetAU = destData.semiMajorAxis;

@@ -1,10 +1,7 @@
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
-import { REAL_DATA, MU_SUN } from '../../engine/constants';
+import { REAL_DATA, MU_SUN_AU as MU_SUN, AU_TO_KM } from '../../engine/constants';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
 import './HUD.css';
-
-const SCALE = 1 / 1.496e11;
-const AU_TO_KM = 1.496e8;
 
 function computeBodyStateFull(templateId: string, jd: number) {
   const data = REAL_DATA[templateId];
@@ -17,8 +14,8 @@ function computeBodyStateFull(templateId: string, jd: number) {
   const nu = trueAnomaly(E, o.eccentricity);
   const sv = stateVectors(data.semiMajorAxis, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN);
   return {
-    position: [sv.position[0] * SCALE, sv.position[1] * SCALE, sv.position[2] * SCALE] as [number, number, number],
-    velocity: [sv.velocity[0] * SCALE, sv.velocity[1] * SCALE, sv.velocity[2] * SCALE] as [number, number, number],
+    position: sv.position,
+    velocity: sv.velocity,
   };
 }
 
@@ -44,7 +41,7 @@ export default function HUD() {
 
   // Orbiting body: used for all orbital parameters (distance, velocity, phase, altitude)
   const orbBodyName = orbitingBodyId ? (REAL_DATA[orbitingBodyId]?.name || '') : '';
-  const orbBodyRadiusKm = orbitingBodyId ? (REAL_DATA[orbitingBodyId]?.radius ?? 0) / 1000 : 0;
+  const orbBodyRadiusKm = orbitingBodyId ? (REAL_DATA[orbitingBodyId]?.radius ?? 0) * AU_TO_KM : 0;
 
   let orbDistAU = Infinity;
   let orbBodyVel: [number, number, number] = [0, 0, 0];
@@ -141,10 +138,10 @@ export default function HUD() {
           <span className="hud-label">&nbsp;&nbsp;速度</span> <span className="hud-value-yellow">{speedMs.toFixed(0)} km/s</span>
           <span className="hud-label">&nbsp;&nbsp;有效速度</span> <span className="hud-value-green">{effectiveSpeedKms.toFixed(0)} km/s</span>
           <span className="hud-label">&nbsp;&nbsp;推力</span> <span className="hud-value-cyan">{thrustMagnitude} MN</span>
-          <span className="hud-label">&nbsp;&nbsp;距{nearestBodyName}</span> <span className="hud-value-brown">{orbDistAU < 0.1 ? `${orbDistKm.toFixed(0)} km` : `${orbDistAU.toFixed(3)} AU`}</span>
+          <span className="hud-label">&nbsp;&nbsp;距{nearestBodyName}</span> <span className="hud-value-brown">{orbDistAU < 0.01 ? `${orbDistKm.toFixed(0)} km` : `${orbDistAU.toFixed(3)} AU`}</span>
           {targetBodyId && (
             <>
-              <span className="hud-label">&nbsp;&nbsp;距{REAL_DATA[targetBodyId]?.name || ''}</span> <span className="hud-value-green">{targetDistAU < 0.1 ? `${targetDistKm.toFixed(0)} km` : `${targetDistAU.toFixed(3)} AU`}</span>
+              <span className="hud-label">&nbsp;&nbsp;距{REAL_DATA[targetBodyId]?.name || ''}</span> <span className="hud-value-green">{targetDistAU < 0.01 ? `${targetDistKm.toFixed(0)} km` : `${targetDistAU.toFixed(3)} AU`}</span>
             </>
           )}
           <span className="hud-label">&nbsp;&nbsp;黄道面</span> <span className="hud-value-purple">{eclipticHeightKm.toFixed(0)} km</span>

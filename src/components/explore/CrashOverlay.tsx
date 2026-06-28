@@ -1,8 +1,6 @@
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
-import { REAL_DATA } from '../../engine/constants';
+import { REAL_DATA, AU_TO_KM } from '../../engine/constants';
 import './CrashOverlay.css';
-
-const AU_TO_KM = 1.496e8;
 
 function formatDuration(ms: number): string {
   if (ms <= 0) return '0 秒';
@@ -23,11 +21,11 @@ function formatDuration(ms: number): string {
 }
 
 function formatDistance(km: number): string {
-  if (km < 1e3) return `${km.toFixed(0)} km`;
-  if (km < 1e6) return `${(km / 1e3).toFixed(1)} 千 km`;
-  if (km < 1e9) return `${(km / 1e6).toFixed(2)} 百万 km`;
-  if (km < 1e12) return `${(km / 1e9).toFixed(3)} 十亿 km`;
-  return `${(km / 1e9).toFixed(2)} 十亿 km`;
+  const au = km / AU_TO_KM;
+  if (au >= 0.01) return `${au.toFixed(au < 1 ? 3 : 2)} AU`;
+  if (km >= 1e3) return `${(km / 1e3).toFixed(1)} 千 km`;
+  if (km >= 1) return `${km.toFixed(0)} km`;
+  return `${(km * 1000).toFixed(0)} m`;
 }
 
 function toLatLon(

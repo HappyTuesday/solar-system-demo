@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { BUILD_DATA } from '../../engine/buildData';
+import { AU_TO_KM } from '../../engine/constants';
 import type { CelestialBodyId } from '../../types';
 import './VelocityInputForm.css';
 
@@ -19,7 +20,7 @@ export default function VelocityInputForm({
   const data = BUILD_DATA[templateId];
   const defaultOrbitalSpeed = data?.orbitalSpeed;
 
-  const defaultSpeed = defaultOrbitalSpeed ? (defaultOrbitalSpeed / 1000).toFixed(1) : '0';
+  const defaultSpeed = defaultOrbitalSpeed ? (defaultOrbitalSpeed * AU_TO_KM).toFixed(1) : '0';
   const [speed, setSpeed] = useState<string>(defaultSpeed);
   const [angle, setAngle] = useState<string>('0');
 
@@ -31,7 +32,7 @@ export default function VelocityInputForm({
     if (!isValid) return;
     const cappedSpeed = Math.min(speedNum, MAX_SPEED);
     const angleDeg = ((angleNum % 360) + 360) % 360;
-    onConfirm(cappedSpeed * 1000, angleDeg);
+    onConfirm(cappedSpeed / AU_TO_KM, angleDeg);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

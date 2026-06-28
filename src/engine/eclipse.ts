@@ -1,8 +1,7 @@
-import { REAL_DATA } from './constants';
+import { REAL_DATA, MU_SUN_AU, G_AU } from './constants';
 import { orbitalPeriod, meanAnomalyAtTime, solveKepler, trueAnomaly, stateVectors } from './orbital';
 
-const MU_SUN = 1.32712440018e20;
-const MU_EARTH = 3.986004418e14;
+const MU_EARTH_AU = G_AU * REAL_DATA.earth.mass;
 
 export type MoonPhaseName =
   | '新月' | '蛾眉月' | '上弦月' | '盈凸月'
@@ -32,14 +31,14 @@ export function getMoonPhase(
   const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
 
   const phases: { max: number; name: MoonPhaseName }[] = [
-    { max: Math.PI / 8, name: '满月' },
-    { max: 3 * Math.PI / 8, name: '亏凸月' },
-    { max: 5 * Math.PI / 8, name: '下弦月' },
-    { max: 7 * Math.PI / 8, name: '残月' },
-    { max: 9 * Math.PI / 8, name: '新月' },
-    { max: 11 * Math.PI / 8, name: '蛾眉月' },
-    { max: 13 * Math.PI / 8, name: '上弦月' },
-    { max: 2 * Math.PI, name: '盈凸月' },
+    { max: Math.PI / 8, name: '新月' },
+    { max: 3 * Math.PI / 8, name: '蛾眉月' },
+    { max: 5 * Math.PI / 8, name: '上弦月' },
+    { max: 7 * Math.PI / 8, name: '盈凸月' },
+    { max: 9 * Math.PI / 8, name: '满月' },
+    { max: 11 * Math.PI / 8, name: '亏凸月' },
+    { max: 13 * Math.PI / 8, name: '下弦月' },
+    { max: 2 * Math.PI, name: '残月' },
   ];
 
   const name = phases.find(p => angle < p.max)?.name ?? '满月';
@@ -59,9 +58,9 @@ export function getEclipseType(
 
   if (dot < 0.9995) return 'none';
 
-  const earthRadius = 6371;
-  const sunRadius = 696340;
-  const distSE = lenSM * (149597870.7 / lenSM);
+  const earthRadius = REAL_DATA.earth.radius;
+  const sunRadius = REAL_DATA.sun.radius;
+  const distSE = lenSM;
   const umbraAngle = Math.atan2(sunRadius - earthRadius, distSE);
   const moonOffsetAngle = Math.abs(Math.PI - Math.acos(dot));
   const shadowRadius = earthRadius * Math.sin(umbraAngle) * moonDist;
@@ -76,7 +75,7 @@ export function predictEclipses(startJD: number, count: number): EclipseEvent[] 
   const events: EclipseEvent[] = [];
   const jdStep = 2 / 24;
   const maxJD = startJD + 400;
-  const moonA = 384400000;
+  const moonA = REAL_DATA.moon.semiMajorAxis!;
   const moonE = 0.0549;
   const moonI = 0.0898;
   const moonOmega = 2.183;
@@ -87,19 +86,19 @@ export function predictEclipses(startJD: number, count: number): EclipseEvent[] 
     const earthData = REAL_DATA.earth;
     if (!earthData.orbital || !earthData.semiMajorAxis) continue;
 
-    const earthPeriod = orbitalPeriod(earthData.semiMajorAxis, MU_SUN);
+    const earthPeriod = orbitalPeriod(earthData.semiMajorAxis, MU_SUN_AU);
     const earthM = meanAnomalyAtTime(earthData.orbital.meanAnomalyAtEpoch, earthPeriod, earthData.orbital.epoch, jd);
     const earthMmod = ((earthM % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
     const earthE = solveKepler(earthMmod, earthData.orbital.eccentricity);
     const earthNu = trueAnomaly(earthE, earthData.orbital.eccentricity);
-    const earthSV = stateVectors(earthData.semiMajorAxis, earthData.orbital.eccentricity, earthData.orbital.inclination, earthData.orbital.longitudeAscendingNode, earthData.orbital.argumentOfPeriapsis, earthNu, MU_SUN);
+    const earthSV = stateVectors(earthData.semiMajorAxis, earthData.orbital.eccentricity, earthData.orbital.inclination, earthData.orbital.longitudeAscendingNode, earthData.orbital.argumentOfPeriapsis, earthNu, MU_SUN_AU);
 
-    const moonPeriod = orbitalPeriod(moonA, MU_EARTH);
+    const moonPeriod = orbitalPeriod(moonA, MU_EARTH_AU);
     const moonM = meanAnomalyAtTime(0.529, moonPeriod, moonEpoch, jd);
     const moonMmod = ((moonM % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
     const moonEVal = solveKepler(moonMmod, moonE);
     const moonNu = trueAnomaly(moonEVal, moonE);
-    const moonSV = stateVectors(moonA, moonE, moonI, moonOmega, moonOmegaBar, moonNu, MU_EARTH);
+    const moonSV = stateVectors(moonA, moonE, moonI, moonOmega, moonOmegaBar, moonNu, MU_EARTH_AU);
 
     const sunDir: [number, number, number] = [-earthSV.position[0], -earthSV.position[1], -earthSV.position[2]];
     const moonDist = Math.sqrt(moonSV.position[0] ** 2 + moonSV.position[1] ** 2 + moonSV.position[2] ** 2);

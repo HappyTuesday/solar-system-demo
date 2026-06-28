@@ -38,7 +38,7 @@ export function updateRefPlaneOrientation(camera: THREE.Camera, lookAt: THREE.Ve
 export function resizeRefPlane(linearScale: number): void {
   if (!_refGroup) return;
   const basePlaneRadius = SPATIAL_TRANSFORM.maxOrbitRadius * 1.5;
-  const furthestRender = 4.5e12 * linearScale;
+  const furthestRender = 30 * linearScale;
   const s = Math.max(1, furthestRender * 1.2 / basePlaneRadius);
   _refGroup.scale.setScalar(s);
 }

@@ -1,10 +1,7 @@
-import { REAL_DATA, MU_SUN } from '../../engine/constants';
+import { REAL_DATA, MU_SUN_AU as MU_SUN, AU_TO_KM } from '../../engine/constants';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import './TargetSelectionModal.css';
-
-const SCALE = 1 / 1.496e11;
-const AU_TO_KM = 1.496e8;
 
 const BODY_COLORS: Record<string, string> = {
   sun: '#ffaa00',
@@ -50,7 +47,7 @@ function TargetSelectionModal({ bodies, currentTarget, onSelect, onClose }: Prop
       const E = solveKepler(Mmod, o.eccentricity);
       const nu = trueAnomaly(E, o.eccentricity);
       const sv = stateVectors(data.semiMajorAxis, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN);
-      bodyPos = [sv.position[0] * SCALE, sv.position[1] * SCALE, sv.position[2] * SCALE];
+      bodyPos = [sv.position[0], sv.position[1], sv.position[2]];
     }
 
     const dx = bodyPos[0] - position[0];
@@ -84,9 +81,9 @@ function TargetSelectionModal({ bodies, currentTarget, onSelect, onClose }: Prop
               <span className="target-modal-dot" style={{ background: opt.color }} />
               <span className="target-modal-body-name">{opt.name}</span>
               <span className="target-modal-dist">
-                {opt.distanceKm < 1e7
-                  ? `${opt.distanceKm.toFixed(0)} km`
-                  : `${(opt.distanceKm / AU_TO_KM).toFixed(3)} AU`}
+                {opt.distanceKm / AU_TO_KM >= 0.01
+                  ? `${(opt.distanceKm / AU_TO_KM).toFixed(3)} AU`
+                  : `${opt.distanceKm.toFixed(0)} km`}
               </span>
               <span className="target-modal-angle">{opt.angleDeg.toFixed(1)}°</span>
             </div>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { getSharedCamera, getSharedCanvas } from '../../rendering/threejs/cameraRef';
 import { renderToPhysical } from '../../engine/coordinateTransform';
+import { AU_TO_KM, AU_TO_M } from '../../engine/constants';
 import './Ruler.css';
 
 const RULER_SIZE = 28;
@@ -20,12 +21,12 @@ function niceInterval(range: number): number {
   return 10 * exp;
 }
 
-function formatPhysLabel(meters: number): string {
-  const abs = Math.abs(meters);
-  if (abs >= 1e12) return `${parseFloat((meters / 1e12).toFixed(1))}万亿`;
-  if (abs >= 1e8) return `${parseFloat((meters / 1e8).toFixed(1))}亿`;
-  if (abs >= 1e4) return `${parseFloat((meters / 1e4).toFixed(1))}万`;
-  return meters.toFixed(0);
+function formatPhysLabel(au: number): string {
+  const abs = Math.abs(au);
+  if (abs >= 0.01) return `${au.toFixed(abs < 1 ? 3 : 1)} AU`;
+  const km = abs * AU_TO_KM;
+  if (km >= 1) return `${(au * AU_TO_KM).toFixed(0)} km`;
+  return `${(au * AU_TO_M).toFixed(0)} m`;
 }
 
 export default function Ruler() {
@@ -108,7 +109,7 @@ export default function Ruler() {
       ctx.stroke();
       if (isMajor) {
         ctx.fillStyle = TEXT_COLOR;
-        ctx.fillText(formatPhysLabel(physX) + 'm', px, 2);
+        ctx.fillText(formatPhysLabel(physX), px, 2);
       }
     }
 
@@ -137,7 +138,7 @@ export default function Ruler() {
       ctx.rotate(-Math.PI / 2);
       ctx.textAlign = 'left';
       ctx.textBaseline = 'bottom';
-      ctx.fillText(formatPhysLabel(physY) + 'm', 0, 0);
+      ctx.fillText(formatPhysLabel(physY), 0, 0);
       ctx.restore();
     }
 

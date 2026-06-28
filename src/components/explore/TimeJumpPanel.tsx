@@ -22,13 +22,11 @@ export default function TimeJumpPanel({ onClose }: Props) {
 
   const doJump = useCallback((offsetMs: number) => {
     timeJump(simulatedTime + offsetMs);
-    onClose();
-  }, [simulatedTime, timeJump, onClose]);
+  }, [simulatedTime, timeJump]);
 
   const jumpToday = useCallback(() => {
     timeJump(Date.now());
-    onClose();
-  }, [timeJump, onClose]);
+  }, [timeJump]);
 
   // Close on outside click
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { REAL_DATA, MU_SUN } from './constants';
+import { REAL_DATA, MU_SUN_AU } from './constants';
 import { BUILD_DATA } from './buildData';
 import {
   julianDate,
@@ -55,7 +55,7 @@ export function computeAutoBuildPlan(timestamp?: number): AutoBuildStep[] {
     if (!data.semiMajorAxis || !data.orbital) continue;
 
     const o = data.orbital;
-    const period = orbitalPeriod(data.semiMajorAxis, MU_SUN);
+    const period = orbitalPeriod(data.semiMajorAxis, MU_SUN_AU);
     const M = meanAnomalyAtTime(o.meanAnomalyAtEpoch, period, o.epoch, jd);
     const Mmod = ((M % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
     const E = solveKepler(Mmod, o.eccentricity);
@@ -63,7 +63,7 @@ export function computeAutoBuildPlan(timestamp?: number): AutoBuildStep[] {
 
     const sv = stateVectors(
       data.semiMajorAxis, o.eccentricity, o.inclination,
-      o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN,
+      o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN_AU,
     );
 
     plan.push({

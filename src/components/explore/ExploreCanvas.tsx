@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
-import { REAL_DATA, MU_SUN } from '../../engine/constants';
+import { REAL_DATA, MU_SUN_AU as MU_SUN, AU_TO_KM } from '../../engine/constants';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { useExploreStore } from '../../stores/exploreStore';
 import { rk4StepSpaceship, applyThrustInBodyFrame, checkSpaceshipCollision, type BodyInfo } from '../../engine/spaceship';
@@ -9,9 +9,7 @@ import { NAVIGATION_CONFIG } from '../../engine/constants';
 import type { SpaceshipState } from '../../types';
 import TimePanel from './TimePanel';
 
-const SCALE = 1 / 1.496e11;
 const ORBIT_LINE_POINTS = 256;
-const AU_TO_KM = 1.496e8;
 
 const REAR_MIRROR_FOV = 65;
 const SIDE_MIRROR_FOV = 75;
@@ -43,8 +41,8 @@ function computeBodyState(templateId: string, jd: number): { position: [number, 
   const nu = trueAnomaly(E, o.eccentricity);
   const sv = stateVectors(data.semiMajorAxis, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN);
   return {
-    position: [sv.position[0] * SCALE, sv.position[1] * SCALE, sv.position[2] * SCALE],
-    velocity: [sv.velocity[0] * SCALE, sv.velocity[1] * SCALE, sv.velocity[2] * SCALE],
+    position: [sv.position[0], sv.position[1], sv.position[2]],
+    velocity: [sv.velocity[0], sv.velocity[1], sv.velocity[2]],
   };
 }
 
@@ -58,7 +56,7 @@ function createOrbitLine(templateId: string, color: number): THREE.Line {
       data.orbital!.longitudeAscendingNode, data.orbital!.argumentOfPeriapsis,
       nu, MU_SUN,
     );
-    points.push(new THREE.Vector3(sv.position[0] * SCALE, sv.position[1] * SCALE, sv.position[2] * SCALE));
+    points.push(new THREE.Vector3(sv.position[0], sv.position[1], sv.position[2]));
   }
   const geom = new THREE.BufferGeometry().setFromPoints(points);
   return new THREE.Line(geom, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55 }));
@@ -441,7 +439,7 @@ function ExploreCanvas() {
     for (const id of allIds) {
       const data = REAL_DATA[id];
       if (!data) continue;
-      const r = data.radius * SCALE;
+      const r = data.radius;
       const geom = new THREE.SphereGeometry(r, 48, 48);
       disposablesRef.current.geometries.push(geom);
       const mat = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.1 });
@@ -538,11 +536,11 @@ function ExploreCanvas() {
           for (const id of allIds) {
             const data = REAL_DATA[id];
             if (id === 'sun') {
-              bodyStates.push({ pos: [0, 0, 0], vel: [0, 0, 0], mass: data.mass, radius: data.radius * SCALE });
+              bodyStates.push({ pos: [0, 0, 0], vel: [0, 0, 0], mass: data.mass, radius: data.radius });
             } else {
               const state = computeBodyState(id, subJd);
               if (state) {
-                bodyStates.push({ pos: state.position, vel: state.velocity, mass: data.mass, radius: data.radius * SCALE });
+                bodyStates.push({ pos: state.position, vel: state.velocity, mass: data.mass, radius: data.radius });
               }
             }
           }
@@ -595,7 +593,7 @@ function ExploreCanvas() {
           if (pos) {
             mesh.position.set(pos[0], pos[1], pos[2]);
             const dist = camera.position.distanceTo(mesh.position);
-            const bodyR = data.radius * SCALE;
+            const bodyR = data.radius;
             const pixelSize = screenH * bodyR / Math.max(dist, 1e-10);
             mesh.scale.setScalar(pixelSize < MIN_BODY_PX ? MIN_BODY_PX / pixelSize : 1);
           }
@@ -604,7 +602,7 @@ function ExploreCanvas() {
         const sunMesh = bodyMeshes.get('sun');
         if (sunMesh) {
           const sunDist = camera.position.length();
-          const sunR = REAL_DATA.sun.radius * SCALE;
+          const sunR = REAL_DATA.sun.radius;
           const sunPx = screenH * sunR / Math.max(sunDist, 1e-10);
           sunMesh.scale.setScalar(sunPx < MIN_BODY_PX ? MIN_BODY_PX / sunPx : 1);
         }
@@ -618,7 +616,7 @@ function ExploreCanvas() {
             id,
             position: [mesh.position.x, mesh.position.y, mesh.position.z],
             mass: data.mass,
-            radius: data.radius * SCALE,
+            radius: data.radius,
           });
         }
 
@@ -739,7 +737,7 @@ function ExploreCanvas() {
                 // Hill sphere check for orbiting body
                 const data = REAL_DATA[id];
                 if (data?.semiMajorAxis) {
-                  const aBodyAU = (data.semiMajorAxis / 1.496e11);
+                  const aBodyAU = data.semiMajorAxis;
                   const hillR = aBodyAU * Math.pow(data.mass / (3 * REAL_DATA.sun.mass), 1 / 3);
                   if (dist < hillR) orbitingId = id;
                 }

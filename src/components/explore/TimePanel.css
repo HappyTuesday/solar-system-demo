@@ -110,24 +110,33 @@
   font-weight: 600;
 }
 
-.time-panel-left-clickable {
-  cursor: pointer;
-  padding: 4px 8px;
+.time-panel-jump-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 3px 10px;
+  background: rgba(68, 136, 255, 0.1);
+  border: 1px solid rgba(68, 136, 255, 0.25);
   border-radius: 4px;
-  background: rgba(68, 136, 255, 0.08);
-  border: 1px solid transparent;
-  transition: background 0.12s, border-color 0.12s;
+  color: #8ab4f8;
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 
-.time-panel-left-clickable:hover {
-  background: rgba(68, 136, 255, 0.15);
-  border-color: rgba(68, 136, 255, 0.25);
+.time-panel-jump-btn:hover {
+  background: rgba(68, 136, 255, 0.2);
+  border-color: rgba(68, 136, 255, 0.4);
+  color: #bbddff;
 }
 
-.time-panel-left-clickable:hover .time-panel-date {
-  color: #ccddff;
+.time-panel-jump-icon {
+  font-size: 13px;
+  line-height: 1;
 }
 
-.time-panel-left-clickable:hover .time-panel-time {
-  color: #ffffff;
+.time-panel-jump-text {
+  letter-spacing: 1px;
 }

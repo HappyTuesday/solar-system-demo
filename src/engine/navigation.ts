@@ -171,6 +171,21 @@ export function getOrbitingBodySemiMajorAxis(
   return data?.semiMajorAxis ?? 0;
 }
 
+// Stable reference semi-major axis: uses orbiting planet's semi-major axis if
+// within Hill sphere, otherwise falls back to actual heliocentric orbit.
+export function getStableReferenceSemiMajorAxis(
+  shipPosition: [number, number, number],
+  shipVelocity: [number, number, number],
+  simulatedTime: number,
+): number {
+  const bodyId = getOrbitingBodyId(shipPosition, simulatedTime);
+  if (bodyId === 'sun') {
+    return computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN_AU);
+  }
+  const data = REAL_DATA[bodyId];
+  return data?.semiMajorAxis ?? computeOrbitalSemiMajorAxis(shipPosition, shipVelocity, MU_SUN_AU);
+}
+
 export function getNearestBodySemiMajorAxis(
   shipPosition: [number, number, number],
   simulatedTime: number,
@@ -218,7 +233,7 @@ export function planHohmannTransfer(
   destinationId: string,
   simulatedTime: number,
 ): NavigationPlan {
-  const aCurrentAU = getNearestBodySemiMajorAxis(shipPosition, simulatedTime);
+  const aCurrentAU = getStableReferenceSemiMajorAxis(shipPosition, shipVelocity, simulatedTime);
 
   if (destinationId === 'sun') {
     return { phases: [], method: 'hohmann', destinationId, plannedAt: simulatedTime };
@@ -394,7 +409,7 @@ export function checkPhaseCompletion(
     const shipAngle = Math.atan2(shipPosition[1], shipPosition[0]);
     const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
 
-    const aCurrentAU = getNearestBodySemiMajorAxis(shipPosition, simulatedTime);
+  const aCurrentAU = getStableReferenceSemiMajorAxis(shipPosition, shipVelocity, simulatedTime);
     const destData = REAL_DATA[plan.destinationId];
     if (!destData || !destData.semiMajorAxis) return false;
     const aTargetAU = destData.semiMajorAxis;
@@ -491,7 +506,7 @@ export function checkWindowReady(
   const shipAngle = Math.atan2(shipPosition[1], shipPosition[0]);
   const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
 
-  const aCurrentAU = getOrbitingBodySemiMajorAxis(shipPosition, simulatedTime);
+  const aCurrentAU = getStableReferenceSemiMajorAxis(shipPosition, shipVelocity, simulatedTime);
   const destData = REAL_DATA[plan.destinationId];
   if (!destData?.semiMajorAxis) return { windowReady: false, remainingDays: 0 };
   const aTargetAU = destData.semiMajorAxis;
@@ -523,36 +538,9 @@ export function checkWindowReady(
   const orbitalAligned = diff < 0.1 || Math.abs(diff - TWO_PI) < 0.1;
 
   // Check departure tangent if orbiting a planet
-  let departureReady = true;
-  const orbitingBodyId = getOrbitingBodyId(shipPosition, simulatedTime);
-  if (orbitingBodyId !== 'sun' && orbitingBodyId !== plan.destinationId) {
-    const bodyState = computeBodyState(orbitingBodyId, jd);
-    if (bodyState) {
-      const bodyPosAU: [number, number, number] = [
-        bodyState.position[0],
-        bodyState.position[1],
-        bodyState.position[2],
-      ];
-      const bodyVelAU: [number, number, number] = [
-        bodyState.velocity[0],
-        bodyState.velocity[1],
-        bodyState.velocity[2],
-      ];
-      const rx = shipPosition[0] - bodyPosAU[0];
-      const ry = shipPosition[1] - bodyPosAU[1];
-      const rz = shipPosition[2] - bodyPosAU[2];
-      const bv = Math.sqrt(bodyVelAU[0] ** 2 + bodyVelAU[1] ** 2 + bodyVelAU[2] ** 2);
-      if (bv > 1e-15) {
-        const vnx = bodyVelAU[0] / bv;
-        const vny = bodyVelAU[1] / bv;
-        const vnz = bodyVelAU[2] / bv;
-        const dot = rx * vnx + ry * vny + rz * vnz;
-        const rr = Math.sqrt(rx * rx + ry * ry + rz * rz);
-        const cosAngle = rr > 1e-15 ? dot / rr : 0;
-        departureReady = goingOutward ? cosAngle > -0.3 : cosAngle < 0.3;
-      }
-    }
-  }
+  // Phase 0 wait_window only checks heliocentric phase angle alignment.
+  // Departure tangent is no longer gated here.
+  const departureReady = true;
 
   // Real-time remaining days: phase difference / synodic angular rate
   let angleToWait = requiredNorm - currentNorm;
@@ -629,6 +617,7 @@ export function evaluateSubStepCondition(
 
 export function checkWaitWindowComplete(
   shipPosition: [number, number, number],
+  shipVelocity: [number, number, number],
   destinationId: string,
   simulatedTime: number,
 ): boolean {
@@ -637,7 +626,7 @@ export function checkWaitWindowComplete(
   if (!targetState) return false;
   const shipAngle = Math.atan2(shipPosition[1], shipPosition[0]);
   const targetAngle = Math.atan2(targetState.position[1], targetState.position[0]);
-  const aCurrentAU = getNearestBodySemiMajorAxis(shipPosition, simulatedTime);
+  const aCurrentAU = getStableReferenceSemiMajorAxis(shipPosition, shipVelocity, simulatedTime);
   const destData = REAL_DATA[destinationId];
   if (!destData || !destData.semiMajorAxis) return false;
   const aTargetAU = destData.semiMajorAxis;

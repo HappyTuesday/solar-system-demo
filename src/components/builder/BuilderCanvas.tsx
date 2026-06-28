@@ -4,7 +4,7 @@ import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
 import { detectCollisions } from '../../engine/physics';
 import { renderToPhysical, physicalToRender, physicalRadiusToRender, getLinearScale } from '../../engine/coordinateTransform';
-import { HINT_ORDER, PHYSICAL_CONSTANTS, REAL_DATA } from '../../engine/constants';
+import { HINT_ORDER, PHYSICAL_CONSTANTS, REAL_DATA, AU_TO_KM } from '../../engine/constants';
 import { BUILD_DATA } from '../../engine/buildData';
 import { initScene, handleResize } from '../../rendering/threejs/setup';
 import { createBodyMesh, updateBodyMeshes, removeBodyMesh, clearAllMeshes, bodyMeshMap, DEFAULT_COLORS } from '../../rendering/threejs/bodies';
@@ -293,23 +293,23 @@ function BuilderCanvas() {
   const previewLeft = mouseScreenPos ? Math.min(mouseScreenPos[0] + MOUSE_OFFSET, (canvasRef.current?.clientWidth ?? 0) - 220) : 0;
   const previewTop = mouseScreenPos ? mouseScreenPos[1] + MOUSE_OFFSET : 0;
 
-  const formatDist = (m: number): string => {
-    if (m >= 1e12) return `${(m / 1.495978707e11).toFixed(2)} AU`;
-    if (m >= 1e9) return `${(m / 1e9).toFixed(0)} 万 km`;
-    return `${(m / 1e3).toFixed(0)} km`;
+  const formatDist = (au: number): string => {
+    if (au >= 0.01) return `${au.toFixed(au < 1 ? 3 : 2)} AU`;
+    if (au * AU_TO_KM >= 1) return `${(au * AU_TO_KM).toFixed(0)} km`;
+    return `${(au * AU_TO_KM * 1000).toFixed(0)} m`;
   };
 
   const MU = PHYSICAL_CONSTANTS.G * PHYSICAL_CONSTANTS.sunMass;
 
   const predOrbitSpeed = mousePhysicalPos
     ? Math.sqrt(MU / Math.max(
-        Math.sqrt(mousePhysicalPos[0] ** 2 + mousePhysicalPos[1] ** 2), 1e3))
+        Math.sqrt(mousePhysicalPos[0] ** 2 + mousePhysicalPos[1] ** 2), 1e-8))
     : 0;
 
   const computeOrbitPrediction = () => {
     if (!mousePhysicalPos || !selectedToolId) return null;
     const r = Math.sqrt(mousePhysicalPos[0] ** 2 + mousePhysicalPos[1] ** 2);
-    if (r < 1e3) return null;
+    if (r < 1e-8) return null;
     const data = BUILD_DATA[selectedToolId];
     const v0 = data?.orbitalSpeed ?? 0;
     if (v0 <= 0) return null;
@@ -412,11 +412,11 @@ function BuilderCanvas() {
           </div>
           <div className="preview-row">
             <span>圆轨速度</span>
-            <span>{(predOrbitSpeed / 1000).toFixed(1)} km/s</span>
+            <span>{(predOrbitSpeed * AU_TO_KM).toFixed(1)} km/s</span>
           </div>
           <div className="preview-row">
             <span>默认速度</span>
-            <span>{selectedToolId && BUILD_DATA[selectedToolId]?.orbitalSpeed ? (BUILD_DATA[selectedToolId]!.orbitalSpeed / 1000).toFixed(1) + ' km/s' : '-'}</span>
+            <span>{selectedToolId && BUILD_DATA[selectedToolId]?.orbitalSpeed ? (BUILD_DATA[selectedToolId]!.orbitalSpeed * AU_TO_KM).toFixed(1) + ' km/s' : '-'}</span>
           </div>
           {orbitPred && (
             <div className="preview-row">

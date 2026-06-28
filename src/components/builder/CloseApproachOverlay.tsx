@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useBuildStore } from '../../stores/buildStore';
-import { CELESTIAL_TEMPLATES } from '../../engine/constants';
+import { CELESTIAL_TEMPLATES, AU_TO_KM } from '../../engine/constants';
 import { vec3Length, getBodyRadius, detectCollisions } from '../../engine/physics';
 import type { CollisionEvent } from '../../engine/physics';
 import type { CelestialBody } from '../../types';
@@ -19,11 +19,10 @@ function getBodyName(templateId: string): string {
   return tmpl?.name ?? templateId;
 }
 
-function formatDist(meters: number): string {
-  if (meters >= 1e12) return `${(meters / 1.495978707e11).toFixed(2)} AU`;
-  if (meters >= 1e9) return `${(meters / 1e9).toFixed(2)} 百万 km`;
-  if (meters >= 1e3) return `${(meters / 1e3).toFixed(0)} km`;
-  return `${meters.toFixed(0)} m`;
+function formatDist(au: number): string {
+  if (au >= 0.01) return `${au.toFixed(au < 1 ? 3 : 2)} AU`;
+  if (au * AU_TO_KM >= 1) return `${(au * AU_TO_KM).toFixed(0)} km`;
+  return `${(au * AU_TO_KM * 1000).toFixed(0)} m`;
 }
 
 function computeClosePairs(bodies: CelestialBody[]): PairInfo[] {
