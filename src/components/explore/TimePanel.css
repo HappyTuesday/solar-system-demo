@@ -109,3 +109,25 @@
   color: #4488ff;
   font-weight: 600;
 }
+
+.time-panel-left-clickable {
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(68, 136, 255, 0.08);
+  border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.time-panel-left-clickable:hover {
+  background: rgba(68, 136, 255, 0.15);
+  border-color: rgba(68, 136, 255, 0.25);
+}
+
+.time-panel-left-clickable:hover .time-panel-date {
+  color: #ccddff;
+}
+
+.time-panel-left-clickable:hover .time-panel-time {
+  color: #ffffff;
+}

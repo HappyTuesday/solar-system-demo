@@ -1,6 +1,7 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { useExploreStore } from '../../stores/exploreStore';
+import TimeJumpPanel from './TimeJumpPanel';
 import './TimePanel.css';
 
 const MIN_EXP = 0;
@@ -45,8 +46,13 @@ function formatSimPerSecond(scale: number): string {
 
 export default function TimePanel() {
   const simulatedTime = useSpaceshipStore(s => s.simulatedTime);
+  const orbitingBodyId = useSpaceshipStore(s => s.orbitingBodyId);
+  const thrustMagnitude = useSpaceshipStore(s => s.thrustMagnitude);
   const timeScale = useExploreStore(s => s.timeScale);
   const setTimeScale = useExploreStore(s => s.setTimeScale);
+  const [showJumpPanel, setShowJumpPanel] = useState(false);
+
+  const canTimeJump = orbitingBodyId !== null && thrustMagnitude === 0;
 
   const handleSliderChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const exp = parseFloat(e.target.value);
@@ -62,7 +68,11 @@ export default function TimePanel() {
 
   return (
     <div className="time-panel">
-      <div className="time-panel-left">
+      <div
+        className={`time-panel-left${canTimeJump ? ' time-panel-left-clickable' : ''}`}
+        onClick={canTimeJump ? () => setShowJumpPanel(v => !v) : undefined}
+        title={canTimeJump ? '点击修改日期/时间' : undefined}
+      >
         <div className="time-panel-date">{formatDate(simulatedTime)}</div>
         <div className="time-panel-time">{formatTime(simulatedTime)}</div>
       </div>
@@ -94,6 +104,9 @@ export default function TimePanel() {
           ))}
         </div>
       </div>
+      {showJumpPanel && canTimeJump && (
+        <TimeJumpPanel onClose={() => setShowJumpPanel(false)} />
+      )}
     </div>
   );
 }
