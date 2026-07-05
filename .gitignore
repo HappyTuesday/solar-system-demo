@@ -26,3 +26,4 @@ dist-ssr
 # Test scripts
 test-*.mjs
 .superpowers/
+.playwright-mcp/

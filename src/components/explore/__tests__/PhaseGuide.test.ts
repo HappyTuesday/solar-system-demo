@@ -2,9 +2,11 @@ import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { NavigationPlan } from '../../../engine/navigation';
-import { computeBodyState } from '../../../engine/navigation';
+import { computeBodyState, computeLiveNavigationGuidance } from '../../../engine/navigation';
 import { julianDate } from '../../../engine/orbital';
 import { AU_TO_KM, G_AU, REAL_DATA } from '../../../engine/constants';
+
+type MockGear = 'D' | 'N' | 'R' | 'T';
 
 type MockSpaceshipState = {
   navigationPlan: NavigationPlan | null;
@@ -18,7 +20,7 @@ type MockSpaceshipState = {
   exploded: boolean;
   targetBodyId: string | null;
   setThrustMagnitude: (thrustMagnitude: number) => void;
-  setGear: (gear: 'D' | 'N' | 'R') => void;
+  setGear: (gear: MockGear) => void;
   setDirection: (direction: [number, number, number]) => void;
   setAttitudeMode: (mode: 'inertial' | 'prograde' | 'nadir' | 'target') => void;
 };
@@ -27,6 +29,17 @@ type MockExploreState = {
   timeScale: number;
   setTimeScale: (scale: number) => void;
 };
+
+function rotateXY(v: [number, number, number], angleDeg: number): [number, number, number] {
+  const angle = angleDeg * Math.PI / 180;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return [
+    v[0] * cos - v[1] * sin,
+    v[0] * sin + v[1] * cos,
+    v[2],
+  ];
+}
 
 const mockStores = vi.hoisted(() => {
   const spaceshipState = {} as MockSpaceshipState;
@@ -56,7 +69,7 @@ vi.mock('../../../stores/exploreStore', () => ({
 }));
 
 describe('PhaseGuide', () => {
-  it('renders wait guidance without exposing time jump as a navigation action', async () => {
+  it('renders direct rendezvous departure text without exposing time jump as a navigation action', async () => {
     const { default: PhaseGuide } = await import('../PhaseGuide');
     const simulatedTime = Date.UTC(2026, 6, 4);
     const earthState = computeBodyState('earth', julianDate(simulatedTime));
@@ -114,16 +127,26 @@ describe('PhaseGuide', () => {
 
     const html = renderToStaticMarkup(React.createElement(PhaseGuide));
 
-    expect(html).toContain('等待');
-    expect(html).toContain('地火窗口条件');
+    expect(html).toContain('脱离当前天体引力范围');
+    expect(html).toContain('指向汇合点方向');
+    expect(html).toContain('当前有效速度');
+    expect(html).toContain('按当前有效速度到达');
+    expect(html).toContain('火星到达汇合点');
+    expect(html).toContain('径向速度');
+    expect(html).toContain('切向速度');
+    expect(html).toContain('理想滑行速度');
+    expect(html).toContain('船身夹角');
+    expect(html).not.toContain('船身方向偏差');
     expect(html).not.toContain('建议倍率');
     expect(html).not.toContain('按指引设置倍率');
+    expect(html).not.toContain('对准导航方向');
+    expect(html).not.toContain('按指引设置推力');
     expect(html).not.toContain('详细轨道参数');
     expect(html).not.toContain('日心半长轴');
     expect(html).not.toContain('快进到发射窗口');
   });
 
-  it('renders live Mars operation commands and an align control', async () => {
+  it('renders live Mars operation text without shortcut controls', async () => {
     const { default: PhaseGuide } = await import('../PhaseGuide');
     const simulatedTime = Date.UTC(2026, 6, 4);
     const marsState = computeBodyState('mars', julianDate(simulatedTime));
@@ -161,20 +184,56 @@ describe('PhaseGuide', () => {
     const html = renderToStaticMarkup(React.createElement(PhaseGuide));
 
     expect(html).toContain('目标：火星');
-    expect(html).toContain('船头：火星相对逆行方向');
+    expect(html).toContain('参考方向：火星相对顺行方向');
     expect(html).toContain('档位：N');
     expect(html).toContain('推力：0 MN');
     expect(html).toContain('导航夹角');
-    expect(html).toContain('对准导航方向');
+    expect(html).not.toContain('对准导航方向');
     expect(html).toContain('指引：N · 0 MN');
-    expect(html).toContain('按指引设置推力');
+    expect(html).not.toContain('按指引设置推力');
     expect(html).not.toContain('建议倍率');
     expect(html).not.toContain('按指引设置倍率');
     expect(html).not.toContain('详细轨道参数');
     expect(html).not.toContain('日心半长轴');
   });
 
-  it('renders low-thrust Earth departure command for Mars mission', async () => {
+  it('renders signed ship nose angle against the guidance reference direction', async () => {
+    const { default: PhaseGuide } = await import('../PhaseGuide');
+    const simulatedTime = Date.UTC(2026, 6, 4);
+    const position: [number, number, number] = [1, 0, 0];
+    const velocity: [number, number, number] = [0, 0, 0];
+    const baseGuidance = computeLiveNavigationGuidance({
+      shipPosition: position,
+      shipVelocity: velocity,
+      shipDirection: [1, 0, 0],
+      destinationId: 'mars',
+      simulatedTime,
+      thrustMagnitude: 0,
+    });
+    expect(baseGuidance.desiredDirection).toBeDefined();
+    if (!baseGuidance.desiredDirection) return;
+
+    mockStores.spaceshipState.navigationPlan = null;
+    mockStores.spaceshipState.activePhaseIndex = -1;
+    mockStores.spaceshipState.position = position;
+    mockStores.spaceshipState.velocity = velocity;
+    mockStores.spaceshipState.direction = rotateXY(baseGuidance.desiredDirection, -10);
+    mockStores.spaceshipState.simulatedTime = simulatedTime;
+    mockStores.spaceshipState.attitudeMode = 'inertial';
+    mockStores.spaceshipState.thrustMagnitude = 0;
+    mockStores.spaceshipState.exploded = false;
+    mockStores.spaceshipState.targetBodyId = 'mars';
+    mockStores.spaceshipState.setThrustMagnitude = vi.fn();
+    mockStores.spaceshipState.setGear = vi.fn();
+    mockStores.spaceshipState.setDirection = vi.fn();
+    mockStores.spaceshipState.setAttitudeMode = vi.fn();
+
+    const html = renderToStaticMarkup(React.createElement(PhaseGuide));
+
+    expect(html).toContain('船身夹角：-10.0°');
+  });
+
+  it('renders direct rendezvous guidance for Earth departure without shortcut buttons', async () => {
     const { default: PhaseGuide } = await import('../PhaseGuide');
     const simulatedTime = Date.UTC(2027, 4, 13, 6);
     const earthState = computeBodyState('earth', julianDate(simulatedTime));
@@ -231,9 +290,14 @@ describe('PhaseGuide', () => {
 
     const html = renderToStaticMarkup(React.createElement(PhaseGuide));
 
-    expect(html).toContain('地球出发点火');
-    expect(html).toContain('D档低推力顺行加速');
-    expect(html).toContain('指引：D · 0.2 MN');
-    expect(html).not.toContain('指引：D · 100 MN');
+    expect(html).toContain('脱离当前天体引力范围');
+    expect(html).toContain('汇合点');
+    expect(html).toContain('当前有效速度');
+    expect(html).toContain('理想滑行速度');
+    expect(html).toContain('按当前有效速度到达');
+    expect(html).toContain('火星到达汇合点');
+    expect(html).not.toContain('对准导航方向');
+    expect(html).not.toContain('按指引设置推力');
+    expect(html).toContain('指引：D · 100 MN');
   });
 });

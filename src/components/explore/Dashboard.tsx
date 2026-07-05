@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
-import { REAL_DATA } from '../../engine/constants';
+import { AU_TO_KM, REAL_DATA } from '../../engine/constants';
 import type { AttitudeMode } from '../../types';
+import type { NavigationPlan } from '../../engine/navigation';
 import MiniMap from './MiniMap';
 import TargetSelectionModal from './TargetSelectionModal';
 import './Dashboard.css';
 
-const RotationRate = Math.PI / 3;
+const ATTITUDE_FINE_STEP_DEG = 0.1;
+const ATTITUDE_MEDIUM_STEP_DEG = 1;
+const ATTITUDE_LARGE_STEP_DEG = 5;
+const ATTITUDE_HOLD_INTERVAL_MS = 80;
+const ATTITUDE_MEDIUM_AFTER_MS = 600;
+const ATTITUDE_LARGE_AFTER_MS = 1600;
 
 function formatWaitDays(days: number): string {
   if (days <= 0.00001) return '即将就绪';
@@ -15,6 +21,28 @@ function formatWaitDays(days: number): string {
   if (totalSec < 3600) return `${Math.round(totalSec / 60)} 分`;
   if (totalSec < 86400) return `${Math.round(totalSec / 3600)} 小时`;
   return `${Math.round(days)} 天`;
+}
+
+function formatDurationSec(seconds: number): string {
+  if (!Number.isFinite(seconds)) return '不可达';
+  if (seconds < 3600) return `${Math.max(1, Math.round(seconds / 60))} 分`;
+  if (seconds < 86400) return `${Math.round(seconds / 3600)} 小时`;
+  return `${Math.round(seconds / 86400)} 天`;
+}
+
+function directPhaseDetail(phaseName: string, navigationPlan: NavigationPlan): string {
+  const rendezvous = navigationPlan.rendezvous;
+  if (!rendezvous) return '实时评估阶段目标';
+  if (phaseName === '加速到汇合滑行速度') {
+    return `目标有效速度 ${(rendezvous.shipIdealCruiseSpeedAUPerSec * AU_TO_KM).toFixed(1)} km/s`;
+  }
+  if (phaseName === '滑行接近汇合点') {
+    return `目标到达汇合点约 ${formatDurationSec(rendezvous.targetTimeToRendezvousSec)}`;
+  }
+  if (phaseName === '汇合前减速') {
+    return `相对速度降至 ${(rendezvous.arrivalMaxRelativeSpeedAUPerSec * AU_TO_KM).toFixed(2)} km/s 以下`;
+  }
+  return '阶段目标实时判定';
 }
 
 function Dashboard() {
@@ -27,8 +55,8 @@ function Dashboard() {
   const setVerticalThrust = useSpaceshipStore(s => s.setVerticalThrust);
   const setThrustMagnitude = useSpaceshipStore(s => s.setThrustMagnitude);
   const setGear = useSpaceshipStore(s => s.setGear);
-  const yaw = useSpaceshipStore(s => s.yaw);
-  const pitch = useSpaceshipStore(s => s.pitch);
+  const yawDegrees = useSpaceshipStore(s => s.yawDegrees);
+  const pitchDegrees = useSpaceshipStore(s => s.pitchDegrees);
   const setDirection = useSpaceshipStore(s => s.setDirection);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const attitudeMode = useSpaceshipStore(s => s.attitudeMode);
@@ -39,6 +67,7 @@ function Dashboard() {
   const activePhaseIndex = useSpaceshipStore(s => s.activePhaseIndex);
   const deviationWarning = useSpaceshipStore(s => s.deviationWarning);
   const [showTargetModal, setShowTargetModal] = useState(false);
+  const showTangentialGear = navigationPlan?.method === 'direct-rendezvous' && Boolean(navigationPlan.rendezvous);
 
   const sliderTrackRef = useRef<HTMLDivElement>(null);
   const navPhasesRef = useRef<HTMLDivElement>(null);
@@ -102,6 +131,21 @@ function Dashboard() {
     }
   }, []);
 
+  const startAttitudeHold = useCallback((applyStep: (degrees: number) => void) => {
+    const startedAt = performance.now();
+    applyStep(ATTITUDE_FINE_STEP_DEG);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(() => {
+      const elapsed = performance.now() - startedAt;
+      const step = elapsed >= ATTITUDE_LARGE_AFTER_MS
+        ? ATTITUDE_LARGE_STEP_DEG
+        : elapsed >= ATTITUDE_MEDIUM_AFTER_MS
+          ? ATTITUDE_MEDIUM_STEP_DEG
+          : ATTITUDE_FINE_STEP_DEG;
+      applyStep(step);
+    }, ATTITUDE_HOLD_INTERVAL_MS);
+  }, []);
+
   useEffect(() => {
     if (!navPhasesRef.current || activePhaseIndex < 0) return;
     const activeEl = navPhasesRef.current.querySelector('.dashboard-nav-phase.active');
@@ -147,12 +191,19 @@ function Dashboard() {
                   <button className={`dashboard-gear-btn gear-r${gear === 'R' ? ' active' : ''}`}
                     onMouseDown={(e) => { e.preventDefault(); setGear('R'); }}
                   >R</button>
+                  {showTangentialGear && (
+                    <button className={`dashboard-gear-btn gear-t${gear === 'T' ? ' active' : ''}`}
+                      title="切向修正：自动调整姿态与推力，切向速度到0或过零后回到N档"
+                      onMouseDown={(e) => { e.preventDefault(); setGear('T'); }}
+                    >T</button>
+                  )}
                 </div>
               </div>
               <div className="dashboard-thrust-value">
                 推力 {thrustMagnitude} MN
                 {gear === 'N' && <span className="gear-indicator"> [N]</span>}
                 {gear === 'R' && <span className="gear-indicator reverse"> [R]</span>}
+                {gear === 'T' && <span className="gear-indicator tangential"> [T切向]</span>}
               </div>
 
               <div className="dashboard-pads-row">
@@ -161,24 +212,28 @@ function Dashboard() {
                   <div className="dashboard-pad-grid">
                     <div />
                     <button className="dashboard-pad-btn"
-                      onMouseDown={(e) => { e.preventDefault(); startHold(() => pitch(RotationRate * 0.1)); }}
+                      title="上仰 0.1°"
+                      onMouseDown={(e) => { e.preventDefault(); startAttitudeHold((degrees) => pitchDegrees(degrees)); }}
                       onMouseUp={stopHold} onMouseLeave={stopHold}
                     >▲</button>
                     <div />
                     <button className="dashboard-pad-btn"
-                      onMouseDown={(e) => { e.preventDefault(); startHold(() => yaw(RotationRate * 0.1)); }}
+                      title="左转 0.1°"
+                      onMouseDown={(e) => { e.preventDefault(); startAttitudeHold((degrees) => yawDegrees(degrees)); }}
                       onMouseUp={stopHold} onMouseLeave={stopHold}
                     >◀</button>
                     <button className="dashboard-pad-btn flip"
                       onMouseDown={(e) => { e.preventDefault(); setDirection([-direction[0], -direction[1], -direction[2]]); setAttitudeMode('inertial' as AttitudeMode); }}
                     >⇄</button>
                     <button className="dashboard-pad-btn"
-                      onMouseDown={(e) => { e.preventDefault(); startHold(() => yaw(-RotationRate * 0.1)); }}
+                      title="右转 0.1°"
+                      onMouseDown={(e) => { e.preventDefault(); startAttitudeHold((degrees) => yawDegrees(-degrees)); }}
                       onMouseUp={stopHold} onMouseLeave={stopHold}
                     >▶</button>
                     <div />
                     <button className="dashboard-pad-btn"
-                      onMouseDown={(e) => { e.preventDefault(); startHold(() => pitch(-RotationRate * 0.1)); }}
+                      title="下俯 0.1°"
+                      onMouseDown={(e) => { e.preventDefault(); startAttitudeHold((degrees) => pitchDegrees(-degrees)); }}
                       onMouseUp={stopHold} onMouseLeave={stopHold}
                     >▼</button>
                     <div />
@@ -273,7 +328,9 @@ function Dashboard() {
                             阶段{phase.index + 1}：{phase.name}
                           </div>
                           <div className="dashboard-nav-phase-detail">
-                            {phase.name.startsWith('等待')
+                            {navigationPlan.method === 'direct-rendezvous'
+                              ? directPhaseDetail(phase.name, navigationPlan)
+                              : phase.name.startsWith('等待')
                                 ? (phase.expectedWaitDays != null
                                     ? `预计等待约 ${formatWaitDays(phase.expectedWaitDays)}`
                                     : '等待发射窗口')

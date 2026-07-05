@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { useExploreStore } from '../../stores/exploreStore';
+import { hasEffectiveThrust } from '../../engine/spaceship';
 import TimeJumpPanel from './TimeJumpPanel';
 import './TimePanel.css';
 
@@ -48,11 +49,12 @@ export default function TimePanel() {
   const simulatedTime = useSpaceshipStore(s => s.simulatedTime);
   const orbitingBodyId = useSpaceshipStore(s => s.orbitingBodyId);
   const thrustMagnitude = useSpaceshipStore(s => s.thrustMagnitude);
+  const thrust = useSpaceshipStore(s => s.thrust);
   const timeScale = useExploreStore(s => s.timeScale);
   const setTimeScale = useExploreStore(s => s.setTimeScale);
   const [showJumpPanel, setShowJumpPanel] = useState(false);
 
-  const canTimeJump = orbitingBodyId !== null && thrustMagnitude === 0;
+  const canTimeJump = orbitingBodyId !== null && !hasEffectiveThrust(thrust, thrustMagnitude);
 
   const handleSliderChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const exp = parseFloat(e.target.value);

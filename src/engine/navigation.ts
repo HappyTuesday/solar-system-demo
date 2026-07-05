@@ -18,11 +18,39 @@ export interface NavigationPhase {
   };
 }
 
+export interface DirectRendezvousInfo {
+  point: [number, number, number];
+  plannedFrom: [number, number, number];
+  targetTimeToRendezvousSec: number;
+  shipIdealCruiseSpeedAUPerSec: number;
+  arrivalMaxRelativeSpeedAUPerSec: number;
+  rendezvousTime: number;
+  validUntil: number;
+  invalidReason?: string;
+}
+
 export interface NavigationPlan {
   phases: NavigationPhase[];
-  method: 'hohmann';
+  method: 'hohmann' | 'direct-rendezvous';
   destinationId: string;
   plannedAt: number;
+  rendezvous?: DirectRendezvousInfo;
+}
+
+export interface DirectRendezvousMetrics {
+  distanceToRendezvousAU: number;
+  targetDistanceToRendezvousAU: number;
+  speedAUPerSec: number;
+  radialSpeedAUPerSec: number;
+  tangentialSpeedAUPerSec: number;
+  effectiveSpeedAUPerSec: number;
+  idealCruiseSpeedAUPerSec: number;
+  shipTimeToRendezvousSec: number;
+  targetTimeToRendezvousSec: number;
+  velocityAngleErrorDeg: number;
+  noseAngleErrorDeg: number;
+  arrivalMaxRelativeSpeedAUPerSec: number;
+  rendezvousDirection: [number, number, number];
 }
 
 export interface GuidanceMetric {
@@ -80,6 +108,7 @@ export interface LiveNavigationGuidanceInput {
   destinationId: string;
   simulatedTime: number;
   thrustMagnitude: number;
+  navigationPlan?: NavigationPlan | null;
 }
 
 const MARS_LIVE_APPROACH_RADIUS_AU = 1.5;
@@ -160,6 +189,22 @@ function vectorScale(v: [number, number, number], scalar: number): [number, numb
 
 function vectorDot(a: [number, number, number], b: [number, number, number]): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function vectorSubtract(a: [number, number, number], b: [number, number, number]): [number, number, number] {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+
+export function signedAngleDeg(
+  current: [number, number, number],
+  target: [number, number, number],
+): number {
+  const currentLen = vectorLength(current);
+  const targetLen = vectorLength(target);
+  if (currentLen < 1e-20 || targetLen < 1e-20) return 0;
+  const unsigned = angleBetweenVectors(current, target) * 180 / Math.PI;
+  const crossZ = target[0] * current[1] - target[1] * current[0];
+  return crossZ >= 0 ? unsigned : -unsigned;
 }
 
 function angleBetweenVectors(a: [number, number, number], b: [number, number, number]): number {
@@ -392,6 +437,148 @@ function getPhaseAngleDegForDeparture(
 
 // ===== Plan generation =====
 
+const DIRECT_STAGE_NAMES = [
+  '脱离当前天体引力范围',
+  '加速到汇合滑行速度',
+  '滑行接近汇合点',
+  '汇合前减速',
+  '进入目标引力范围',
+  '轨道圆化',
+  '到达',
+] as const;
+
+const DIRECT_ACCELERATION_VELOCITY_TOLERANCE_DEG = 2;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function estimateDirectCruiseSpeed(distanceAU: number): number {
+  const minSpeed = 8 / AU_TO_KM;
+  const maxSpeed = 300 / AU_TO_KM;
+  const accelLimited = Math.sqrt(Math.max(1e-12, SPACECRAFT_CONFIG.maxThrustAU * distanceAU * 0.08));
+  return clamp(accelLimited, minSpeed, maxSpeed);
+}
+
+function createDirectRendezvousPhases(destinationId: string, idealSpeed: number): NavigationPhase[] {
+  const destination = REAL_DATA[destinationId];
+  const targetA = destination?.semiMajorAxis ?? 1;
+  return DIRECT_STAGE_NAMES.map((name, index) => {
+    const thrustDirection: NavigationPhase['thrustDirection'] =
+      index === 2 || index === 6 ? 'none' : index === 3 ? 'backward' : 'forward';
+    const thrustMagnitude = index === 2 || index === 6 ? 0 : index === 5 ? 35 : 100;
+    return {
+      index,
+      name,
+      thrustDirection,
+      thrustMagnitude,
+      deltaV: index === 1 ? idealSpeed : 0,
+      expectedSpeedKms: index === 1 ? idealSpeed * AU_TO_KM : 0,
+      targetOrbit: {
+        semiMajorAxis: targetA,
+        eccentricity: index === 6 ? 0 : 0.2,
+      },
+    };
+  });
+}
+
+export function planDirectRendezvousTransfer(
+  shipPosition: [number, number, number],
+  _shipVelocity: [number, number, number],
+  destinationId: string,
+  simulatedTime: number,
+): NavigationPlan {
+  if (destinationId === 'sun') {
+    return { phases: [], method: 'direct-rendezvous', destinationId, plannedAt: simulatedTime };
+  }
+
+  const destination = REAL_DATA[destinationId];
+  if (!destination?.semiMajorAxis || !destination.orbital) {
+    return { phases: [], method: 'direct-rendezvous', destinationId, plannedAt: simulatedTime };
+  }
+
+  let targetState = computeBodyState(destinationId, julianDate(simulatedTime));
+  if (!targetState) {
+    return { phases: [], method: 'direct-rendezvous', destinationId, plannedAt: simulatedTime };
+  }
+
+  for (let i = 0; i < 4; i++) {
+    const distance = vectorLength(vectorSubtract(targetState.position, shipPosition));
+    const idealSpeed = estimateDirectCruiseSpeed(distance);
+    const rendezvousTimeSec = clamp(distance / idealSpeed, 3 * 86400, 820 * 86400);
+    const futureTarget = computeBodyState(destinationId, julianDate(simulatedTime + rendezvousTimeSec * 1000));
+    if (!futureTarget) break;
+    targetState = futureTarget;
+  }
+
+  const rendezvousPoint = targetState.position;
+  const finalDistance = vectorLength(vectorSubtract(rendezvousPoint, shipPosition));
+  const idealSpeed = estimateDirectCruiseSpeed(finalDistance);
+  const rendezvousTimeSec = clamp(finalDistance / idealSpeed, 3 * 86400, 820 * 86400);
+  const arrivalMaxRelativeSpeedAUPerSec = 0.65 / AU_TO_KM;
+  const phases = createDirectRendezvousPhases(destinationId, idealSpeed);
+
+  return {
+    phases,
+    method: 'direct-rendezvous',
+    destinationId,
+    plannedAt: simulatedTime,
+    rendezvous: {
+      point: rendezvousPoint,
+      plannedFrom: shipPosition,
+      targetTimeToRendezvousSec: rendezvousTimeSec,
+      shipIdealCruiseSpeedAUPerSec: idealSpeed,
+      arrivalMaxRelativeSpeedAUPerSec,
+      rendezvousTime: simulatedTime + rendezvousTimeSec * 1000,
+      validUntil: simulatedTime + Math.min(rendezvousTimeSec * 0.2, 20 * 86400) * 1000,
+    },
+  };
+}
+
+export function computeDirectRendezvousMetrics(
+  shipPosition: [number, number, number],
+  shipVelocity: [number, number, number],
+  shipDirection: [number, number, number],
+  plan: NavigationPlan,
+  simulatedTime: number,
+): DirectRendezvousMetrics {
+  const rendezvous = plan.rendezvous;
+  const targetState = computeBodyState(plan.destinationId, julianDate(simulatedTime));
+  const point = rendezvous?.point ?? targetState?.position ?? shipPosition;
+  const toRendezvous = vectorSubtract(point, shipPosition);
+  const distanceToRendezvousAU = vectorLength(toRendezvous);
+  const rendezvousDirection = vectorNormalize(toRendezvous);
+  const speedAUPerSec = vectorLength(shipVelocity);
+  const radialSpeedAUPerSec = vectorDot(shipVelocity, rendezvousDirection);
+  const tangentialReferenceRaw: [number, number, number] = [-rendezvousDirection[1], rendezvousDirection[0], 0];
+  const tangentialReference = vectorNormalize(tangentialReferenceRaw);
+  const tangentialSpeedAUPerSec = vectorDot(shipVelocity, tangentialReference);
+  const effectiveSpeedAUPerSec = Math.max(0, radialSpeedAUPerSec);
+  const shipTimeToRendezvousSec = effectiveSpeedAUPerSec > 1e-20
+    ? distanceToRendezvousAU / effectiveSpeedAUPerSec
+    : Infinity;
+  const targetDistanceToRendezvousAU = targetState
+    ? vectorLength(vectorSubtract(point, targetState.position))
+    : Infinity;
+  const targetTimeToRendezvousSec = Math.max(0, ((rendezvous?.rendezvousTime ?? simulatedTime) - simulatedTime) / 1000);
+
+  return {
+    distanceToRendezvousAU,
+    targetDistanceToRendezvousAU,
+    speedAUPerSec,
+    radialSpeedAUPerSec,
+    tangentialSpeedAUPerSec,
+    effectiveSpeedAUPerSec,
+    idealCruiseSpeedAUPerSec: rendezvous?.shipIdealCruiseSpeedAUPerSec ?? 0,
+    shipTimeToRendezvousSec,
+    targetTimeToRendezvousSec,
+    velocityAngleErrorDeg: signedAngleDeg(shipVelocity, rendezvousDirection),
+    noseAngleErrorDeg: signedAngleDeg(shipDirection, rendezvousDirection),
+    arrivalMaxRelativeSpeedAUPerSec: rendezvous?.arrivalMaxRelativeSpeedAUPerSec ?? 0.65 / AU_TO_KM,
+    rendezvousDirection,
+  };
+}
+
 export function planHohmannTransfer(
   shipPosition: [number, number, number],
   shipVelocity: [number, number, number],
@@ -558,6 +745,43 @@ export function checkPhaseCompleted(
   simulatedTime: number,
 ): boolean {
   if (!phase) return false;
+
+  if (phase.name === '脱离当前天体引力范围') {
+    const orbitingId = getOrbitingBodyId(shipPosition, simulatedTime);
+    if (orbitingId === 'sun') return true;
+
+    const orbitingData = REAL_DATA[orbitingId];
+    if (!orbitingData) return false;
+
+    const bodyState = computeBodyState(orbitingId, julianDate(simulatedTime));
+    if (!bodyState) return false;
+
+    const drx = shipPosition[0] - bodyState.position[0];
+    const dry = shipPosition[1] - bodyState.position[1];
+    const drz = shipPosition[2] - bodyState.position[2];
+    const dvx = shipVelocity[0] - bodyState.velocity[0];
+    const dvy = shipVelocity[1] - bodyState.velocity[1];
+    const dvz = shipVelocity[2] - bodyState.velocity[2];
+    const rRel = Math.sqrt(drx * drx + dry * dry + drz * drz);
+    if (rRel <= 0) return false;
+
+    const vRel2 = dvx * dvx + dvy * dvy + dvz * dvz;
+    const energyRel = vRel2 / 2 - (G_AU * orbitingData.mass) / rRel;
+    return energyRel > 0;
+  }
+
+  if (phase.name === '加速到汇合滑行速度') {
+    const plan = planDirectRendezvousTransfer(shipPosition, shipVelocity, destinationId, simulatedTime);
+    const metrics = computeDirectRendezvousMetrics(
+      shipPosition,
+      shipVelocity,
+      shipVelocity,
+      plan,
+      simulatedTime,
+    );
+    return Math.abs(metrics.velocityAngleErrorDeg) <= DIRECT_ACCELERATION_VELOCITY_TOLERANCE_DEG
+      && metrics.speedAUPerSec >= metrics.idealCruiseSpeedAUPerSec * (1 - 1e-12);
+  }
 
   // Phase 1: 等待发射窗口 — heliocentric phase angle aligned
   if (phase.name.startsWith('等待')) {
@@ -1065,10 +1289,6 @@ function relativeProgradeDirection(orbit: TargetRelativeOrbit): [number, number,
   return vectorNormalize(orbit.relativeVelocity);
 }
 
-function relativeRetrogradeDirection(orbit: TargetRelativeOrbit): [number, number, number] {
-  return vectorScale(relativeProgradeDirection(orbit), -1);
-}
-
 function directionToTarget(orbit: TargetRelativeOrbit): [number, number, number] {
   return vectorScale(vectorNormalize(orbit.relativePosition), -1);
 }
@@ -1096,8 +1316,10 @@ function guidanceWithDirection(
   metrics: GuidanceMetric[],
   reason: string,
 ): PhaseGuidance {
-  const angleDeg = angleBetweenVectors(input.shipDirection, desiredDirection) * 180 / Math.PI;
-  const needsTurn = angleDeg > 6;
+  const angleDeg = signedAngleDeg(input.shipDirection, desiredDirection);
+  const absAngleDeg = Math.abs(angleDeg);
+  const needsTurn = absAngleDeg > 6;
+  const recommendedGear = thrustDirection === 'backward' ? 'R' : 'D';
   if (needsTurn) {
     return {
       operation: 'turn',
@@ -1107,7 +1329,7 @@ function guidanceWithDirection(
         { label: '船身夹角', current: angleDeg, target: 6, unit: '°', warn: true },
         ...metrics,
       ],
-      progress: Math.max(0, 100 - angleDeg),
+      progress: Math.max(0, 100 - absAngleDeg),
       completed: false,
       shouldThrust: false,
       thrustDirection: 'none',
@@ -1135,7 +1357,7 @@ function guidanceWithDirection(
     attitudeMode: 'inertial',
     desiredDirection,
     desiredDirectionLabel,
-    recommendedGear: 'D',
+    recommendedGear,
     recommendedThrustMagnitude: thrustMagnitude,
     suggestedTimeScale: 1,
     reason,
@@ -1209,11 +1431,11 @@ function computeFarMarsApproachGuidance(
 
   const direction = mode === 'approach'
     ? directionToTarget(orbit)
-    : relativeRetrogradeDirection(orbit);
+    : relativeProgradeDirection(orbit);
   const title = mode === 'approach' ? '点火接近火星' : '火星相对制动';
   const actionText = mode === 'approach'
     ? '船头对准火星方向，D档小推力接近，建立受控闭合速度'
-    : '船头对准火星相对逆行方向，D档制动，先降低火星相对速度';
+    : '船头保持火星相对顺行方向，R档反推制动，先降低火星相对速度';
 
   return guidanceWithDirection(
     input,
@@ -1221,7 +1443,7 @@ function computeFarMarsApproachGuidance(
     actionText,
     'ignite',
     direction,
-    mode === 'approach' ? '指向火星方向' : '火星相对逆行方向',
+    mode === 'approach' ? '指向火星方向' : '火星相对顺行方向',
     mode === 'approach' ? 'forward' : 'backward',
     mode === 'approach' ? 15 : 100,
     [
@@ -1314,7 +1536,7 @@ function computeMarsLiveGuidance(input: LiveNavigationGuidanceInput, orbit: Targ
     }
 
     if (needsLowerApoapsis) {
-      const direction = relativeRetrogradeDirection(orbit);
+      const direction = relativeProgradeDirection(orbit);
       if (!isNearTargetPeriapsis(orbit)) {
         return {
           operation: 'coast',
@@ -1331,7 +1553,7 @@ function computeMarsLiveGuidance(input: LiveNavigationGuidanceInput, orbit: Targ
           thrustMagnitude: 0,
           attitudeMode: 'inertial',
           desiredDirection: direction,
-          desiredDirectionLabel: '火星相对逆行方向',
+          desiredDirectionLabel: '火星相对顺行方向',
           recommendedGear: 'N',
           recommendedThrustMagnitude: 0,
           suggestedTimeScale: chooseTargetCoastTimeScale(orbit, 'periapsis'),
@@ -1341,10 +1563,10 @@ function computeMarsLiveGuidance(input: LiveNavigationGuidanceInput, orbit: Targ
       return guidanceWithDirection(
         input,
         '点火降低远火点',
-        '船头对准火星相对逆行方向，D档点火，降低远火点并圆化绕飞轨道',
+        '船头保持火星相对顺行方向，R档反推制动，降低远火点并圆化绕飞轨道',
         'ignite',
         direction,
-        '火星相对逆行方向',
+        '火星相对顺行方向',
         'backward',
         35,
         targetOrbitMetrics(orbit),
@@ -1374,10 +1596,10 @@ function computeMarsLiveGuidance(input: LiveNavigationGuidanceInput, orbit: Targ
     return guidanceWithDirection(
       input,
       '火星相对制动',
-      '船头对准火星相对逆行方向，D档制动，先降低火星相对速度',
+      '船头保持火星相对顺行方向，R档反推制动，先降低火星相对速度',
       'ignite',
-      relativeRetrogradeDirection(orbit),
-      '火星相对逆行方向',
+      relativeProgradeDirection(orbit),
+      '火星相对顺行方向',
       'backward',
       100,
       [
@@ -1395,24 +1617,6 @@ function computeMarsLiveGuidance(input: LiveNavigationGuidanceInput, orbit: Targ
   }
 
   return null;
-}
-
-function relativeProgradeFromOrbitingBody(
-  shipPosition: [number, number, number],
-  shipVelocity: [number, number, number],
-  simulatedTime: number,
-): [number, number, number] {
-  const orbitingId = getOrbitingBodyId(shipPosition, simulatedTime);
-  if (orbitingId === 'sun') return vectorNormalize(shipVelocity);
-
-  const bodyState = computeBodyState(orbitingId, julianDate(simulatedTime));
-  if (!bodyState) return vectorNormalize(shipVelocity);
-
-  return vectorNormalize([
-    shipVelocity[0] - bodyState.velocity[0],
-    shipVelocity[1] - bodyState.velocity[1],
-    shipVelocity[2] - bodyState.velocity[2],
-  ]);
 }
 
 function hasEscapedCurrentOrbitingBody(
@@ -1445,107 +1649,251 @@ function hasEscapedCurrentOrbitingBody(
   return relativeEnergy > 0;
 }
 
-function enrichFallbackGuidance(
+function formatSecondsForMetric(seconds: number): number {
+  if (!Number.isFinite(seconds)) return Infinity;
+  return seconds / 86400;
+}
+
+function directRendezvousMetricList(
+  metrics: DirectRendezvousMetrics,
+  destinationName: string,
+): GuidanceMetric[] {
+  return [
+    { label: '速度方向偏差', current: metrics.velocityAngleErrorDeg, target: 0, unit: '°', warn: Math.abs(metrics.velocityAngleErrorDeg) > 8 },
+    { label: '径向速度', current: metrics.radialSpeedAUPerSec * AU_TO_KM, target: metrics.idealCruiseSpeedAUPerSec * AU_TO_KM, unit: 'km/s', highlight: true, warn: metrics.radialSpeedAUPerSec < 0 },
+    { label: '切向速度', current: metrics.tangentialSpeedAUPerSec * AU_TO_KM, target: 0, unit: 'km/s', warn: Math.abs(metrics.tangentialSpeedAUPerSec) > metrics.idealCruiseSpeedAUPerSec * Math.sin(DIRECT_ACCELERATION_VELOCITY_TOLERANCE_DEG * Math.PI / 180) },
+    { label: '按当前有效速度到达', current: formatSecondsForMetric(metrics.shipTimeToRendezvousSec), target: formatSecondsForMetric(metrics.targetTimeToRendezvousSec), unit: '日', highlight: true },
+    { label: '当前速度大小', current: metrics.speedAUPerSec * AU_TO_KM, target: metrics.idealCruiseSpeedAUPerSec * AU_TO_KM, unit: 'km/s', highlight: true },
+    { label: '当前有效速度', current: metrics.effectiveSpeedAUPerSec * AU_TO_KM, target: metrics.idealCruiseSpeedAUPerSec * AU_TO_KM, unit: 'km/s', highlight: true },
+    { label: '理想滑行速度', current: metrics.idealCruiseSpeedAUPerSec * AU_TO_KM, target: metrics.idealCruiseSpeedAUPerSec * AU_TO_KM, unit: 'km/s' },
+    { label: `${destinationName}到达汇合点`, current: formatSecondsForMetric(metrics.targetTimeToRendezvousSec), target: 0, unit: '日' },
+    { label: '距汇合点', current: metrics.distanceToRendezvousAU, target: 0, unit: 'AU', highlight: true },
+  ];
+}
+
+function directGuidanceWithDirection(
   input: LiveNavigationGuidanceInput,
-  phase: NavigationPhase,
-  fallback: PhaseGuidance,
+  title: string,
+  actionText: string,
+  operation: PhaseGuidance['operation'],
+  desiredDirection: [number, number, number],
+  desiredDirectionLabel: string,
+  thrustMagnitude: number,
+  metrics: GuidanceMetric[],
+  reason: string,
+  thrustDirection: 'forward' | 'backward' = 'forward',
 ): PhaseGuidance {
-  if (phase.name.startsWith('等待')) {
-    return {
-      ...fallback,
-      operation: 'jumpTime',
-      recommendedGear: 'N',
-      recommendedThrustMagnitude: 0,
-      suggestedTimeScale: 100000,
-    };
-  }
-
-  if (fallback.completed) {
-    return {
-      ...fallback,
-      operation: 'cutoff',
-      recommendedGear: 'N',
-      recommendedThrustMagnitude: 0,
-      suggestedTimeScale: 1,
-    };
-  }
-
-  if (phase.thrustDirection === 'none') {
-    return {
-      ...fallback,
-      operation: 'coast',
-      recommendedGear: 'N',
-      recommendedThrustMagnitude: 0,
-      suggestedTimeScale: 10000,
-    };
-  }
-
-  const prograde = relativeProgradeFromOrbitingBody(input.shipPosition, input.shipVelocity, input.simulatedTime);
-  const desiredDirection = phase.thrustDirection === 'backward'
-    ? vectorScale(prograde, -1)
-    : prograde;
-  const angleDeg = angleBetweenVectors(input.shipDirection, desiredDirection) * 180 / Math.PI;
-  const needsTurn = angleDeg > 6;
-  const directionLabel = phase.thrustDirection === 'backward' ? '当前绕飞逆行方向' : '当前绕飞顺行方向';
-  const readyToBurn = fallback.shouldThrust;
+  const recommendedGear = thrustDirection === 'backward' ? 'R' : 'D';
 
   return {
-    ...fallback,
-    operation: needsTurn ? 'turn' : readyToBurn ? 'ignite' : 'wait',
-    shouldThrust: !needsTurn && readyToBurn,
+    operation,
+    title,
+    actionText,
+    metrics,
+    progress: operation === 'coast' ? 55 : 25,
+    completed: false,
+    shouldThrust: operation !== 'coast' && thrustMagnitude > 0,
+    thrustDirection: operation === 'coast' ? 'none' : thrustDirection,
+    thrustMagnitude: operation === 'coast' ? 0 : thrustMagnitude,
+    attitudeMode: 'inertial',
     desiredDirection,
-    desiredDirectionLabel: directionLabel,
-    recommendedGear: needsTurn || !readyToBurn ? 'N' : 'D',
-    recommendedThrustMagnitude: needsTurn || !readyToBurn ? 0 : phase.thrustMagnitude,
-    suggestedTimeScale: needsTurn || readyToBurn ? 1 : 10,
+    desiredDirectionLabel,
+    recommendedGear: operation === 'coast' || thrustMagnitude <= 0 ? 'N' : recommendedGear,
+    recommendedThrustMagnitude: operation === 'coast' ? 0 : thrustMagnitude,
+    suggestedTimeScale: operation === 'coast' ? 10000 : 1,
+    reason,
   };
 }
 
-function computeHeliocentricTransferCoastGuidance(
+function computeDirectRendezvousGuidance(
   input: LiveNavigationGuidanceInput,
   targetOrbit: TargetRelativeOrbit | null,
-): PhaseGuidance | null {
-  const destination = REAL_DATA[input.destinationId];
-  if (!destination?.semiMajorAxis) return null;
-  if (!hasEscapedCurrentOrbitingBody(input.shipPosition, input.shipVelocity, input.simulatedTime)) return null;
+): PhaseGuidance {
+  const targetName = REAL_DATA[input.destinationId]?.name ?? input.destinationId;
 
-  const a = computeOrbitalSemiMajorAxis(input.shipPosition, input.shipVelocity, MU_SUN_AU);
-  const ecc = computeEccentricity(input.shipPosition, input.shipVelocity, MU_SUN_AU);
-  if (!Number.isFinite(a) || !Number.isFinite(ecc) || a <= 0 || ecc >= 1) return null;
+  if (targetOrbit && isStableTargetOrbit(targetOrbit, input.destinationId)) {
+    return {
+      operation: 'arrived',
+      title: '已到达',
+      actionText: `保持空档，飞船已处于${targetName}稳定绕飞轨道`,
+      metrics: targetOrbitMetrics(targetOrbit),
+      progress: 100,
+      completed: true,
+      shouldThrust: false,
+      thrustDirection: 'none',
+      thrustMagnitude: 0,
+      attitudeMode: 'inertial',
+      recommendedGear: 'N',
+      recommendedThrustMagnitude: 0,
+      suggestedTimeScale: 1,
+      reason: '目标相对轨道已满足安全近点、远点和偏心率条件',
+    };
+  }
 
-  const periapsis = a * (1 - ecc);
-  const apoapsis = a * (1 + ecc);
-  const targetA = destination.semiMajorAxis;
-  const tolerance = Math.max(0.08, targetA * 0.05);
-  const targetReachedByOrbit = targetA >= periapsis - tolerance && targetA <= apoapsis + tolerance;
-  if (!targetReachedByOrbit) return null;
+  const activePlan = input.navigationPlan?.method === 'direct-rendezvous'
+    && input.navigationPlan.destinationId === input.destinationId
+    && input.navigationPlan.rendezvous
+    ? input.navigationPlan
+    : null;
+  const plan = activePlan ?? planDirectRendezvousTransfer(
+    input.shipPosition,
+    input.shipVelocity,
+    input.destinationId,
+    input.simulatedTime,
+  );
+  const rendezvous = plan.rendezvous;
+  if (!rendezvous) {
+    return {
+      operation: 'coast',
+      title: `前往${targetName}`,
+      actionText: '目标轨道数据不足，保持当前状态并等待下一轮导航刷新',
+      metrics: targetOrbit ? targetOrbitMetrics(targetOrbit) : [],
+      progress: 0,
+      completed: false,
+      shouldThrust: false,
+      thrustDirection: 'none',
+      thrustMagnitude: 0,
+      attitudeMode: 'inertial',
+      recommendedGear: 'N',
+      recommendedThrustMagnitude: 0,
+      suggestedTimeScale: 1,
+      reason: '无法计算可用汇合点',
+    };
+  }
 
-  const distanceToTarget = targetOrbit?.distance ?? 0;
-  const suggestedTimeScale = distanceToTarget < 0.13
-    ? 1000
-    : 100000;
-  const r = vectorLength(input.shipPosition);
+  const metrics = computeDirectRendezvousMetrics(
+    input.shipPosition,
+    input.shipVelocity,
+    input.shipDirection,
+    plan,
+    input.simulatedTime,
+  );
+  const metricList = directRendezvousMetricList(metrics, targetName);
+  const currentOrbiting = getOrbitingBodyId(input.shipPosition, input.simulatedTime);
+  const escapedCurrentBody = hasEscapedCurrentOrbitingBody(
+    input.shipPosition,
+    input.shipVelocity,
+    input.simulatedTime,
+  );
+
+  if (targetOrbit && targetOrbit.distance <= targetOrbit.hillRadius * 1.4) {
+    if (targetOrbit.speed <= metrics.arrivalMaxRelativeSpeedAUPerSec || targetOrbit.energy < 0) {
+      return {
+        operation: 'coast',
+        title: `进入${targetName}引力范围`,
+        actionText: `保持空档绕飞${targetName}，等待近点或远点位置进行轨道圆化`,
+        metrics: [
+          { label: `${targetName}相对速度`, current: targetOrbit.speed * AU_TO_KM, target: metrics.arrivalMaxRelativeSpeedAUPerSec * AU_TO_KM, unit: 'km/s', highlight: true },
+          ...targetOrbitMetrics(targetOrbit),
+        ],
+        progress: 75,
+        completed: false,
+        shouldThrust: false,
+        thrustDirection: 'none',
+        thrustMagnitude: 0,
+        attitudeMode: 'inertial',
+        recommendedGear: 'N',
+        recommendedThrustMagnitude: 0,
+        suggestedTimeScale: 100,
+        reason: `${targetName}引力已接管，接下来以轨道近点、远点和偏心率为目标圆化`,
+      };
+    }
+
+    return directGuidanceWithDirection(
+      input,
+      '汇合前减速',
+      `船头保持${targetName}相对顺行方向，R档反推制动，把相对速度降到捕获允许范围内`,
+      'ignite',
+      relativeProgradeDirection(targetOrbit),
+      `${targetName}相对顺行方向`,
+      100,
+      [
+        { label: `${targetName}相对速度`, current: targetOrbit.speed * AU_TO_KM, target: metrics.arrivalMaxRelativeSpeedAUPerSec * AU_TO_KM, unit: 'km/s', warn: true },
+        ...metricList,
+      ],
+      `已接近${targetName}引力范围，但相对速度仍高于汇合捕获上限`,
+      'backward',
+    );
+  }
+
+  if (currentOrbiting !== 'sun' && currentOrbiting !== input.destinationId && !escapedCurrentBody) {
+    return directGuidanceWithDirection(
+      input,
+      '脱离当前天体引力范围',
+      '沿汇合点方向建立离场速度，D档加速，先脱离当前绕飞天体的主导引力范围',
+      'ignite',
+      metrics.rendezvousDirection,
+      '指向汇合点方向',
+      100,
+      metricList,
+      '飞船仍受当前绕飞天体束缚，必须先完成离场目标再建立星际滑行速度',
+    );
+  }
+
+  const absVelocityAngle = Math.abs(metrics.velocityAngleErrorDeg);
+  const velocityReady = absVelocityAngle <= DIRECT_ACCELERATION_VELOCITY_TOLERANCE_DEG;
+  const speedReady = metrics.speedAUPerSec >= metrics.idealCruiseSpeedAUPerSec * (1 - 1e-12);
+  const speedTooHighForArrival = targetOrbit
+    ? targetOrbit.speed > metrics.arrivalMaxRelativeSpeedAUPerSec * 1.4
+    : false;
+  const timeMismatch = Number.isFinite(metrics.shipTimeToRendezvousSec)
+    && metrics.targetTimeToRendezvousSec > 0
+    && metrics.shipTimeToRendezvousSec > metrics.targetTimeToRendezvousSec * 1.35;
+  const nearRendezvous = metrics.distanceToRendezvousAU < 0.04
+    || (
+      Number.isFinite(metrics.shipTimeToRendezvousSec)
+      && metrics.shipTimeToRendezvousSec < Math.max(6 * 3600, metrics.targetTimeToRendezvousSec * 0.2)
+  );
+
+  if (nearRendezvous && (speedTooHighForArrival || absVelocityAngle > 18)) {
+    const brakeDirection = targetOrbit ? relativeProgradeDirection(targetOrbit) : vectorNormalize(input.shipVelocity);
+    return directGuidanceWithDirection(
+      input,
+      '汇合前减速',
+      '保持当前飞行方向，R档反推制动，优先把汇合速度降到允许范围',
+      'ignite',
+      brakeDirection,
+      targetOrbit ? `${targetName}相对顺行方向` : '当前速度方向',
+      100,
+      metricList,
+      '飞船已接近汇合窗口，但速度或方向会导致高速掠过，需要先减速',
+      'backward',
+    );
+  }
+
+  if (!speedReady || !velocityReady || timeMismatch) {
+    return directGuidanceWithDirection(
+      input,
+      '加速到汇合滑行速度',
+      '沿汇合点方向加速；目标是速度方向严格指向汇合点，且当前速度大小达到理想滑行速度',
+      'ignite',
+      metrics.rendezvousDirection,
+      '指向汇合点方向',
+      100,
+      metricList,
+      timeMismatch
+        ? '按当前有效速度无法赶上目标天体到达汇合点，需要重新加速或等待下一轮汇合点重算'
+        : '飞船尚未满足汇合滑行的速度方向或速度大小目标',
+    );
+  }
 
   return {
     operation: 'coast',
-    title: '转移轨道滑行',
-    actionText: `当前日心转移轨道已覆盖${destination.name}轨道，保持空档滑行并等待接近`,
-    metrics: [
-      { label: '日心距', current: r, target: targetA, unit: 'AU', highlight: true },
-      { label: '近日点', current: periapsis, target: Math.min(periapsis, targetA), unit: 'AU' },
-      { label: '远日点', current: apoapsis, target: Math.max(apoapsis, targetA), unit: 'AU', highlight: true },
-      { label: `距${destination.name}`, current: distanceToTarget, target: 0.1, unit: 'AU', highlight: true },
-    ],
-    progress: Math.max(0, Math.min(100, (r - periapsis) / Math.max(apoapsis - periapsis, 1e-9) * 100)),
+    title: '滑行接近汇合点',
+    actionText: '保持空档滑行，持续监测方向和有效速度；若偏航或速度不足，导航会退回加速阶段',
+    metrics: metricList,
+    progress: Math.max(0, Math.min(90, 100 - metrics.distanceToRendezvousAU / Math.max(vectorLength(vectorSubtract(rendezvous.point, rendezvous.plannedFrom)), 1e-9) * 100)),
     completed: false,
     shouldThrust: false,
     thrustDirection: 'none',
     thrustMagnitude: 0,
     attitudeMode: 'inertial',
+    desiredDirection: metrics.rendezvousDirection,
+    desiredDirectionLabel: '指向汇合点方向',
     recommendedGear: 'N',
     recommendedThrustMagnitude: 0,
-    suggestedTimeScale,
-    reason: '飞船已经在通往目标轨道的日心转移椭圆上，重新规划不应退回等待发射窗口',
+    suggestedTimeScale: 10000,
+    reason: '汇合方向和有效速度达标，当前阶段目标是靠近汇合点',
   };
 }
 
@@ -1575,47 +1923,14 @@ export function computeLiveNavigationGuidance(input: LiveNavigationGuidanceInput
 
   if (input.destinationId === 'mars' && targetOrbit) {
     const marsGuidance = computeMarsLiveGuidance(input, targetOrbit);
-    if (marsGuidance) return marsGuidance;
+    const hasActiveDirectRendezvous = input.navigationPlan?.method === 'direct-rendezvous'
+      && input.navigationPlan.destinationId === input.destinationId
+      && Boolean(input.navigationPlan.rendezvous);
+    const shouldUseMarsLocalGuidance = isStableTargetOrbit(targetOrbit, 'mars')
+      || isBoundTargetOrbit(targetOrbit)
+      || (!hasActiveDirectRendezvous && targetOrbit.distance <= Math.max(MARS_LIVE_APPROACH_RADIUS_AU, targetOrbit.hillRadius * 3));
+    if (marsGuidance && shouldUseMarsLocalGuidance) return marsGuidance;
   }
 
-  const transferGuidance = computeHeliocentricTransferCoastGuidance(input, targetOrbit);
-  if (transferGuidance) return transferGuidance;
-
-  const plan = planHohmannTransfer(
-    input.shipPosition,
-    input.shipVelocity,
-    input.destinationId,
-    input.simulatedTime,
-  );
-  const phase = plan.phases[0];
-  if (phase) {
-    const fallback = computePhaseGuidance(
-      phase,
-      input.shipPosition,
-      input.shipVelocity,
-      input.destinationId,
-      input.simulatedTime,
-      'inertial',
-      input.thrustMagnitude,
-    );
-    const enriched = enrichFallbackGuidance(input, phase, fallback);
-    return {
-      ...enriched,
-      reason: '尚未进入目标天体捕获区，沿用实时重算的霍曼转移阶段指引',
-    };
-  }
-
-  return {
-    operation: 'coast',
-    title: `前往${targetData.name}`,
-    actionText: '保持当前状态并等待下一轮导航刷新',
-    metrics: targetOrbit ? targetOrbitMetrics(targetOrbit) : [],
-    progress: 0,
-    completed: false,
-    shouldThrust: false,
-    thrustDirection: 'none',
-    thrustMagnitude: 0,
-    attitudeMode: 'inertial',
-    reason: '当前状态暂无可执行机动',
-  };
+  return computeDirectRendezvousGuidance(input, targetOrbit);
 }

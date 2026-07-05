@@ -82,8 +82,10 @@ function handleTouchStart(e: TouchEvent): void {
     activeTouches.set(t.identifier, { x: t.clientX, y: t.clientY });
   }
 
+  const hasToolSelected = !!useUIStore.getState().selectedToolId;
+
   if (e.touches.length === 1) {
-    e.preventDefault();
+    if (!hasToolSelected) e.preventDefault();
   } else if (e.touches.length === 2) {
     e.preventDefault();
     rotationActive = false;
@@ -104,8 +106,10 @@ function handleTouchMove(e: TouchEvent): void {
     activeTouches.set(t.identifier, { x: t.clientX, y: t.clientY });
   }
 
+  const hasToolSelected = !!useUIStore.getState().selectedToolId;
+
   if (e.touches.length === 1) {
-    e.preventDefault();
+    if (!hasToolSelected) e.preventDefault();
   } else if (pinchActive && e.touches.length === 2) {
     e.preventDefault();
     const t0 = e.touches[0];

@@ -29,7 +29,7 @@ describe('exploreSimulation', () => {
     expect(states.find(s => s.id === 'earth')?.mass).toBe(REAL_DATA.earth.mass);
   });
 
-  it('advances the ship with body-frame thrust, time scale, and moving bodies', () => {
+  it('advances the ship with body-frame thrust, full time scale, and moving bodies', () => {
     const ship = makeShip({
       thrust: [1, 0, 0],
       thrustMagnitude: 100,
@@ -42,12 +42,29 @@ describe('exploreSimulation', () => {
       timeScale: 10,
     });
 
-    expect(result.simulatedTime).toBe(Date.UTC(2026, 6, 4) + 20);
-    expect(result.simDelta).toBeCloseTo(0.02, 12);
+    expect(result.simulatedTime).toBe(Date.UTC(2026, 6, 4) + 500);
+    expect(result.simDelta).toBeCloseTo(0.5, 12);
     expect(result.ship.position[1]).toBeGreaterThan(ship.position[1]);
     expect(result.ship.velocity[1]).toBeGreaterThan(ship.velocity[1]);
     expect(result.speedKms).toBeGreaterThan(0);
     expect(result.travelKm).toBeGreaterThan(0);
     expect(result.finalBodies.map(b => b.id)).toContain('mars');
+  });
+
+  it('treats neutral gear body-frame thrust as no effective thrust even when the slider is nonzero', () => {
+    const ship = makeShip({
+      thrust: [0, 0, 0],
+      thrustMagnitude: 100,
+    });
+
+    const result = advanceExploreShipPhysics({
+      ship,
+      simulatedTime: Date.UTC(2026, 6, 4),
+      frameDt: 0.05,
+      timeScale: 10,
+    });
+
+    expect(result.simDelta).toBeCloseTo(0.5, 12);
+    expect(result.ship.velocity[1]).toBeCloseTo(ship.velocity[1], 15);
   });
 });

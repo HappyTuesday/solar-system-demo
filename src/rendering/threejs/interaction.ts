@@ -10,10 +10,27 @@ export function getPlacementPoint(
   camera: THREE.Camera,
   canvas: HTMLCanvasElement
 ): THREE.Vector3 | null {
+  return getPlacementPointFromClient(camera, canvas, event.clientX, event.clientY);
+}
+
+export function getPlacementPointFromTouch(
+  touch: { clientX: number; clientY: number },
+  camera: THREE.Camera,
+  canvas: HTMLCanvasElement
+): THREE.Vector3 | null {
+  return getPlacementPointFromClient(camera, canvas, touch.clientX, touch.clientY);
+}
+
+function getPlacementPointFromClient(
+  camera: THREE.Camera,
+  canvas: HTMLCanvasElement,
+  clientX: number,
+  clientY: number
+): THREE.Vector3 | null {
   const rect = canvas.getBoundingClientRect();
   const mouse = new THREE.Vector2(
-    ((event.clientX - rect.left) / rect.width) * 2 - 1,
-    -((event.clientY - rect.top) / rect.height) * 2 + 1
+    ((clientX - rect.left) / rect.width) * 2 - 1,
+    -((clientY - rect.top) / rect.height) * 2 + 1
   );
   raycaster.setFromCamera(mouse, camera);
   const target = new THREE.Vector3();

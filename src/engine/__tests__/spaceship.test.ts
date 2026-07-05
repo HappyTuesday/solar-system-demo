@@ -4,6 +4,7 @@ import {
   applyThrustInBodyFrame,
   computeSpaceshipAcceleration,
   checkSpaceshipCollision,
+  hasEffectiveThrust,
   rk4StepSpaceshipWithMovingBodies,
   predictTrajectory,
   type BodyInfo,
@@ -57,6 +58,14 @@ describe('spaceship', () => {
       const full = applyThrustInBodyFrame(1, 0, 0, 100, [1, 0, 0]);
       const half = applyThrustInBodyFrame(1, 0, 0, 50, [1, 0, 0]);
       expect(full[0]).toBeCloseTo(half[0] * 2, 10);
+    });
+  });
+
+  describe('hasEffectiveThrust', () => {
+    it('should require both nonzero magnitude and a nonzero body-frame thrust vector', () => {
+      expect(hasEffectiveThrust([1, 0, 0], 35)).toBe(true);
+      expect(hasEffectiveThrust([0, 0, 0], 35)).toBe(false);
+      expect(hasEffectiveThrust([1, 0, 0], 0)).toBe(false);
     });
   });
 

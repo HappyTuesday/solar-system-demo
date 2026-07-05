@@ -4,6 +4,7 @@ import { julianDate } from './orbital';
 import { computeBodyState } from './navigation';
 import {
   applyThrustInBodyFrame,
+  hasEffectiveThrust,
   rk4StepSpaceship,
   type BodyInfo,
 } from './spaceship';
@@ -97,10 +98,8 @@ export function advanceExploreShipPhysics(
   input: AdvanceExploreShipPhysicsInput,
 ): AdvanceExploreShipPhysicsResult {
   const frameDt = Math.max(0, input.frameDt);
-  let simDelta = frameDt * input.timeScale;
-  if (input.ship.thrustMagnitude > 0 && simDelta > 0.02) {
-    simDelta = 0.02;
-  }
+  const simDelta = frameDt * input.timeScale;
+  const isThrusting = hasEffectiveThrust(input.ship.thrust, input.ship.thrustMagnitude);
 
   const worldThrust = applyThrustInBodyFrame(
     input.ship.thrust[0],
@@ -119,7 +118,8 @@ export function advanceExploreShipPhysics(
     exploded: input.ship.exploded,
   };
 
-  const steps = Math.min(Math.max(1, Math.floor(simDelta / 0.016)), 200);
+  const targetSubDt = isThrusting ? 0.02 : 0.016;
+  const steps = Math.min(Math.max(1, Math.ceil(simDelta / targetSubDt)), 200);
   const subDt = simDelta / steps;
   const bodyIds = input.bodyIds ?? EXPLORE_BODY_IDS;
 

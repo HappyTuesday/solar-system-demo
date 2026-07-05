@@ -1,11 +1,10 @@
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { useExploreStore } from '../../stores/exploreStore';
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import { REAL_DATA } from '../../engine/constants';
-import { computeLiveNavigationGuidance } from '../../engine/navigation';
-import { computeMarsMissionDirective, directiveFromPhaseGuidance } from '../../engine/marsMissionNavigator';
+import { computeLiveNavigationGuidance, signedAngleDeg } from '../../engine/navigation';
+import { directiveFromPhaseGuidance } from '../../engine/marsMissionNavigator';
 import type { NavigationDirective } from '../../engine/marsMissionNavigator';
-import { applyGuidanceDirection, applyGuidanceThrottle } from '../../stores/guidanceControls';
 import './PhaseGuide.css';
 
 // ---- Action bar rendering from PhaseGuidance ----
@@ -22,18 +21,6 @@ function formatOperation(operation: NavigationDirective['action']): string {
     case 'arrived': return '已到达';
     default: return '';
   }
-}
-
-function vectorLength(v: [number, number, number]): number {
-  return Math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2);
-}
-
-function angleBetweenDirections(a: [number, number, number], b: [number, number, number]): number {
-  const al = vectorLength(a);
-  const bl = vectorLength(b);
-  if (al < 1e-20 || bl < 1e-20) return 0;
-  const cos = (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) / (al * bl);
-  return Math.acos(Math.max(-1, Math.min(1, cos))) * 180 / Math.PI;
 }
 
 function renderPhaseGuidance(g: NavigationDirective): React.ReactNode {
@@ -64,7 +51,7 @@ function renderPhaseGuidance(g: NavigationDirective): React.ReactNode {
 
         {(g.desiredDirectionLabel || g.recommendedGear || g.recommendedThrustMagnitude != null) && (
           <div className="action-command-strip">
-            {g.desiredDirectionLabel && <span>船头：{g.desiredDirectionLabel}</span>}
+            {g.desiredDirectionLabel && <span>参考方向：{g.desiredDirectionLabel}</span>}
             {g.recommendedGear && <span>档位：{g.recommendedGear}</span>}
             {g.recommendedThrustMagnitude != null && <span>推力：{g.recommendedThrustMagnitude} MN</span>}
           </div>
@@ -109,31 +96,6 @@ function renderPhaseGuidance(g: NavigationDirective): React.ReactNode {
   );
 }
 
-function computeFreshGuidanceFromStore(): NavigationDirective | null {
-  const current = useSpaceshipStore.getState();
-  const destinationId = current.targetBodyId ?? current.navigationPlan?.destinationId ?? '';
-  if (!destinationId) return null;
-
-  if (destinationId === 'mars') {
-    return computeMarsMissionDirective({
-      shipPosition: current.position,
-      shipVelocity: current.velocity,
-      shipDirection: current.direction,
-      simulatedTime: current.simulatedTime,
-      thrustMagnitude: current.thrustMagnitude,
-    });
-  }
-
-  return directiveFromPhaseGuidance(computeLiveNavigationGuidance({
-    shipPosition: current.position,
-    shipVelocity: current.velocity,
-    shipDirection: current.direction,
-    destinationId,
-    simulatedTime: current.simulatedTime,
-    thrustMagnitude: current.thrustMagnitude,
-  }));
-}
-
 // ---- Main component ----
 
 let _renderSeq = 0;
@@ -147,10 +109,6 @@ export default function PhaseGuide() {
   const simulatedTime = useSpaceshipStore(s => s.simulatedTime);
   const attitudeMode = useSpaceshipStore(s => s.attitudeMode);
   const thrustMagnitude = useSpaceshipStore(s => s.thrustMagnitude);
-  const setThrustMagnitude = useSpaceshipStore(s => s.setThrustMagnitude);
-  const setGear = useSpaceshipStore(s => s.setGear);
-  const setDirection = useSpaceshipStore(s => s.setDirection);
-  const setAttitudeMode = useSpaceshipStore(s => s.setAttitudeMode);
   const exploded = useSpaceshipStore(s => s.exploded);
   const targetBodyId = useSpaceshipStore(s => s.targetBodyId);
   const timeScale = useExploreStore(s => s.timeScale);
@@ -161,43 +119,27 @@ export default function PhaseGuide() {
 
   const guidance = useMemo(() => {
     if (!destinationId) return null;
-    if (destinationId === 'mars') {
-      return computeMarsMissionDirective({
-        shipPosition: position,
-        shipVelocity: velocity,
-        shipDirection: direction,
-        simulatedTime,
-        thrustMagnitude,
-      });
-    }
-    const legacyGuidance = computeLiveNavigationGuidance({
+    return directiveFromPhaseGuidance(computeLiveNavigationGuidance({
       shipPosition: position,
       shipVelocity: velocity,
       shipDirection: direction,
       destinationId,
       simulatedTime,
       thrustMagnitude,
-    });
-    return directiveFromPhaseGuidance(legacyGuidance);
-  }, [destinationId, position, velocity, direction, simulatedTime, thrustMagnitude]);
+      navigationPlan,
+    }));
+  }, [destinationId, position, velocity, direction, simulatedTime, thrustMagnitude, navigationPlan]);
 
-  const guidanceAngleDeg = guidance?.desiredDirection
-    ? angleBetweenDirections(direction, guidance.desiredDirection)
+  const velocityAngleMetric = guidance?.metrics.find(metric => metric.label === '速度方向偏差') ?? null;
+  const guidanceAngleDeg = velocityAngleMetric
+    ? velocityAngleMetric.current
+    : guidance?.desiredDirection
+      ? signedAngleDeg(direction, guidance.desiredDirection)
+      : null;
+  const noseAngleDeg = guidance?.desiredDirection
+    ? signedAngleDeg(direction, guidance.desiredDirection)
     : null;
-
-  const handleAlignToGuidance = useCallback(() => {
-    applyGuidanceDirection(computeFreshGuidanceFromStore() ?? guidance, {
-      setDirection,
-      setAttitudeMode,
-    });
-  }, [guidance, setDirection, setAttitudeMode]);
-
-  const handleApplyThrottleGuidance = useCallback(() => {
-    applyGuidanceThrottle(computeFreshGuidanceFromStore() ?? guidance, {
-      setThrustMagnitude,
-      setGear,
-    });
-  }, [guidance, setThrustMagnitude, setGear]);
+  const guidanceAngleLabel = velocityAngleMetric ? '飞行夹角' : '导航夹角';
 
   if (exploded || !destinationId) {
     return null;
@@ -225,24 +167,21 @@ export default function PhaseGuide() {
       {guidance && renderPhaseGuidance(guidance)}
 
       {guidance?.desiredDirection && (
-        <div className="phase-guide-align-panel">
+        <div className="phase-guide-align-panel text-only">
           <div className="phase-guide-align-text">
-            导航夹角：{guidanceAngleDeg != null ? guidanceAngleDeg.toFixed(1) : '--'}°
+            {guidanceAngleLabel}：{guidanceAngleDeg != null ? guidanceAngleDeg.toFixed(1) : '--'}°
           </div>
-          <button className="phase-guide-align-btn" type="button" onClick={handleAlignToGuidance}>
-            对准导航方向
-          </button>
+          <div className="phase-guide-align-text">
+            船身夹角：{noseAngleDeg != null ? noseAngleDeg.toFixed(1) : '--'}°
+          </div>
         </div>
       )}
 
       {guidance && (guidance.recommendedGear || guidance.recommendedThrustMagnitude != null) && (
-        <div className="phase-guide-control-panel">
+        <div className="phase-guide-control-panel text-only">
           <div className="phase-guide-control-text">
             指引：{guidance.recommendedGear ?? 'N'} · {guidance.recommendedThrustMagnitude ?? 0} MN
           </div>
-          <button className="phase-guide-control-btn" type="button" onClick={handleApplyThrottleGuidance}>
-            按指引设置推力
-          </button>
         </div>
       )}
 

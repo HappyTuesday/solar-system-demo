@@ -32,7 +32,7 @@ function makeMarsRelativeState(
 }
 
 describe('marsMissionNavigator', () => {
-  it('returns wait guidance for a launch window without exposing jumpTime as a navigation action', () => {
+  it('returns direct rendezvous guidance without exposing jumpTime as a navigation action', () => {
     const simulatedTime = Date.UTC(2026, 6, 4);
     const earthState = computeBodyState('earth', julianDate(simulatedTime));
     expect(earthState).not.toBeNull();
@@ -66,11 +66,11 @@ describe('marsMissionNavigator', () => {
       thrustMagnitude: 0,
     });
 
-    expect(directive.action).toBe('wait');
-    expect(directive.recommendedGear).toBe('N');
-    expect(directive.recommendedThrustMagnitude).toBe(0);
-    expect(directive.condition.label).toContain('窗口');
-    expect(directive.suggestedTimeScale).toBeGreaterThan(1);
+    expect(directive.action).not.toBe('wait');
+    expect(directive.title).toContain('地球出发点火');
+    expect(directive.target).not.toContain('霍曼');
+    expect(directive.recommendedGear).toBe('D');
+    expect(directive.recommendedThrustMagnitude).toBeGreaterThan(0);
   });
 
   it('keeps Earth departure guidance when Mars is nearby but the ship is still in Earth parking orbit', () => {

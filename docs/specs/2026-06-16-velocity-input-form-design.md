@@ -2,7 +2,7 @@
 
 ## 概述
 
-将天体放置时的初速度设定从「鼠标拖动」改为「输入弹窗」。用户点击画布确定位置后，在控制面板区域弹出输入表单填写速度和角度，画布实时显示绿色箭头预览。
+将天体放置时的初速度设定从「鼠标拖动」改为「输入弹窗」。用户点击画布确定位置后，在画布点击位置附近弹出输入表单填写速度和角度，确认后将速度转换为核心单位 AU/s 并创建天体。
 
 ## 需求来源
 
@@ -13,21 +13,19 @@
 
 ### 新增文件
 
-#### `src/components/controls/VelocityInputForm.tsx`
+#### `src/components/builder/VelocityInputForm.tsx`
 
-输入表单组件，在 `isPlacing` 时显示于控制面板内。职责：
+输入表单组件，在 `isPlacing` 时显示于画布点击位置附近的放置确认弹窗内。职责：
 
-1. 接收 props: `templateId`, `clickPosRender` ([x,y,z]), `onConfirm`, `onCancel`
+1. 接收 props: `templateId`, `onConfirm`, `onCancel`
 2. 提供两个输入框：
-   - **初速度大小**：数字输入，单位 m/s，默认值 0，上限 200,000 m/s
+   - **初速度大小**：数字输入，单位 km/s，默认值为该天体在搭建数据中的参考轨道速度，上限 200 km/s
    - **切向角度**：数字输入，单位 °，默认值 0°，范围 [0, 360)
 3. 使用**本地状态**管理速度和角度的输入值
-4. 随输入变化**实时调用** `previewVelocityArrow()` 更新画布上的绿色箭头
-5. 显示该天体的**真实轨道速度**作为参考提示
-6. 两个按钮：「确认放置」（橙色主按钮）+「取消」
-7. 「确认」时调用 `onConfirm(speed, angle)`，「取消」时调用 `onCancel()`
+4. 两个按钮：「确认放置」（橙色主按钮）+「取消」
+5. 「确认」时将 km/s 通过 `AU_TO_KM` 转换为核心单位 AU/s 后调用 `onConfirm(speed, angle)`，「取消」时调用 `onCancel()`
 
-#### `src/components/controls/VelocityInputForm.css`
+#### `src/components/builder/VelocityInputForm.css`
 
 遵循 ControlPanel 风格（深色主题，与现有面板一致）：
 
@@ -38,71 +36,35 @@
 - 取消按钮：`background: #333; color: #ccc;`
 - 参考提示：灰色小字，字号 10px
 
+#### `src/engine/placementVelocity.ts`
+
+初速度方向计算工具，属于 engine 纯逻辑层。职责：
+
+1. 导出 `computePlacementVelocity(input)`，输入为放置位置、速度大小（AU/s）、切向角度（°）和可选参考中心。
+2. 按角度定义计算速度向量：0° 为逆时针切向，90° 为径向向外，180° 为顺时针切向，270° 为径向向内。
+3. 只在放置位置与参考中心重合或速度为 0 时返回 `[0, 0, 0]`；不得因为距离小于或等于 1 AU 丢弃用户输入的非零速度。
+4. 不依赖 React、Three.js 或 store，可用单元测试覆盖 1 AU 内行星的切向速度保留行为。
+
 ### 修改文件
 
-#### `src/components/controls/ControlPanel.tsx`
+#### `src/components/builder/BuilderCanvas.tsx`
 
-- 当 `uiStore.isPlacing && uiStore.clickPosRender` 时，渲染 `<VelocityInputForm />` 替代原有的 `placement-info` 卡片
-- 传入 `templateId`、`clickPosRender`
-- `onConfirm` 回调：调用 `placeBody()` 提交天体（与现有 `handleMouseUp` 逻辑相同）
-- `onCancel` 回调：恢复 `isPlacing = false`，清理 gizmos，恢复选天体状态
-
-#### `src/components/canvas/Canvas3D.tsx`
-
-- **移除** `handleMouseMove` 中的速度拖动分支（`else if (isPlacing && dragStartRef.current ...)` 整块）
-- **移除** `handleMouseUp` 中的放置提交逻辑（`if (isPlacing && dragStartRef.current ...)` 整块）
-- **移除** 画布上的 `.speed-label` 速度覆盖层
-- **新增** `handleMouseDown` 中点击后只设置位置和 `isPlacing`，不进入拖动逻辑：
-  ```tsx
-  // 点击后仅锁定位置，不创建 previewSphere（改用 ControlPanel 中的输入弹窗）
-  dragStartRef.current = point.clone(); // 保留位置引用
-  setIsPlacing(true);
-  useBuildStore.getState().pauseBuild();
-  ```
-- 箭头预览由外部调用 `updateArrowPreview` 函数（导入自 interaction.ts）
-
-#### `src/components/canvas/Canvas3D.css`
-
-- 移除 `.speed-label` 样式规则
+- 点击画布后将渲染坐标转换为物理 AU 坐标，写入 `uiStore.clickPosPhysical`，并显示 `<VelocityInputForm />`
+- `onConfirm` 回调：调用 `computePlacementVelocity()` 生成 AU/s 速度向量，再调用 `placeBody()` 提交天体
+- 速度方向计算不在 `.tsx` 内实现，组件只负责 UI 事件、坐标读取和 store 调用
 
 #### `src/stores/uiStore.ts`
 
-- 新增 `clickPosRender: [number, number, number] | null` 状态
-- 新增 `setClickPosRender(pos: [number, number, number] | null)` action
-- `resetUI()` 中重置 `clickPosRender: null`
-
-#### `src/rendering/interaction.ts`
-
-- 新增 `previewVelocityArrowInPlacement()` 函数：
-  ```ts
-  export function previewVelocityArrowInPlacement(
-    scene: THREE.Scene,
-    clickPos: THREE.Vector3,      // 渲染空间点击位置
-    speed: number,                 // 物理速度 (m/s)
-    angleDeg: number,             // 切向角度 (°)
-    posPhysical: [number, number, number],  // 物理位置
-    referenceCenter: [number, number, number], // 参考中心（太阳或父天体）
-  ): void
-  ```
-  计算逻辑：
-  1. 从参考中心到天体位置的径向向量 `r = pos - center`
-  2. 计算切线方向（XY 平面内逆时针旋转 90°）：`tangent = [-ry, rx, 0]`，归一化
-  3. 计算径向向外方向：`radial = r / |r|`
-  4. 物理速度向量：`vPhys = speed * (cos(θ) * tangent + sin(θ) * radial)`
-  5. 渲染速度：`vRender = physicalVelocityToRender(vPhys, posPhysical)`
-  6. 箭头可视化缩放：`vRenderScaled = vRender / DRAG_CONFIG.speedScale`
-  7. 调用 `updateVelocityArrow(scene, clickPos, clickPos + vRenderScaled, color)`
-
-#### `src/rendering/cameraRef.ts`
-
-- 新增 `_scene: THREE.Scene | null` 及 `setSharedScene`/`getSharedScene` 函数
-- 在 `Canvas3D.tsx` 初始化时通过 `setSharedScene(setup.scene)` 注册场景
+- `clickPosPhysical: [number, number] | null` 保存点击位置的物理 AU 坐标
+- `clickPosScreen: [number, number] | null` 保存弹窗定位所需的画布屏幕坐标
+- `setClickPosPhysical()` / `setClickPosScreen()` 分别更新上述状态
+- `resetUI()` 中重置 `clickPosPhysical` 和 `clickPosScreen`
 
 ### 无需修改
 
 - `src/stores/buildStore.ts` — `placeBody` 接口不变
 - `src/engine/physics.ts` — 不涉及
-- `src/engine/constants.ts` — DRAG_CONFIG 仍定义 speedScale 用于箭头可视化缩放
+- `src/engine/constants.ts` — 单位换算常量继续由 `AU_TO_KM` 提供
 - `src/components/toolbar/CelestialToolbar.tsx` — 不变
 
 ## 交互流程
@@ -110,9 +72,8 @@
 ```
 选择天体 → 悬浮预览 → 点击画布位置
   → 位置锁定，模拟暂停
-  → ControlPanel 显式 VelocityInputForm
-  → 画布显示绿色箭头预览（随输入实时更新）
-    ├── 编辑速度/角度 → 箭头实时更新
+  → 画布点击位置附近显示 VelocityInputForm
+    ├── 编辑速度/角度 → 表单本地校验速度与角度
     ├── 点击「确认放置」→ placeBody() → resumeBuild() → 清理
     └── 点击「取消」→ cleanupGizmos() → 恢复选天体状态
 ```
@@ -139,22 +100,13 @@
 - 若参考中心尚未放置：退化为以原点 `(0,0,0)` 为参考中心；角度仍可设定但无实际参考意义
 - 太阳：不存在此流程（太阳自动放置，速度始终为零）
 
-## 可视化预览
-
-箭头从点击位置出发，指向初速度方向，长度与速度大小成比例：
-
-```
-arrowLength_render = |physicalVelocityToRender(vPhys, posPhys)| / DRAG_CONFIG.speedScale
-```
-
-缩放因子 `DRAG_CONFIG.speedScale (2e-6)` 使得真实轨道速度对应的箭头在渲染空间中约 50~100 单位长，视觉上清晰可辨。
-
 ## 边界情况
 
-1. **速度为 0**：箭头不显示，天体的初速度为零（静止放置）
-2. **速度超过上限 (200,000 m/s)**：输入框限制最大值，超出时自动裁剪
+1. **速度为 0**：天体的初速度为零（静止放置）
+2. **速度超过上限 (200 km/s)**：输入框限制最大值，超出时自动裁剪
 3. **角度输入超出范围**：自动规整到 [0, 360)（`((angle % 360) + 360) % 360`）
 4. **非数字输入**：「确认」按钮禁用，提示"请输入有效数值"
 5. **参考中心未放置**：使用原点 (0,0,0) 作为参考，角度仍可设定
 6. **卫星点击时父体缺失**：同上，以原点为参考
 7. **随机点放置后立即取消**：清理 gizmos，`setIsPlacing(false)`，选天体状态保留
+8. **1 AU 内放置**：只要位置不与参考中心重合，非零速度必须按角度转换为速度向量，不能被清零

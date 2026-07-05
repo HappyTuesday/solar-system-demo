@@ -47,6 +47,17 @@ export function applyThrustInBodyFrame(
   return [tx, ty, tz];
 }
 
+export function hasEffectiveThrust(
+  thrust: [number, number, number],
+  magnitude: number,
+): boolean {
+  return magnitude > 0 && (
+    Math.abs(thrust[0]) > 1e-12 ||
+    Math.abs(thrust[1]) > 1e-12 ||
+    Math.abs(thrust[2]) > 1e-12
+  );
+}
+
 export interface BodyInfo {
   id: string;
   position: [number, number, number];

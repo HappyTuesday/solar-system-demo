@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { useBuildStore } from '../../stores/buildStore';
 import { useUIStore } from '../../stores/uiStore';
 import { detectCollisions } from '../../engine/physics';
-import { renderToPhysical, physicalToRender, physicalRadiusToRender, getLinearScale } from '../../engine/coordinateTransform';
+import { computePlacementVelocity } from '../../engine/placementVelocity';
+import { renderToPhysical, physicalToRender, getLinearScale } from '../../engine/coordinateTransform';
 import { HINT_ORDER, PHYSICAL_CONSTANTS, REAL_DATA, AU_TO_KM } from '../../engine/constants';
 import { BUILD_DATA } from '../../engine/buildData';
 import { initScene, handleResize } from '../../rendering/threejs/setup';
@@ -12,7 +13,7 @@ import { createReferencePlane, addOrbitRing, clearOrbitRings } from '../../rende
 import { TrailManager } from '../../rendering/threejs/trails';
 import { initTouchInteraction, destroyTouchInteraction } from '../../rendering/threejs/touchInteraction';
 import { setSharedCamera, setSharedCanvas, setSharedScene, setCurrentLookAt } from '../../rendering/threejs/cameraRef';
-import { getPlacementPoint, removeFloatingPreview, createFloatingPreview } from '../../rendering/threejs/interaction';
+import { getPlacementPoint, getPlacementPointFromTouch, removeFloatingPreview, createFloatingPreview } from '../../rendering/threejs/interaction';
 import VelocityInputForm from './VelocityInputForm';
 
 function BuilderCanvas() {
@@ -23,15 +24,13 @@ function BuilderCanvas() {
   const trailManagerRef = useRef<TrailManager | null>(null);
   const animRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
+  const [canvasWidth, setCanvasWidth] = useState(0);
 
   const bodies = useBuildStore(s => s.bodies);
-  const isRunning = useBuildStore(s => s.isRunning);
   const selectedToolId = useUIStore(s => s.selectedToolId);
-  const selectedBodyIds = useUIStore(s => s.selectedBodyIds);
   const isPlacing = useUIStore(s => s.isPlacing);
   const showTrails = useUIStore(s => s.showTrails);
   const linearScale = useUIStore(s => s.linearScale);
-  const setSelectedBodyIds = useUIStore(s => s.setSelectedBodyIds);
   const setMousePositions = useUIStore(s => s.setMousePositions);
   const setPreviewPosition = useUIStore(s => s.setPreviewPosition);
   const setIsPlacing = useUIStore(s => s.setIsPlacing);
@@ -40,6 +39,8 @@ function BuilderCanvas() {
   const clickPosScreen = useUIStore(s => s.clickPosScreen);
   const panToBodyId = useUIStore(s => s.panToBodyId);
   const setPanToBodyId = useUIStore(s => s.setPanToBodyId);
+
+  const [mouseScreenPos, setMouseScreenPos] = useState<[number, number] | null>(null);
 
   // --- Three.js scene init ---
   useEffect(() => {
@@ -56,6 +57,7 @@ function BuilderCanvas() {
     setSharedCanvas(canvas);
 
     createReferencePlane(scene, canvas.clientWidth, canvas.clientHeight);
+    setCanvasWidth(canvas.clientWidth);
 
     const tm = new TrailManager(scene);
     tm.setVisible(showTrails);
@@ -74,6 +76,7 @@ function BuilderCanvas() {
     const observer = new ResizeObserver(() => {
       const c = canvasRef.current;
       if (c && renderer && camera) {
+        setCanvasWidth(c.clientWidth);
         handleResize(c, renderer, camera);
       }
     });
@@ -223,29 +226,106 @@ function BuilderCanvas() {
     return getPlacementPoint(e.nativeEvent, camera, canvas);
   }, []);
 
+  const getRenderPosFromTouch = useCallback((clientX: number, clientY: number): THREE.Vector3 | null => {
+    const camera = cameraRef.current;
+    const canvas = canvasRef.current;
+    if (!camera || !canvas) return null;
+    return getPlacementPointFromTouch({ clientX, clientY }, camera, canvas);
+  }, []);
+
+  const touchActiveRef = useRef(false);
+
+  const handleTouchStartOnCanvas = useCallback((e: React.TouchEvent) => {
+    if (!selectedToolId || isPlacing || e.touches.length !== 1) return;
+    e.preventDefault();
+    touchActiveRef.current = true;
+
+    const touch = e.touches[0];
+    const point = getRenderPosFromTouch(touch.clientX, touch.clientY);
+    if (point) {
+      const [physX, physY] = renderToPhysical([point.x, point.y, 0]);
+      setMousePositions([physX, physY]);
+      setPreviewPosition([point.x, point.y]);
+
+      const scene = sceneRef.current;
+      const data = BUILD_DATA[selectedToolId];
+      if (scene && data) {
+        const renderRadius = Math.max(data.radius * getLinearScale(), 10);
+        const color = DEFAULT_COLORS[selectedToolId] ?? 0x888888;
+        createFloatingPreview(scene, point, renderRadius, color, selectedToolId);
+      }
+    }
+
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      setMouseScreenPos([touch.clientX - rect.left, touch.clientY - rect.top]);
+    }
+  }, [selectedToolId, isPlacing, getRenderPosFromTouch, setMousePositions, setPreviewPosition]);
+
+  const handleTouchMoveOnCanvas = useCallback((e: React.TouchEvent) => {
+    if (!touchActiveRef.current || e.touches.length !== 1) return;
+    e.preventDefault();
+
+    const touch = e.touches[0];
+    const point = getRenderPosFromTouch(touch.clientX, touch.clientY);
+    if (point) {
+      const [physX, physY] = renderToPhysical([point.x, point.y, 0]);
+      setMousePositions([physX, physY]);
+      setPreviewPosition([point.x, point.y]);
+
+      const scene = sceneRef.current;
+      const data = BUILD_DATA[selectedToolId!];
+      if (scene && data) {
+        const renderRadius = Math.max(data.radius * getLinearScale(), 10);
+        const color = DEFAULT_COLORS[selectedToolId!] ?? 0x888888;
+        createFloatingPreview(scene, point, renderRadius, color, selectedToolId!);
+      }
+    }
+
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      setMouseScreenPos([touch.clientX - rect.left, touch.clientY - rect.top]);
+    }
+  }, [selectedToolId, getRenderPosFromTouch, setMousePositions, setPreviewPosition]);
+
+  const handleTouchEndOnCanvas = useCallback((e: React.TouchEvent) => {
+    if (!touchActiveRef.current) return;
+    touchActiveRef.current = false;
+
+    const touch = e.changedTouches[0];
+    if (!touch) return;
+
+    const point = getRenderPosFromTouch(touch.clientX, touch.clientY);
+    if (point) {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        setClickPosScreen([touch.clientX - rect.left, touch.clientY - rect.top]);
+      }
+      const [physX, physY] = renderToPhysical([point.x, point.y, 0]);
+      setClickPosPhysical([physX, physY]);
+      setIsPlacing(true);
+      setMouseScreenPos(null);
+      const scene = sceneRef.current;
+      if (scene) removeFloatingPreview(scene);
+    }
+  }, [getRenderPosFromTouch, setClickPosPhysical, setClickPosScreen, setIsPlacing, setMouseScreenPos]);
+
   const handlePlaceConfirm = useCallback((speed: number, angleDeg: number) => {
     const toolId = useUIStore.getState().selectedToolId;
     const clickPos = useUIStore.getState().clickPosPhysical;
     if (!toolId || !clickPos) return;
 
-    const angleRad = (angleDeg * Math.PI) / 180;
     const px = clickPos[0];
     const py = clickPos[1];
     const pz = 0;
-    const dist = Math.sqrt(px * px + py * py);
-
-    let vel: [number, number, number] = [0, 0, 0];
-    if (speed > 0 && dist > 1) {
-      const tx = -py / dist;
-      const ty = px / dist;
-      const cosA = Math.cos(angleRad);
-      const sinA = Math.sin(angleRad);
-      vel = [
-        speed * (cosA * tx + sinA * px / dist),
-        speed * (cosA * ty + sinA * py / dist),
-        0,
-      ];
-    }
+    const vel = computePlacementVelocity({
+      position: [px, py, pz],
+      speed,
+      angleDeg,
+    });
 
     const data = BUILD_DATA[toolId];
     const realData = REAL_DATA[toolId];
@@ -276,9 +356,6 @@ function BuilderCanvas() {
     useUIStore.getState().setClickPosScreen(null);
   }, []);
 
-  // --- Mouse screen position for popups ---
-  const [mouseScreenPos, setMouseScreenPos] = useState<[number, number] | null>(null);
-
   // --- Floating preview cleanup on tool deselect ---
   useEffect(() => {
     if (!selectedToolId || isPlacing) {
@@ -290,7 +367,7 @@ function BuilderCanvas() {
   const mousePhysicalPos = useUIStore(s => s.mousePhysicalPos);
   const MOUSE_OFFSET = 12;
   const showPreview = selectedToolId && !isPlacing && mouseScreenPos;
-  const previewLeft = mouseScreenPos ? Math.min(mouseScreenPos[0] + MOUSE_OFFSET, (canvasRef.current?.clientWidth ?? 0) - 220) : 0;
+  const previewLeft = mouseScreenPos ? Math.min(mouseScreenPos[0] + MOUSE_OFFSET, canvasWidth - 220) : 0;
   const previewTop = mouseScreenPos ? mouseScreenPos[1] + MOUSE_OFFSET : 0;
 
   const formatDist = (au: number): string => {
@@ -306,7 +383,7 @@ function BuilderCanvas() {
         Math.sqrt(mousePhysicalPos[0] ** 2 + mousePhysicalPos[1] ** 2), 1e-8))
     : 0;
 
-  const computeOrbitPrediction = () => {
+  const orbitPred = useMemo(() => {
     if (!mousePhysicalPos || !selectedToolId) return null;
     const r = Math.sqrt(mousePhysicalPos[0] ** 2 + mousePhysicalPos[1] ** 2);
     if (r < 1e-8) return null;
@@ -325,12 +402,10 @@ function BuilderCanvas() {
     const e = Math.sqrt(e2);
     const b = a * Math.sqrt(1 - e2);
     return { a, b, e, r, atApoapsis: r > a };
-  };
+  }, [MU, mousePhysicalPos, selectedToolId]);
 
-  const orbitPred = useMemo(computeOrbitPrediction, [mousePhysicalPos, selectedToolId]);
-
-  const showPopup = isPlacing && clickPosScreen && useUIStore.getState().selectedToolId;
-  const popupLeft = clickPosScreen ? Math.min(clickPosScreen[0] + MOUSE_OFFSET, (canvasRef.current?.clientWidth ?? 0) - 220) : 0;
+  const showPopup = isPlacing && clickPosScreen && selectedToolId;
+  const popupLeft = clickPosScreen ? Math.min(clickPosScreen[0] + MOUSE_OFFSET, canvasWidth - 220) : 0;
   const popupTop = clickPosScreen ? clickPosScreen[1] + MOUSE_OFFSET : 0;
 
   return (
@@ -343,6 +418,9 @@ function BuilderCanvas() {
           height: '100%',
           cursor: selectedToolId ? 'crosshair' : 'default',
         }}
+        onTouchStart={handleTouchStartOnCanvas}
+        onTouchMove={handleTouchMoveOnCanvas}
+        onTouchEnd={handleTouchEndOnCanvas}
         onMouseMove={(e) => {
           if (!selectedToolId || isPlacing) {
             if (!selectedToolId) setMouseScreenPos(null);
@@ -439,7 +517,7 @@ function BuilderCanvas() {
           style={{ left: popupLeft, top: popupTop }}
         >
           <VelocityInputForm
-            templateId={useUIStore.getState().selectedToolId!}
+            templateId={selectedToolId!}
             onConfirm={handlePlaceConfirm}
             onCancel={handlePlaceCancel}
           />

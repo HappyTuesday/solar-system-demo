@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   planHohmannTransfer,
+  planDirectRendezvousTransfer,
+  computeDirectRendezvousMetrics,
   checkPhaseCompleted,
   checkDeviation,
   computePhaseGuidance,
@@ -13,6 +15,7 @@ import {
   computeGuidanceSafetyTimeScale,
   isStableTargetOrbit,
   computeTargetRelativeOrbit,
+  signedAngleDeg,
   type NavigationPlan,
   type NavigationPhase,
 } from '../navigation';
@@ -22,6 +25,14 @@ import { rk4StepSpaceshipWithMovingBodies, applyThrustInBodyFrame, type BodyInfo
 import type { SpaceshipState } from '../../types';
 
 describe('navigation', () => {
+  describe('signedAngleDeg', () => {
+    it('preserves left/right sign around the ecliptic plane', () => {
+      expect(signedAngleDeg([0, 1, 0], [1, 0, 0])).toBeCloseTo(90, 8);
+      expect(signedAngleDeg([0, -1, 0], [1, 0, 0])).toBeCloseTo(-90, 8);
+      expect(signedAngleDeg([1, 0, 0], [1, 0, 0])).toBeCloseTo(0, 8);
+    });
+  });
+
   describe('getOrbitingBodyId', () => {
     it('should return sun when far from planets', () => {
       const shipPos: [number, number, number] = [100, 0, 0];
@@ -217,6 +228,309 @@ describe('navigation', () => {
     });
   });
 
+  describe('planDirectRendezvousTransfer', () => {
+    it('builds a direct rendezvous plan with stage-goal phases and rendezvous data', () => {
+      const now = Date.UTC(2027, 4, 13, 6);
+      const earthState = computeBodyState('earth', julianDate(now));
+      expect(earthState).not.toBeNull();
+      if (!earthState) return;
+
+      const shipPos: [number, number, number] = [
+        earthState.position[0] + REAL_DATA.earth.radius + 400 / AU_TO_KM,
+        earthState.position[1],
+        earthState.position[2],
+      ];
+      const shipVel = earthState.velocity;
+
+      const plan = planDirectRendezvousTransfer(shipPos, shipVel, 'mars', now);
+
+      expect(plan.method).toBe('direct-rendezvous');
+      expect(plan.destinationId).toBe('mars');
+      expect(plan.rendezvous).toBeDefined();
+      expect(plan.rendezvous?.targetTimeToRendezvousSec).toBeGreaterThan(0);
+      expect(plan.rendezvous?.shipIdealCruiseSpeedAUPerSec).toBeGreaterThan(0);
+      expect(plan.rendezvous?.arrivalMaxRelativeSpeedAUPerSec).toBeGreaterThan(0);
+      expect(plan.phases.map(phase => phase.name)).toEqual([
+        '脱离当前天体引力范围',
+        '加速到汇合滑行速度',
+        '滑行接近汇合点',
+        '汇合前减速',
+        '进入目标引力范围',
+        '轨道圆化',
+        '到达',
+      ]);
+    });
+
+    it('allows direct rendezvous cruise targets above the old 120 km/s cap', () => {
+      const now = Date.UTC(2027, 4, 13, 6);
+      const plan = planDirectRendezvousTransfer([-8, 0, 0], [0, 0, 0], 'mars', now);
+
+      expect(plan.rendezvous).toBeDefined();
+      expect((plan.rendezvous?.shipIdealCruiseSpeedAUPerSec ?? 0) * AU_TO_KM).toBeGreaterThan(120);
+      expect((plan.rendezvous?.shipIdealCruiseSpeedAUPerSec ?? 0) * AU_TO_KM).toBeLessThanOrEqual(300);
+    });
+
+    it('computes signed rendezvous angles and ETA from effective speed only', () => {
+      const now = Date.UTC(2027, 4, 13, 6);
+      const plan = planDirectRendezvousTransfer([1, 0, 0], [0, 0, 0], 'mars', now);
+      expect(plan.rendezvous).toBeDefined();
+      if (!plan.rendezvous) return;
+
+      const toPoint: [number, number, number] = [
+        plan.rendezvous.point[0] - 1,
+        plan.rendezvous.point[1],
+        plan.rendezvous.point[2],
+      ];
+      const toPointLen = Math.sqrt(toPoint[0] ** 2 + toPoint[1] ** 2 + toPoint[2] ** 2);
+      const toward: [number, number, number] = [
+        toPoint[0] / toPointLen,
+        toPoint[1] / toPointLen,
+        toPoint[2] / toPointLen,
+      ];
+      const leftOfTarget: [number, number, number] = [-toward[1], toward[0], 0];
+
+      const metrics = computeDirectRendezvousMetrics(
+        [1, 0, 0],
+        [
+          toward[0] * plan.rendezvous.shipIdealCruiseSpeedAUPerSec,
+          toward[1] * plan.rendezvous.shipIdealCruiseSpeedAUPerSec,
+          toward[2] * plan.rendezvous.shipIdealCruiseSpeedAUPerSec,
+        ],
+        leftOfTarget,
+        plan,
+        now,
+      );
+
+      expect(metrics.effectiveSpeedAUPerSec).toBeCloseTo(plan.rendezvous.shipIdealCruiseSpeedAUPerSec, 8);
+      expect(metrics.shipTimeToRendezvousSec).toBeGreaterThan(0);
+      expect(metrics.velocityAngleErrorDeg).toBeCloseTo(0, 5);
+      expect(metrics.noseAngleErrorDeg).toBeGreaterThan(80);
+      expect(metrics.noseAngleErrorDeg).toBeLessThan(100);
+
+      const reverseMetrics = computeDirectRendezvousMetrics(
+        [1, 0, 0],
+        [-toward[0] * 1e-7, -toward[1] * 1e-7, -toward[2] * 1e-7],
+        leftOfTarget,
+        plan,
+        now,
+      );
+      expect(reverseMetrics.effectiveSpeedAUPerSec).toBe(0);
+      expect(reverseMetrics.shipTimeToRendezvousSec).toBe(Infinity);
+    });
+
+    it('decomposes rendezvous-relative radial and tangential speed', () => {
+      const now = Date.UTC(2027, 4, 13, 6);
+      const plan = planDirectRendezvousTransfer([1, 0, 0], [0, 0, 0], 'mars', now);
+      expect(plan.rendezvous).toBeDefined();
+      if (!plan.rendezvous) return;
+
+      const direction = computeDirectRendezvousMetrics(
+        [1, 0, 0],
+        [0, 0, 0],
+        [1, 0, 0],
+        plan,
+        now,
+      ).rendezvousDirection;
+      const tangentialRaw: [number, number, number] = [-direction[1], direction[0], 0];
+      const tangentialLen = Math.sqrt(tangentialRaw[0] ** 2 + tangentialRaw[1] ** 2 + tangentialRaw[2] ** 2);
+      const tangential: [number, number, number] = [
+        tangentialRaw[0] / tangentialLen,
+        tangentialRaw[1] / tangentialLen,
+        tangentialRaw[2] / tangentialLen,
+      ];
+      const shipVelocity: [number, number, number] = [
+        direction[0] * (3 / AU_TO_KM) + tangential[0] * (4 / AU_TO_KM),
+        direction[1] * (3 / AU_TO_KM) + tangential[1] * (4 / AU_TO_KM),
+        direction[2] * (3 / AU_TO_KM),
+      ];
+
+      const metrics = computeDirectRendezvousMetrics(
+        [1, 0, 0],
+        shipVelocity,
+        [-1, 0, 0],
+        plan,
+        now,
+      );
+
+      expect(metrics.radialSpeedAUPerSec * AU_TO_KM).toBeCloseTo(3, 6);
+      expect(metrics.tangentialSpeedAUPerSec * AU_TO_KM).toBeCloseTo(4, 6);
+      expect(metrics.effectiveSpeedAUPerSec * AU_TO_KM).toBeCloseTo(3, 6);
+
+      const reverseTangentialMetrics = computeDirectRendezvousMetrics(
+        [1, 0, 0],
+        [
+          direction[0] * (3 / AU_TO_KM) - tangential[0] * (4 / AU_TO_KM),
+          direction[1] * (3 / AU_TO_KM) - tangential[1] * (4 / AU_TO_KM),
+          direction[2] * (3 / AU_TO_KM),
+        ],
+        [-1, 0, 0],
+        plan,
+        now,
+      );
+      expect(reverseTangentialMetrics.tangentialSpeedAUPerSec * AU_TO_KM).toBeCloseTo(-4, 6);
+    });
+
+    it('returns acceleration guidance when cruise direction or effective speed is not acceptable', () => {
+      const now = Date.UTC(2027, 4, 13, 6);
+      const plan = planDirectRendezvousTransfer([1, 0, 0], [0, 0, 0], 'mars', now);
+      expect(plan.rendezvous).toBeDefined();
+      if (!plan.rendezvous) return;
+
+      const guidance = computeLiveNavigationGuidance({
+        shipPosition: [1, 0, 0],
+        shipVelocity: [0, 0, 0],
+        shipDirection: [0, 1, 0],
+        destinationId: 'mars',
+        simulatedTime: now,
+        thrustMagnitude: 0,
+      });
+
+      expect(guidance.title).toContain('加速');
+      expect(guidance.metrics).toContainEqual(expect.objectContaining({
+        label: '当前有效速度',
+        target: plan.rendezvous.shipIdealCruiseSpeedAUPerSec * AU_TO_KM,
+      }));
+    });
+
+    it('direct rendezvous guidance ignores nose angle and responds to flight-path angle', () => {
+      const now = Date.UTC(2027, 4, 13, 6);
+      const plan = planDirectRendezvousTransfer([1, 0, 0], [0, 0, 0], 'mars', now);
+      expect(plan.rendezvous).toBeDefined();
+      if (!plan.rendezvous) return;
+
+      const direction = computeDirectRendezvousMetrics(
+        [1, 0, 0],
+        [0, 0, 0],
+        [1, 0, 0],
+        plan,
+        now,
+      ).rendezvousDirection;
+      const guidance = computeLiveNavigationGuidance({
+        shipPosition: [1, 0, 0],
+        shipVelocity: [
+          direction[0] * plan.rendezvous.shipIdealCruiseSpeedAUPerSec * 0.5,
+          direction[1] * plan.rendezvous.shipIdealCruiseSpeedAUPerSec * 0.5,
+          direction[2] * plan.rendezvous.shipIdealCruiseSpeedAUPerSec * 0.5,
+        ],
+        shipDirection: [-direction[0], -direction[1], -direction[2]],
+        destinationId: 'mars',
+        simulatedTime: now,
+        thrustMagnitude: 0,
+      });
+
+      expect(guidance.operation).toBe('ignite');
+      expect(guidance.title).toContain('加速');
+      expect(guidance.metrics.some(metric => metric.label === '船身方向偏差')).toBe(false);
+      expect(guidance.metrics).toContainEqual(expect.objectContaining({ label: '径向速度' }));
+      expect(guidance.metrics).toContainEqual(expect.objectContaining({ label: '切向速度' }));
+    });
+
+    it('reuses the active direct rendezvous point instead of replanning every guidance refresh', () => {
+      const now = Date.UTC(2027, 4, 13, 6);
+      const plan = planDirectRendezvousTransfer([1, 0, 0], [0, 0, 0], 'mars', now);
+      expect(plan.rendezvous).toBeDefined();
+      if (!plan.rendezvous) return;
+
+      const shipPosition: [number, number, number] = [1.02, 0.01, 0];
+      const metricsFromActivePlan = computeDirectRendezvousMetrics(
+        shipPosition,
+        [0, 0, 0],
+        [1, 0, 0],
+        plan,
+        now + 3600 * 1000,
+      );
+
+      const guidance = computeLiveNavigationGuidance({
+        shipPosition,
+        shipVelocity: [0, 0, 0],
+        shipDirection: [1, 0, 0],
+        destinationId: 'mars',
+        simulatedTime: now + 3600 * 1000,
+        thrustMagnitude: 0,
+        navigationPlan: plan,
+      });
+
+      expect(guidance.desiredDirection?.[0]).toBeCloseTo(metricsFromActivePlan.rendezvousDirection[0], 10);
+      expect(guidance.desiredDirection?.[1]).toBeCloseTo(metricsFromActivePlan.rendezvousDirection[1], 10);
+      expect(guidance.metrics).toContainEqual(expect.objectContaining({
+        label: '理想滑行速度',
+        current: plan.rendezvous.shipIdealCruiseSpeedAUPerSec * AU_TO_KM,
+      }));
+    });
+
+    it('keeps direct rendezvous guidance before Mars gravity capture and keeps rendezvous arrival times visible', () => {
+      const now = Date.UTC(2027, 4, 13, 6);
+      const marsState = computeBodyState('mars', julianDate(now));
+      expect(marsState).not.toBeNull();
+      if (!marsState) return;
+
+      const shipPosition: [number, number, number] = [
+        marsState.position[0] + 1,
+        marsState.position[1],
+        marsState.position[2],
+      ];
+      const shipVelocity: [number, number, number] = [
+        marsState.velocity[0],
+        marsState.velocity[1] + 5 / AU_TO_KM,
+        marsState.velocity[2],
+      ];
+      const plan = planDirectRendezvousTransfer(shipPosition, shipVelocity, 'mars', now);
+
+      const guidance = computeLiveNavigationGuidance({
+        shipPosition,
+        shipVelocity,
+        shipDirection: [0, 1, 0],
+        destinationId: 'mars',
+        simulatedTime: now,
+        thrustMagnitude: 0,
+        navigationPlan: plan,
+      });
+
+      expect(guidance.title).not.toContain('火星相对制动');
+      expect(guidance.metrics).toContainEqual(expect.objectContaining({ label: '按当前有效速度到达' }));
+      expect(guidance.metrics).toContainEqual(expect.objectContaining({ label: '火星到达汇合点' }));
+    });
+
+    it('recommends R gear braking without turning the nose to retrograde for direct rendezvous slowdown', () => {
+      const now = Date.UTC(2027, 4, 13, 6);
+      const targetState = computeBodyState('venus', julianDate(now));
+      expect(targetState).not.toBeNull();
+      if (!targetState) return;
+
+      const hillRadius = REAL_DATA.venus.semiMajorAxis!
+        * Math.pow(REAL_DATA.venus.mass / (3 * REAL_DATA.sun.mass), 1 / 3);
+      const relativeDistance = hillRadius * 0.8;
+      const relativeSpeed = 4 / AU_TO_KM;
+      const shipPosition: [number, number, number] = [
+        targetState.position[0] + relativeDistance,
+        targetState.position[1],
+        targetState.position[2],
+      ];
+      const shipVelocity: [number, number, number] = [
+        targetState.velocity[0],
+        targetState.velocity[1] + relativeSpeed,
+        targetState.velocity[2],
+      ];
+      const shipDirection: [number, number, number] = [0, 1, 0];
+
+      const guidance = computeLiveNavigationGuidance({
+        shipPosition,
+        shipVelocity,
+        shipDirection,
+        destinationId: 'venus',
+        simulatedTime: now,
+        thrustMagnitude: 0,
+      });
+
+      expect(guidance.title).toContain('减速');
+      expect(guidance.operation).toBe('ignite');
+      expect(guidance.recommendedGear).toBe('R');
+      expect(guidance.thrustDirection).toBe('backward');
+      expect(guidance.desiredDirectionLabel).toContain('顺行');
+      expect(Math.abs(guidance.metrics[0]?.current ?? 0)).toBeGreaterThan(0.65);
+    });
+  });
+
   describe('checkPhaseCompleted', () => {
     it('wait phase: should return false when phase not aligned', () => {
       const phase: NavigationPhase = {
@@ -259,6 +573,135 @@ describe('navigation', () => {
           expect(result).toBe(false);
         }
       }
+    });
+
+    it('direct escape phase: should complete after escaping the current body binding energy', () => {
+      const phase: NavigationPhase = {
+        index: 0, name: '脱离当前天体引力范围', thrustDirection: 'forward', thrustMagnitude: 100,
+        deltaV: 0, expectedSpeedKms: 0, targetOrbit: { semiMajorAxis: REAL_DATA.mars.semiMajorAxis!, eccentricity: 0.2 },
+      };
+      const now = Date.now();
+      const earthState = computeBodyState('earth', julianDate(now));
+      expect(earthState).not.toBeNull();
+      if (!earthState) return;
+
+      const relativeDistanceAU = 0.0001;
+      const earthMu = G_AU * REAL_DATA.earth.mass;
+      const escapeSpeedAUPerSec = Math.sqrt((2 * earthMu) / relativeDistanceAU);
+      const shipPos: [number, number, number] = [
+        earthState.position[0] + relativeDistanceAU,
+        earthState.position[1],
+        earthState.position[2],
+      ];
+      const shipVel: [number, number, number] = [
+        earthState.velocity[0],
+        earthState.velocity[1] + escapeSpeedAUPerSec * 1.05,
+        earthState.velocity[2],
+      ];
+
+      expect(getOrbitingBodyId(shipPos, now)).toBe('earth');
+      expect(checkPhaseCompleted(phase, shipPos, shipVel, 'mars', now)).toBe(true);
+    });
+
+    it('direct escape phase: should remain incomplete while still bound to the current body', () => {
+      const phase: NavigationPhase = {
+        index: 0, name: '脱离当前天体引力范围', thrustDirection: 'forward', thrustMagnitude: 100,
+        deltaV: 0, expectedSpeedKms: 0, targetOrbit: { semiMajorAxis: REAL_DATA.mars.semiMajorAxis!, eccentricity: 0.2 },
+      };
+      const now = Date.now();
+      const earthState = computeBodyState('earth', julianDate(now));
+      expect(earthState).not.toBeNull();
+      if (!earthState) return;
+
+      const shipPos: [number, number, number] = [
+        earthState.position[0] + 0.0001,
+        earthState.position[1],
+        earthState.position[2],
+      ];
+      const shipVel: [number, number, number] = [...earthState.velocity];
+
+      expect(getOrbitingBodyId(shipPos, now)).toBe('earth');
+      expect(checkPhaseCompleted(phase, shipPos, shipVel, 'mars', now)).toBe(false);
+    });
+
+    it('direct acceleration phase should not complete from old vis-viva velocity matching alone', () => {
+      const now = Date.UTC(2026, 6, 5);
+      const phase: NavigationPhase = {
+        index: 1,
+        name: '加速到汇合滑行速度',
+        thrustDirection: 'forward',
+        thrustMagnitude: 100,
+        deltaV: 0,
+        expectedSpeedKms: 0,
+        targetOrbit: { semiMajorAxis: REAL_DATA.mars.semiMajorAxis!, eccentricity: 0.2 },
+      };
+      const shipPosition: [number, number, number] = [1, 0, 0];
+      const oldVisVivaSpeed = Math.sqrt(MU_SUN_AU * (2 / 1 - 1 / REAL_DATA.mars.semiMajorAxis!)) * 1.001;
+      const shipVelocity: [number, number, number] = [0, -oldVisVivaSpeed, 0];
+
+      const directPlan = planDirectRendezvousTransfer(shipPosition, shipVelocity, 'mars', now);
+      expect(directPlan.rendezvous).toBeDefined();
+      if (!directPlan.rendezvous) return;
+      const directMetrics = computeDirectRendezvousMetrics(
+        shipPosition,
+        shipVelocity,
+        [0, 1, 0],
+        directPlan,
+        now,
+      );
+      expect(
+        Math.abs(directMetrics.velocityAngleErrorDeg) > 10
+          || directMetrics.effectiveSpeedAUPerSec < directMetrics.idealCruiseSpeedAUPerSec * 0.92,
+      ).toBe(true);
+
+      expect(checkPhaseCompleted(phase, shipPosition, shipVelocity, 'mars', now)).toBe(false);
+    });
+
+    it('direct acceleration phase should require near-exact rendezvous direction and full cruise speed', () => {
+      const now = Date.UTC(2026, 6, 5);
+      const phase: NavigationPhase = {
+        index: 1,
+        name: '加速到汇合滑行速度',
+        thrustDirection: 'forward',
+        thrustMagnitude: 100,
+        deltaV: 0,
+        expectedSpeedKms: 0,
+        targetOrbit: { semiMajorAxis: REAL_DATA.mars.semiMajorAxis!, eccentricity: 0.2 },
+      };
+      const shipPosition: [number, number, number] = [1, 0, 0];
+      const plan = planDirectRendezvousTransfer(shipPosition, [0, 0, 0], 'mars', now);
+      expect(plan.rendezvous).toBeDefined();
+      if (!plan.rendezvous) return;
+
+      const direction = computeDirectRendezvousMetrics(
+        shipPosition,
+        [0, 0, 0],
+        [1, 0, 0],
+        plan,
+        now,
+      ).rendezvousDirection;
+      const perpendicular: [number, number, number] = [-direction[1], direction[0], 0];
+      const angleRad = 3 * Math.PI / 180;
+      const idealSpeed = plan.rendezvous.shipIdealCruiseSpeedAUPerSec;
+      const tooWideVelocity: [number, number, number] = [
+        (direction[0] * Math.cos(angleRad) + perpendicular[0] * Math.sin(angleRad)) * idealSpeed * 1.1,
+        (direction[1] * Math.cos(angleRad) + perpendicular[1] * Math.sin(angleRad)) * idealSpeed * 1.1,
+        direction[2] * idealSpeed * 1.1,
+      ];
+      const tooSlowVelocity: [number, number, number] = [
+        direction[0] * idealSpeed * 0.99,
+        direction[1] * idealSpeed * 0.99,
+        direction[2] * idealSpeed * 0.99,
+      ];
+      const readyVelocity: [number, number, number] = [
+        direction[0] * idealSpeed,
+        direction[1] * idealSpeed,
+        direction[2] * idealSpeed,
+      ];
+
+      expect(checkPhaseCompleted(phase, shipPosition, tooWideVelocity, 'mars', now)).toBe(false);
+      expect(checkPhaseCompleted(phase, shipPosition, tooSlowVelocity, 'mars', now)).toBe(false);
+      expect(checkPhaseCompleted(phase, shipPosition, readyVelocity, 'mars', now)).toBe(true);
     });
 
     it('coast phase: should return true when close to destination', () => {
@@ -584,8 +1027,8 @@ describe('navigation', () => {
       expect(guidance.operation === 'turn' || guidance.operation === 'ignite').toBe(true);
       expect(guidance.title).toContain('火星');
       expect(guidance.actionText).toContain('制动');
-      expect(guidance.recommendedGear).toBe(guidance.operation === 'turn' ? 'N' : 'D');
-      expect(guidance.desiredDirectionLabel).toContain('逆行');
+      expect(guidance.recommendedGear).toBe(guidance.operation === 'turn' ? 'N' : 'R');
+      expect(guidance.desiredDirectionLabel).toContain('顺行');
       expect(guidance.recommendedThrustMagnitude).toBe(guidance.operation === 'turn' ? 0 : 100);
     });
 
@@ -656,7 +1099,7 @@ describe('navigation', () => {
       expect(guidance.actionText).toContain('制动');
       expect(guidance.operation).not.toBe('jumpTime');
       expect(guidance.operation).not.toBe('wait');
-      expect(guidance.recommendedGear).toBe(guidance.operation === 'turn' ? 'N' : 'D');
+      expect(guidance.recommendedGear).toBe(guidance.operation === 'turn' ? 'N' : 'R');
       expect(guidance.recommendedThrustMagnitude).toBe(guidance.operation === 'turn' ? 0 : 100);
     });
 
@@ -697,7 +1140,7 @@ describe('navigation', () => {
       const guidance = computeLiveNavigationGuidance({
         shipPosition: ship.position,
         shipVelocity: ship.velocity,
-        shipDirection: [0, -1, 0],
+        shipDirection: [0, 1, 0],
         destinationId: 'mars',
         simulatedTime: now,
         thrustMagnitude: 0,
@@ -706,8 +1149,8 @@ describe('navigation', () => {
       expect(guidance.completed).toBe(false);
       expect(guidance.operation).toBe('ignite');
       expect(guidance.title).toContain('制动');
-      expect(guidance.desiredDirectionLabel).toContain('逆行');
-      expect(guidance.recommendedGear).toBe('D');
+      expect(guidance.desiredDirectionLabel).toContain('顺行');
+      expect(guidance.recommendedGear).toBe('R');
       expect(guidance.recommendedThrustMagnitude).toBe(100);
     });
 
@@ -732,35 +1175,26 @@ describe('navigation', () => {
       expect(guidance.suggestedTimeScale).toBe(100);
     });
 
-    it('等待霍曼窗口时，实时导航给出用户可执行的空档和时间倍率建议', () => {
-      let guidance = null as ReturnType<typeof computeLiveNavigationGuidance> | null;
-      const start = Date.UTC(2026, 6, 4);
-      const dayMs = 86400 * 1000;
+    it('地球停车轨道中不再等待霍曼窗口，而是给出直接汇合离场目标', () => {
+      const simulatedTime = Date.UTC(2026, 6, 4);
+      const ship = makeEarthParkingState(simulatedTime);
+      const guidance = computeLiveNavigationGuidance({
+        shipPosition: ship.position,
+        shipVelocity: ship.velocity,
+        shipDirection: ship.direction,
+        destinationId: 'mars',
+        simulatedTime,
+        thrustMagnitude: 0,
+      });
 
-      for (let day = 0; day <= 800; day += 5) {
-        const simulatedTime = start + day * dayMs;
-        const ship = makeEarthParkingState(simulatedTime);
-        const current = computeLiveNavigationGuidance({
-          shipPosition: ship.position,
-          shipVelocity: ship.velocity,
-          shipDirection: ship.direction,
-          destinationId: 'mars',
-          simulatedTime,
-          thrustMagnitude: 0,
-        });
-        if (current.operation === 'jumpTime') {
-          guidance = current;
-          break;
-        }
-      }
-
-      expect(guidance).not.toBeNull();
-      expect(guidance?.recommendedGear).toBe('N');
-      expect(guidance?.recommendedThrustMagnitude).toBe(0);
-      expect(guidance?.suggestedTimeScale).toBeGreaterThan(1);
+      expect(guidance.operation).not.toBe('jumpTime');
+      expect(guidance.title).toContain('脱离当前天体引力范围');
+      expect(guidance.desiredDirectionLabel).toContain('汇合点');
+      expect(guidance.metrics).toContainEqual(expect.objectContaining({ label: '当前有效速度' }));
+      expect(guidance.metrics).toContainEqual(expect.objectContaining({ label: '理想滑行速度' }));
     });
 
-    it('出发点火阶段的实时导航给出船头、D档和推力建议', () => {
+    it('直接汇合加速阶段给出船头、D档和推力建议', () => {
       let guidance = null as ReturnType<typeof computeLiveNavigationGuidance> | null;
       const start = Date.UTC(2026, 6, 4);
       const halfDayMs = 12 * 3600 * 1000;
@@ -787,36 +1221,26 @@ describe('navigation', () => {
       expect(guidance?.recommendedGear).toBe('D');
       expect(guidance?.recommendedThrustMagnitude).toBe(100);
       expect(guidance?.desiredDirection).toBeDefined();
-      expect(guidance?.desiredDirectionLabel).toContain('顺行');
+      expect(guidance?.desiredDirectionLabel).toContain('汇合点');
       expect(guidance?.suggestedTimeScale).toBeGreaterThan(0);
     });
 
-    it('地球停车轨道反向90度点不能推荐外行星转移点火', () => {
-      let guidance = null as ReturnType<typeof computeLiveNavigationGuidance> | null;
-      const start = Date.UTC(2026, 6, 4);
-      const halfDayMs = 12 * 3600 * 1000;
+    it('地球停车轨道反向90度点也按当前状态重算直接汇合目标', () => {
+      const simulatedTime = Date.UTC(2026, 6, 4);
+      const ship = makeEarthAntiDepartureState(simulatedTime);
+      const guidance = computeLiveNavigationGuidance({
+        shipPosition: ship.position,
+        shipVelocity: ship.velocity,
+        shipDirection: ship.direction,
+        destinationId: 'mars',
+        simulatedTime,
+        thrustMagnitude: 0,
+      });
 
-      for (let halfDay = 0; halfDay <= 1800; halfDay += 1) {
-        const simulatedTime = start + halfDay * halfDayMs;
-        const ship = makeEarthAntiDepartureState(simulatedTime);
-        const current = computeLiveNavigationGuidance({
-          shipPosition: ship.position,
-          shipVelocity: ship.velocity,
-          shipDirection: ship.direction,
-          destinationId: 'mars',
-          simulatedTime,
-          thrustMagnitude: 0,
-        });
-        if (current.title.includes('点火时机') || current.operation === 'ignite') {
-          guidance = current;
-          break;
-        }
-      }
-
-      expect(guidance).not.toBeNull();
-      expect(guidance?.operation).not.toBe('ignite');
-      expect(guidance?.recommendedGear).toBe('N');
-      expect(guidance?.recommendedThrustMagnitude).toBe(0);
+      expect(guidance.operation).not.toBe('jumpTime');
+      expect(guidance.title).toContain('脱离当前天体引力范围');
+      expect(guidance.desiredDirectionLabel).toContain('汇合点');
+      expect(guidance.metrics.some(metric => metric.label === '速度方向偏差')).toBe(true);
     });
 
     it('已在地火转移轨道上时，实时导航不会重新等待窗口', () => {
@@ -847,7 +1271,7 @@ describe('navigation', () => {
       expect(guidance.suggestedTimeScale).toBeGreaterThan(0);
     });
 
-    it('地球逃逸后即使仍在希尔球内，也提示转移滑行而不是卡在熄火低倍率', () => {
+    it('地球逃逸后即使仍在希尔球内，也按汇合速度和方向重新评估阶段目标', () => {
       const now = Date.UTC(2027, 4, 9, 15, 36, 33);
       const earthState = computeBodyState('earth', julianDate(now));
       expect(earthState).not.toBeNull();
@@ -885,11 +1309,10 @@ describe('navigation', () => {
         thrustMagnitude: 0,
       });
 
-      expect(guidance.operation).toBe('coast');
-      expect(guidance.title).toContain('转移轨道滑行');
-      expect(guidance.recommendedGear).toBe('N');
-      expect(guidance.recommendedThrustMagnitude).toBe(0);
-      expect(guidance.suggestedTimeScale).toBeGreaterThan(1);
+      expect(guidance.operation).not.toBe('jumpTime');
+      expect(guidance.title).toContain('汇合');
+      expect(guidance.metrics).toContainEqual(expect.objectContaining({ label: '按当前有效速度到达' }));
+      expect(guidance.metrics).toContainEqual(expect.objectContaining({ label: '当前有效速度' }));
     });
   });
 

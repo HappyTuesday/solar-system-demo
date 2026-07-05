@@ -4,9 +4,10 @@ import { stateVectors } from '../../engine/orbital';
 import { REAL_DATA, MU_SUN_AU as MU_SUN } from '../../engine/constants';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { useExploreStore } from '../../stores/exploreStore';
-import { checkSpaceshipCollision } from '../../engine/spaceship';
+import { checkSpaceshipCollision, hasEffectiveThrust } from '../../engine/spaceship';
 import { NAVIGATION_CONFIG } from '../../engine/constants';
 import { advanceExploreShipPhysics } from '../../engine/exploreSimulation';
+import { computeRendezvousPulse } from '../../engine/navigationVisual';
 import TimePanel from './TimePanel';
 
 const ORBIT_LINE_POINTS = 256;
@@ -129,6 +130,39 @@ function createExplosionParticleTexture(): THREE.CanvasTexture {
   gradient.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, size, size);
+  return new THREE.CanvasTexture(canvas);
+}
+
+function createRendezvousMarkerTexture(kind: 'core' | 'ring'): THREE.CanvasTexture {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const half = size / 2;
+
+  if (kind === 'core') {
+    const gradient = ctx.createRadialGradient(half, half, 0, half, half, half);
+    gradient.addColorStop(0, 'rgba(220,255,235,1)');
+    gradient.addColorStop(0.25, 'rgba(70,255,160,0.92)');
+    gradient.addColorStop(0.58, 'rgba(0,220,140,0.35)');
+    gradient.addColorStop(1, 'rgba(0,220,140,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+  } else {
+    ctx.strokeStyle = 'rgba(80,255,170,0.95)';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(half, half, half * 0.38, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const glow = ctx.createRadialGradient(half, half, half * 0.34, half, half, half * 0.5);
+    glow.addColorStop(0, 'rgba(0,255,150,0.2)');
+    glow.addColorStop(1, 'rgba(0,255,150,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, size, size);
+  }
+
   return new THREE.CanvasTexture(canvas);
 }
 
@@ -407,6 +441,44 @@ function ExploreCanvas() {
 
     const stars = createStarfield(scene, disposablesRef.current);
 
+    const rendezvousGroup = new THREE.Group();
+    rendezvousGroup.visible = false;
+    rendezvousGroup.renderOrder = 950;
+    const rendezvousCoreTexture = createRendezvousMarkerTexture('core');
+    const rendezvousRingTexture = createRendezvousMarkerTexture('ring');
+    disposablesRef.current.textures.push(rendezvousCoreTexture, rendezvousRingTexture);
+
+    const rendezvousCoreMaterial = new THREE.SpriteMaterial({
+      map: rendezvousCoreTexture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      opacity: 0.9,
+    });
+    disposablesRef.current.materials.push(rendezvousCoreMaterial);
+    const rendezvousCore = new THREE.Sprite(rendezvousCoreMaterial);
+    rendezvousGroup.add(rendezvousCore);
+
+    const rendezvousRingMaterials: THREE.SpriteMaterial[] = [];
+    const rendezvousRings: THREE.Sprite[] = [];
+    for (let i = 0; i < 3; i++) {
+      const material = new THREE.SpriteMaterial({
+        map: rendezvousRingTexture,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        opacity: 0.5,
+      });
+      disposablesRef.current.materials.push(material);
+      rendezvousRingMaterials.push(material);
+      const sprite = new THREE.Sprite(material);
+      rendezvousRings.push(sprite);
+      rendezvousGroup.add(sprite);
+    }
+    scene.add(rendezvousGroup);
+
     const bodyMeshes = new Map<string, THREE.Mesh>();
     const allIds = allIdsRef.current;
     const loader = new THREE.TextureLoader();
@@ -462,9 +534,11 @@ function ExploreCanvas() {
     const animLookTarget = new THREE.Vector3();
 
     const animate = (time: number) => {
+      useSpaceshipStore.getState().updateTangentialCorrectionGear();
       const store = useSpaceshipStore.getState();
 
-      if (store.isRunning && !store.exploded && store.thrustMagnitude > 0) {
+      const effectiveThrust = hasEffectiveThrust(store.thrust, store.thrustMagnitude);
+      if (store.isRunning && !store.exploded && effectiveThrust) {
         if (!engineSoundRef.current) startEngineSound();
         setEngineVolume(store.thrustMagnitude);
       } else if (engineSoundRef.current?.active) {
@@ -512,7 +586,7 @@ function ExploreCanvas() {
           const elapsed = (simulatedTime - navStore.lastDeviationCheckTime) / 1000;
           // Check every frame when thrust is active so burn sub-steps can
           // auto-complete at the right moment without overshooting.
-          if (elapsed > NAVIGATION_CONFIG.deviationCheckInterval || navStore.thrustMagnitude > 0) {
+          if (elapsed > NAVIGATION_CONFIG.deviationCheckInterval || hasEffectiveThrust(navStore.thrust, navStore.thrustMagnitude)) {
             useSpaceshipStore.setState({ lastDeviationCheckTime: simulatedTime });
             navStore.checkNavigationalDeviation();
           }
@@ -852,6 +926,36 @@ function ExploreCanvas() {
         sp.position[2] + smoothDirRef.current.z * 10 + centerOffset.z,
       );
       camera.lookAt(animLookTarget);
+
+      {
+        const navPlan = useSpaceshipStore.getState().navigationPlan;
+        if (navPlan?.method === 'direct-rendezvous' && navPlan.rendezvous) {
+          const point = navPlan.rendezvous.point;
+          rendezvousGroup.visible = true;
+          rendezvousGroup.position.set(point[0], point[1], point[2]);
+          const distance = Math.max(camera.position.distanceTo(rendezvousGroup.position), 1e-6);
+          const baseWorldSize = Math.max(0.003, Math.min(0.08, distance * 0.018));
+          const pulse = computeRendezvousPulse(time, {
+            baseRadius: 4,
+            spreadRadius: 16,
+            rings: rendezvousRings.length,
+          });
+
+          const coreScale = baseWorldSize * (pulse.coreRadius / 4);
+          rendezvousCore.scale.set(coreScale, coreScale, 1);
+          rendezvousCoreMaterial.opacity = pulse.coreAlpha;
+
+          for (let i = 0; i < rendezvousRings.length; i++) {
+            const ring = pulse.rings[i];
+            const ringScale = baseWorldSize * (ring.radius / 4);
+            rendezvousRings[i].scale.set(ringScale, ringScale, 1);
+            rendezvousRingMaterials[i].opacity = ring.alpha;
+          }
+        } else {
+          rendezvousGroup.visible = false;
+        }
+      }
+
       renderer.render(scene, camera);
 
       rearCam.position.copy(pos);
@@ -937,6 +1041,7 @@ function ExploreCanvas() {
       }
 
       const d = disposables;
+      scene.remove(rendezvousGroup);
       for (const line of d.lines) scene.remove(line);
       for (const [, mesh] of bodyMeshes) scene.remove(mesh);
       scene.remove(stars);
