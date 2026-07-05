@@ -75,6 +75,7 @@ function Dashboard() {
   const updateThrustFromClientX = useCallback((clientX: number) => {
     const track = sliderTrackRef.current;
     if (!track) return;
+    if (useSpaceshipStore.getState().gear === 'P') return;
     const rect = track.getBoundingClientRect();
     const x = clientX - rect.left;
     const pct = Math.max(0, Math.min(100, Math.round((x / rect.width) * 100)));
@@ -191,6 +192,10 @@ function Dashboard() {
                   <button className={`dashboard-gear-btn gear-r${gear === 'R' ? ' active' : ''}`}
                     onMouseDown={(e) => { e.preventDefault(); setGear('R'); }}
                   >R</button>
+                  <button className={`dashboard-gear-btn gear-p${gear === 'P' ? ' active' : ''}`}
+                    title="泊车：自动朝向前进方向并反向制动，速度归零后回到N档"
+                    onMouseDown={(e) => { e.preventDefault(); setGear('P'); }}
+                  >P</button>
                   {showTangentialGear && (
                     <button className={`dashboard-gear-btn gear-t${gear === 'T' ? ' active' : ''}`}
                       title="切向修正：自动调整姿态与推力，切向速度到0或过零后回到N档"
@@ -204,6 +209,7 @@ function Dashboard() {
                 {gear === 'N' && <span className="gear-indicator"> [N]</span>}
                 {gear === 'R' && <span className="gear-indicator reverse"> [R]</span>}
                 {gear === 'T' && <span className="gear-indicator tangential"> [T切向]</span>}
+                {gear === 'P' && <span className="gear-indicator park"> [P泊车]</span>}
               </div>
 
               <div className="dashboard-pads-row">
