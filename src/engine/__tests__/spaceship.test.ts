@@ -11,7 +11,7 @@ import {
   parkBrakeSnapshot,
   type BodyInfo,
 } from '../spaceship';
-import { SPACECRAFT_CONFIG, G_AU, MU_SUN_AU, AU_TO_KM } from '../constants';
+import { MU_SUN_AU, AU_TO_KM } from '../constants';
 
 const EPSILON = 1e-12;
 
