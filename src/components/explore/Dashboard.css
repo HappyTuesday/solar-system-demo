@@ -176,6 +176,12 @@
   color: #99e8ff;
 }
 
+.dashboard-gear-btn.gear-p.active {
+  background: rgba(120, 140, 255, 0.15);
+  border-color: rgba(120, 140, 255, 0.25);
+  color: #8aa0ff;
+}
+
 .gear-indicator {
   color: #88ccff;
 }
@@ -186,6 +192,10 @@
 
 .gear-indicator.tangential {
   color: #99e8ff;
+}
+
+.gear-indicator.park {
+  color: #8aa0ff;
 }
 
 /* ---- Control pads (3x3 grids) ---- */
