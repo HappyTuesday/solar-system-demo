@@ -1,5 +1,5 @@
 import type { SpaceshipState } from '../types';
-import { SPACECRAFT_CONFIG, G_AU } from './constants';
+import { SPACECRAFT_CONFIG, G_AU, AU_TO_KM } from './constants';
 import { vec3Length } from './physics';
 
 function vec3Normalize(v: [number, number, number]): [number, number, number] {
@@ -199,4 +199,42 @@ export function checkSpaceshipCollision(
     }
   }
   return null;
+}
+
+export const PARK_BRAKE_REFERENCE_AU_PER_SEC = 30 / AU_TO_KM;
+export const PARK_BRAKE_MAX_THRUST_MN = 100;
+export const PARK_BRAKE_MIN_THRUST_MN = 1;
+export const PARK_BRAKE_EPS_AU_PER_SEC = 0.01 / AU_TO_KM;
+
+export function parkBrakeThrustMagnitude(speedAUPerSec: number): number {
+  const scaled = (speedAUPerSec / PARK_BRAKE_REFERENCE_AU_PER_SEC) * PARK_BRAKE_MAX_THRUST_MN;
+  return Math.max(
+    PARK_BRAKE_MIN_THRUST_MN,
+    Math.min(PARK_BRAKE_MAX_THRUST_MN, scaled),
+  );
+}
+
+export interface ParkBrakeSnapshot {
+  facingDirection: [number, number, number];
+  thrustMagnitude: number;
+  reachedStop: boolean;
+}
+
+export function parkBrakeSnapshot(
+  velocity: [number, number, number],
+  initialDirection: [number, number, number],
+): ParkBrakeSnapshot {
+  const speed = vec3Length(velocity);
+  const forwardProjection =
+    velocity[0] * initialDirection[0] +
+    velocity[1] * initialDirection[1] +
+    velocity[2] * initialDirection[2];
+  const reachedStop =
+    speed <= PARK_BRAKE_EPS_AU_PER_SEC ||
+    forwardProjection <= PARK_BRAKE_EPS_AU_PER_SEC;
+  return {
+    facingDirection: vec3Normalize(velocity),
+    thrustMagnitude: parkBrakeThrustMagnitude(speed),
+    reachedStop,
+  };
 }

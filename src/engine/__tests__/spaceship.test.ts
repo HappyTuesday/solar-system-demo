@@ -7,9 +7,11 @@ import {
   hasEffectiveThrust,
   rk4StepSpaceshipWithMovingBodies,
   predictTrajectory,
+  parkBrakeThrustMagnitude,
+  parkBrakeSnapshot,
   type BodyInfo,
 } from '../spaceship';
-import { SPACECRAFT_CONFIG, G_AU, MU_SUN_AU } from '../constants';
+import { SPACECRAFT_CONFIG, G_AU, MU_SUN_AU, AU_TO_KM } from '../constants';
 
 const EPSILON = 1e-12;
 
@@ -119,6 +121,45 @@ describe('spaceship', () => {
       const points = predictTrajectory(ship, () => [makeSun()], 60, 10);
       expect(points.length).toBe(10);
       expect(points[0].length).toBe(3);
+    });
+  });
+
+  describe('parkBrakeThrustMagnitude', () => {
+    it('should clamp to max thrust at or above reference speed', () => {
+      const refSpeed = 30 / AU_TO_KM;
+      expect(parkBrakeThrustMagnitude(refSpeed)).toBeCloseTo(100, 6);
+      expect(parkBrakeThrustMagnitude(refSpeed * 5)).toBe(100);
+    });
+
+    it('should clamp to min thrust near zero speed', () => {
+      expect(parkBrakeThrustMagnitude(0)).toBe(1);
+    });
+
+    it('should scale linearly between min and max', () => {
+      const halfRef = 15 / AU_TO_KM;
+      expect(parkBrakeThrustMagnitude(halfRef)).toBeCloseTo(50, 6);
+    });
+  });
+
+  describe('parkBrakeSnapshot', () => {
+    it('should face along current velocity and report not stopped while moving forward', () => {
+      const v: [number, number, number] = [0, 2e-7, 0];
+      const snap = parkBrakeSnapshot(v, [0, 1, 0]);
+      expect(snap.reachedStop).toBe(false);
+      expect(snap.facingDirection[0]).toBeCloseTo(0, 12);
+      expect(snap.facingDirection[1]).toBeCloseTo(1, 12);
+      expect(snap.facingDirection[2]).toBeCloseTo(0, 12);
+      expect(snap.thrustMagnitude).toBeGreaterThan(0);
+    });
+
+    it('should report stopped once velocity crosses the initial forward direction', () => {
+      const snap = parkBrakeSnapshot([0, -2e-7, 0], [0, 1, 0]);
+      expect(snap.reachedStop).toBe(true);
+    });
+
+    it('should report stopped when speed is essentially zero', () => {
+      const snap = parkBrakeSnapshot([0, 0, 0], [0, 1, 0]);
+      expect(snap.reachedStop).toBe(true);
     });
   });
 });
