@@ -1,61 +1,20 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useSpaceshipStore, mergeCompletedAndNextSubSteps } from '../spaceshipStore';
-import type { NavigationPhase, NavSubStep } from '../../engine/navigation';
+import { useSpaceshipStore } from '../spaceshipStore';
+import type { NavigationPhase } from '../../engine/navigation';
 import { REAL_DATA, MU_SUN_AU } from '../../engine/constants';
 
-function makeSubStep(
-  id: string, type: NavSubStep['type'], phaseId: number, order: number,
-  overrides?: Partial<NavSubStep>,
-): NavSubStep {
+function makePhase(
+  name: string, thrustDir: 'forward' | 'backward' | 'none', mag: number, targetSMA: number,
+): NavigationPhase {
   return {
-    id, phaseId, order, type, status: 'pending',
-    condition: { type: 'always', met: true, description: 'test' },
-    action: { thrustDirection: 'off', thrustMagnitude: 0, attitudeMode: 'inertial', description: 'test', completionCriteria: 'test' },
-    ...overrides,
+    index: 0, name, thrustDirection: thrustDir, thrustMagnitude: mag,
+    deltaV: 0.01, expectedSpeedKms: 3, targetOrbit: { semiMajorAxis: targetSMA, eccentricity: 0.3 },
   };
 }
 
-describe('mergeCompletedAndNextSubSteps', () => {
-  it('should mark slices as completed and merge with next', () => {
-    const phase: NavigationPhase = {
-      index: 0, name: 'test', subSteps: [
-        makeSubStep('a', 'orient_prograde', 0, 0),
-        makeSubStep('b', 'burn_prograde', 0, 1),
-      ],
-      thrustDirection: 'forward', thrustMagnitude: 100, deltaV: 0.01, expectedSpeedKms: 1,
-      targetOrbit: { semiMajorAxis: 1, eccentricity: 0 },
-    };
-
-    const next: NavSubStep[] = [makeSubStep('b2', 'burn_prograde', 0, 1)];
-    mergeCompletedAndNextSubSteps(phase, 1, next);
-
-    expect(phase.subSteps.length).toBe(2);
-    expect(phase.subSteps[0].id).toBe('a');
-    expect(phase.subSteps[0].status).toBe('completed');
-    expect(phase.subSteps[1].id).toBe('b2');
-    expect(phase.subSteps[1].status).toBe('pending');
-  });
-
-  it('should handle completedCount=0 (new phase entry)', () => {
-    const phase: NavigationPhase = {
-      index: 0, name: 'test', subSteps: [],
-      thrustDirection: 'forward', thrustMagnitude: 100, deltaV: 0.01, expectedSpeedKms: 1,
-      targetOrbit: { semiMajorAxis: 1, eccentricity: 0 },
-    };
-
-    const next: NavSubStep[] = [makeSubStep('a', 'coast_transfer', 0, 0)];
-    mergeCompletedAndNextSubSteps(phase, 0, next);
-
-    expect(phase.subSteps.length).toBe(1);
-    expect(phase.subSteps[0].status).toBe('pending');
-  });
-});
-
 describe('spaceshipStore navigation lifecycle', () => {
   beforeEach(() => {
-    const s = useSpaceshipStore.getState();
-    s.reset();
-    // Position ship at Earth orbit
+    useSpaceshipStore.getState().reset();
     const aEarth = REAL_DATA.earth.semiMajorAxis!;
     const vEarth = Math.sqrt(MU_SUN_AU / aEarth);
     useSpaceshipStore.setState({
@@ -66,14 +25,12 @@ describe('spaceshipStore navigation lifecycle', () => {
     });
   });
 
-  it('setTargetBody should populate plan with subSteps', () => {
+  it('setTargetBody should populate plan with phases', () => {
     useSpaceshipStore.getState().setTargetBody('mars');
     const s = useSpaceshipStore.getState();
     expect(s.navigationPlan).not.toBeNull();
     expect(s.activePhaseIndex).toBe(0);
-    expect(s.activeSubStepIndex).toBe(0);
-    const phase = s.navigationPlan!.phases[s.activePhaseIndex];
-    expect(phase.subSteps.length).toBeGreaterThan(0);
+    expect(s.navigationPlan!.phases.length).toBeGreaterThanOrEqual(4);
   });
 
   it('setTargetBody(null) should clear plan', () => {
@@ -82,136 +39,134 @@ describe('spaceshipStore navigation lifecycle', () => {
     const s = useSpaceshipStore.getState();
     expect(s.navigationPlan).toBeNull();
     expect(s.activePhaseIndex).toBe(-1);
-    expect(s.activeSubStepIndex).toBe(0);
   });
 
-  it('orient_prograde should auto-complete when attitudeMode is prograde', () => {
-    useSpaceshipStore.getState().setTargetBody('mars');
-    let s = useSpaceshipStore.getState();
-    const plan = s.navigationPlan!;
-    // Find a phase that has orient_prograde, or inject one
-    const phase = plan.phases[s.activePhaseIndex];
-    // Replace sub-steps with [orient, coast] to test orient completion
-    phase.subSteps = [
-      makeSubStep('orient', 'orient_prograde', phase.index, 0),
-      makeSubStep('coast', 'coast_transfer', phase.index, 1),
-    ];
-    useSpaceshipStore.setState({ navigationPlan: { ...plan, phases: plan.phases }, activeSubStepIndex: 0, attitudeMode: 'prograde' });
-
-    // Call checkNavigationalDeviation twice - first for orient, second for coast
-    useSpaceshipStore.getState().checkNavigationalDeviation();
-    s = useSpaceshipStore.getState();
-    expect(s.activeSubStepIndex).toBe(1); // orient should complete
-  });
-
-  it('orient_prograde should NOT complete when attitudeMode is inertial', () => {
+  it('checkNavigationalDeviation should NOT advance phase when burn is incomplete', () => {
     useSpaceshipStore.getState().setTargetBody('mars');
     const s = useSpaceshipStore.getState();
     const plan = s.navigationPlan!;
-    const phase = plan.phases[s.activePhaseIndex];
-    phase.subSteps = [
-      makeSubStep('orient', 'orient_prograde', phase.index, 0),
-      makeSubStep('coast', 'coast_transfer', phase.index, 1),
+    // Replace phases with test phase that won't complete
+    plan.phases = [
+      makePhase('提升远日点', 'forward', 100, 2.0),
     ];
-    useSpaceshipStore.setState({ navigationPlan: { ...plan, phases: plan.phases }, activeSubStepIndex: 0, attitudeMode: 'inertial' });
+    useSpaceshipStore.setState({ navigationPlan: { ...plan }, activePhaseIndex: 0 });
+
+    const phaseBefore = useSpaceshipStore.getState().activePhaseIndex;
+    useSpaceshipStore.getState().checkNavigationalDeviation();
+    expect(useSpaceshipStore.getState().activePhaseIndex).toBe(phaseBefore);
+  });
+
+  it('checkNavigationalDeviation should advance phase when burn is complete', () => {
+    useSpaceshipStore.getState().setTargetBody('mars');
+    const s = useSpaceshipStore.getState();
+    const aTransferAU = (1.0 + REAL_DATA.mars.semiMajorAxis!) / 2;
+    const plan = s.navigationPlan!;
+    plan.phases = [
+      makePhase('提升远日点', 'forward', 100, aTransferAU),
+      makePhase('转移轨道滑行', 'none', 0, aTransferAU),
+    ];
+    // Ship far from Earth (in interplanetary space) with correct transfer orbit velocity
+    const shipR = 1.01; // slightly beyond 1 AU, away from Earth
+    const vBurn = Math.sqrt(MU_SUN_AU * (2 / shipR - 1 / aTransferAU));
+    useSpaceshipStore.setState({
+      navigationPlan: { ...plan },
+      targetBodyId: 'venus',
+      activePhaseIndex: 0,
+      position: [shipR, 0, 0],
+      velocity: [0, vBurn, 0],
+      orbitingBodyId: 'sun', // ensure we skip SOI check
+    });
 
     useSpaceshipStore.getState().checkNavigationalDeviation();
     const s2 = useSpaceshipStore.getState();
-    expect(s2.activeSubStepIndex).toBe(0); // should NOT advance, attitude is inertial
+    expect(s2.activePhaseIndex).toBe(1);
+    expect(s2.thrustMagnitude).toBe(0);
   });
 
-  it('burn_prograde should NOT auto-complete without thrust (semi-major mismatch)', () => {
+  it('checkNavigationalDeviation should NOT crash when no plan', () => {
+    useSpaceshipStore.getState().setTargetBody(null);
+    expect(() => useSpaceshipStore.getState().checkNavigationalDeviation()).not.toThrow();
+  });
+
+  it('phase advance should reset thrust to zero', () => {
+    useSpaceshipStore.getState().setTargetBody('mars');
+    const s = useSpaceshipStore.getState();
+    const aTransferAU = (1.0 + REAL_DATA.mars.semiMajorAxis!) / 2;
+    const plan = s.navigationPlan!;
+    plan.phases = [
+      makePhase('提升远日点', 'forward', 100, aTransferAU),
+      makePhase('转移轨道滑行', 'none', 0, aTransferAU),
+    ];
+    const shipR = 1.01;
+    const vBurn = Math.sqrt(MU_SUN_AU * (2 / shipR - 1 / aTransferAU));
+    useSpaceshipStore.setState({
+      navigationPlan: { ...plan },
+      targetBodyId: 'venus',
+      activePhaseIndex: 0,
+      position: [shipR, 0, 0],
+      velocity: [0, vBurn, 0],
+      orbitingBodyId: 'sun',
+      thrustMagnitude: 100,
+    });
+
+    useSpaceshipStore.getState().checkNavigationalDeviation();
+    const s2 = useSpaceshipStore.getState();
+    expect(s2.thrustMagnitude).toBe(0);
+    expect(s2.thrust).toEqual([0, 0, 0]);
+  });
+
+  it('Mars live directives should not let the legacy plan check clear freshly applied thrust', () => {
     useSpaceshipStore.getState().setTargetBody('mars');
     const s = useSpaceshipStore.getState();
     const plan = s.navigationPlan!;
-    const phase = plan.phases[s.activePhaseIndex];
-    // Set a burn_prograde with target that doesn't match current orbit
-    phase.subSteps = [
-      makeSubStep('burn', 'burn_prograde', phase.index, 0, {
-        action: { thrustDirection: 'forward', thrustMagnitude: 100, attitudeMode: 'prograde',
-          targetSemiMajorAxisAU: 2.0, description: '', completionCriteria: '' },
-      }),
+    plan.phases = [
+      makePhase('提升远日点', 'forward', 100, 1),
+      makePhase('转移轨道滑行', 'none', 0, 1),
     ];
-    useSpaceshipStore.setState({ navigationPlan: { ...plan, phases: plan.phases }, activeSubStepIndex: 0 });
+    useSpaceshipStore.setState({
+      targetBodyId: 'mars',
+      navigationPlan: { ...plan },
+      activePhaseIndex: 0,
+      position: [1, 0, 0],
+      velocity: [0, Math.sqrt(MU_SUN_AU), 0],
+      orbitingBodyId: 'sun',
+      thrustMagnitude: 1,
+      thrust: [1, 0, 0],
+      gear: 'D',
+    });
 
     useSpaceshipStore.getState().checkNavigationalDeviation();
     const s2 = useSpaceshipStore.getState();
-    expect(s2.activeSubStepIndex).toBe(0); // should NOT advance
+
+    expect(s2.activePhaseIndex).toBe(0);
+    expect(s2.thrustMagnitude).toBe(1);
+    expect(s2.thrust).toEqual([1, 0, 0]);
+    expect(s2.gear).toBe('D');
   });
 
-  it('phase should advance when all sub-steps complete', () => {
-    useSpaceshipStore.getState().setTargetBody('mars');
+  it('guided D gear setup should keep visible thrust magnitude and actual forward thrust in sync', () => {
+    useSpaceshipStore.getState().setThrustMagnitude(35);
+    useSpaceshipStore.getState().setGear('D');
+
     const s = useSpaceshipStore.getState();
-    const plan = s.navigationPlan!;
-    const phase = plan.phases[s.activePhaseIndex];
-    // Phase with 1 sub-step, and activeSubStepIndex already past it
-    phase.subSteps = [makeSubStep('only', 'coast_transfer', phase.index, 0)];
-    useSpaceshipStore.setState({ navigationPlan: { ...plan, phases: plan.phases }, activeSubStepIndex: 1 });
-
-    // Advance should move to next phase
-    useSpaceshipStore.getState().checkNavigationalDeviation();
-    const s2 = useSpaceshipStore.getState();
-    expect(s2.activePhaseIndex).toBe(s.activePhaseIndex + 1);
-    expect(s2.activeSubStepIndex).toBe(0);
+    expect(s.thrustMagnitude).toBe(35);
+    expect(s.gear).toBe('D');
+    expect(s.thrust[0]).toBe(1);
   });
 
-  it('wait_window should NOT complete without thrust', () => {
-    useSpaceshipStore.getState().setTargetBody('mars');
-    let s = useSpaceshipStore.getState();
-    const plan = s.navigationPlan!;
-    const phase = plan.phases[s.activePhaseIndex];
-    // Inject wait_window with 2 sub-steps so we can test conditional completion
-    phase.subSteps = [
-      makeSubStep('wait', 'wait_window', phase.index, 0),
-      makeSubStep('next', 'coast_transfer', phase.index, 1),
-    ];
-    useSpaceshipStore.setState({ navigationPlan: { ...plan, phases: plan.phases }, activeSubStepIndex: 0, thrustMagnitude: 0, windowReady: false });
+  it('guided neutral setup should clear actual forward thrust', () => {
+    useSpaceshipStore.getState().setThrustMagnitude(35);
+    useSpaceshipStore.getState().setGear('D');
+    useSpaceshipStore.getState().setThrustMagnitude(0);
+    useSpaceshipStore.getState().setGear('N');
 
-    // Turn on window readiness but NO thrust
-    useSpaceshipStore.setState({ windowReady: true });
-    s = useSpaceshipStore.getState();
-    // Force the condition to simulate window being ready in checkWindowReady
-    // Since checkWindowReady uses real orbital positions, we simulate by directly setting condition.met
-    s.navigationPlan!.phases[s.activePhaseIndex].subSteps[0].condition.met = true;
-
-    useSpaceshipStore.getState().checkNavigationalDeviation();
-    s = useSpaceshipStore.getState();
-    expect(s.activeSubStepIndex).toBe(0); // should NOT advance without thrust
+    const s = useSpaceshipStore.getState();
+    expect(s.thrustMagnitude).toBe(0);
+    expect(s.gear).toBe('N');
+    expect(s.thrust[0]).toBe(0);
   });
 
-  it('wait_window should complete when window ready AND thrust engaged', () => {
-    useSpaceshipStore.getState().setTargetBody('mars');
-    let s = useSpaceshipStore.getState();
-    const plan = s.navigationPlan!;
-    const phase = plan.phases[s.activePhaseIndex];
-    phase.subSteps = [
-      makeSubStep('wait', 'wait_window', phase.index, 0),
-      makeSubStep('next', 'coast_transfer', phase.index, 1),
-    ];
-    useSpaceshipStore.setState({ navigationPlan: { ...plan, phases: plan.phases }, activeSubStepIndex: 0, thrustMagnitude: 50, windowReady: true });
-    s = useSpaceshipStore.getState();
-    // Force condition.met = true so the only gating factor is thrustMagnitude
-    s.navigationPlan!.phases[s.activePhaseIndex].subSteps[0].condition.met = true;
-
-    // Override checkWindowReady by directly simulating window being ready
-    // We need checkWindowReady to return true; thrust is already > 0
-    // The checkNavigationalDeviation calls checkWindowReady which returns real orbital data
-    // For this test, we inject a mock by pre-setting state properly
-    // Since checkWindowReady may return false for arbitrary positions, we need to simulate
-    // by directly calling the store's logic with pre-set windowReady + thrust
-    useSpaceshipStore.setState({ windowReady: true, thrustMagnitude: 50 });
-
-    // Now the actual checkWindowReady will be called, but we can't control its output
-    // Instead, we test the sub-step completion via direct checkSubStepCompletion
-    // which is already tested in navigation.test.ts
-    // This test verifies the store integration: when window IS ready and thrust > 0,
-    // the sub-step advances.
-    // We skip this integration test for now since it depends on orbital positions
-    // and instead rely on the engine-level tests for checkSubStepCompletion.
-    expect(1).toBe(1); // placeholder for store integration coverage
-  });
-
-  it('timeJump should update position, velocity, direction, and simulatedTime', () => {
+  it('timeJump should update position, velocity, and simulatedTime', () => {
     useSpaceshipStore.getState().reset();
     const posBefore = [...useSpaceshipStore.getState().position];
     const timeBefore = useSpaceshipStore.getState().simulatedTime;
@@ -237,35 +192,15 @@ describe('spaceshipStore navigation lifecycle', () => {
     expect(s.simulatedTime).toBe(timeBefore);
   });
 
-  it('merge should preserve completed sub-steps after regeneration', () => {
+  it('replanNavigation should generate new plan and keep phase index close', () => {
     useSpaceshipStore.getState().setTargetBody('mars');
-    let s = useSpaceshipStore.getState();
-    const plan = s.navigationPlan!;
-    // Phase 0 is always '等待发射窗口', pick phase 1 (burn maneuver phase)
-    expect(plan.phases.length).toBeGreaterThanOrEqual(5);
-    const burnPhase = plan.phases[1];
-    const burnPhaseIdx = 1;
-    // Inject test sub-steps
-    burnPhase.subSteps = [
-      makeSubStep('orient', 'orient_prograde', burnPhaseIdx, 0),
-      makeSubStep('burn', 'burn_prograde', burnPhaseIdx, 1, {
-        action: { thrustDirection: 'forward', thrustMagnitude: 100, attitudeMode: 'prograde',
-          targetSemiMajorAxisAU: 2.0, description: '', completionCriteria: '' },
-      }),
-    ];
-    useSpaceshipStore.setState({
-      navigationPlan: { ...plan, phases: [...plan.phases] },
-      activePhaseIndex: burnPhaseIdx,
-      activeSubStepIndex: 0,
-      attitudeMode: 'prograde',
-    });
+    const s = useSpaceshipStore.getState();
+    expect(s.navigationPlan).not.toBeNull();
+    const oldPhaseIdx = s.activePhaseIndex;
 
-    // orient should complete
-    useSpaceshipStore.getState().checkNavigationalDeviation();
-    s = useSpaceshipStore.getState();
-    // Remaining regenerated by generatePhaseNextSubSteps
-    const updatedPhase = s.navigationPlan!.phases[burnPhaseIdx];
-    expect(updatedPhase.subSteps[0].status).toBe('completed');
-    expect(updatedPhase.subSteps[1].type).toMatch(/^burn_/);
+    useSpaceshipStore.getState().replanNavigation();
+    const s2 = useSpaceshipStore.getState();
+    expect(s2.navigationPlan).not.toBeNull();
+    expect(s2.activePhaseIndex).toBeLessThanOrEqual(oldPhaseIdx + 1);
   });
 });

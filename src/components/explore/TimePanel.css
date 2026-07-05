@@ -6,7 +6,7 @@
   display: flex;
   gap: 18px;
   align-items: center;
-  background: rgba(5, 10, 30, 0.85);
+  background: rgba(5, 10, 30, 0.55);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border-radius: 8px;
@@ -17,9 +17,9 @@
 
 .time-panel-left {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 2px;
+  gap: 10px;
   flex-shrink: 0;
 }
 
@@ -27,6 +27,7 @@
   font-size: 16px;
   color: #aaccee;
   letter-spacing: 1px;
+  white-space: nowrap;
 }
 
 .time-panel-time {
@@ -34,6 +35,7 @@
   font-weight: 600;
   color: #ffffff;
   letter-spacing: 2px;
+  white-space: nowrap;
 }
 
 .time-panel-right {
@@ -114,7 +116,6 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-top: 6px;
   padding: 3px 10px;
   background: rgba(68, 136, 255, 0.1);
   border: 1px solid rgba(68, 136, 255, 0.25);

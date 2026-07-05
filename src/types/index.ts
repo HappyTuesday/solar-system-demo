@@ -110,7 +110,14 @@ export interface UIState {
 
 // --- Spaceship State ---
 
-export type AttitudeMode = 'inertial' | 'prograde' | 'nadir' | 'target';
+export type AttitudeMode =
+  | 'inertial'
+  | 'prograde'
+  | 'heliocentric-tangential-prograde'
+  | 'heliocentric-prograde'
+  | 'heliocentric-retrograde'
+  | 'nadir'
+  | 'target';
 
 export interface SpaceshipState {
   position: [number, number, number];

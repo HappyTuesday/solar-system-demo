@@ -75,10 +75,9 @@ describe('spaceship', () => {
       const ship = makeShip(1.0, 0, 0, 0, 0, 0);
       ship.thrust = [1e-10, 0, 0];
       const acc = computeSpaceshipAcceleration(ship, [makeSun()]);
-      const thrustAccel = 1e-10 / SPACECRAFT_CONFIG.mass;
-      // The x acceleration should be gravity + thrust
+      // The x acceleration should be gravity + thrust (thrust is already acceleration)
       const gravityOnly = -MU_SUN_AU / (1 * 1);
-      expect(acc[0]).toBeCloseTo(gravityOnly + thrustAccel, EPSILON);
+      expect(acc[0]).toBeCloseTo(gravityOnly + 1e-10, EPSILON);
     });
   });
 

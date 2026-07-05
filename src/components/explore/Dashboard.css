@@ -49,7 +49,9 @@
 /* ---- Thrust slider ---- */
 .dashboard-thrust-row {
   position: relative;
-  height: 22px;
+  height: 14px;
+  flex: 1;
+  min-width: 0;
 }
 
 .dashboard-thrust-track {
@@ -103,6 +105,77 @@
   color: #445566;
   text-align: center;
   margin-top: -4px;
+}
+
+/* ---- Thrust + Gear row ---- */
+.dashboard-thrust-gear-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dashboard-gear-separator {
+  width: 0;
+  height: 18px;
+  border-left: 1px solid rgba(0, 180, 255, 0.15);
+  flex-shrink: 0;
+}
+
+.dashboard-gear-buttons {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.dashboard-gear-btn {
+  width: 28px;
+  height: 24px;
+  font-size: 10px;
+  background: rgba(0, 180, 255, 0.06);
+  border: 1px solid rgba(0, 180, 255, 0.1);
+  border-radius: 2px;
+  font-family: inherit;
+  font-size: 8px;
+  font-weight: bold;
+  color: #556677;
+  cursor: pointer;
+  user-select: none;
+  padding: 0;
+  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dashboard-gear-btn:hover {
+  background: rgba(0, 180, 255, 0.15);
+  color: #8899bb;
+}
+
+.dashboard-gear-btn.gear-d.active {
+  background: rgba(0, 255, 128, 0.15);
+  border-color: rgba(0, 255, 128, 0.25);
+  color: #00ff88;
+}
+
+.dashboard-gear-btn.gear-n.active {
+  background: rgba(255, 200, 0, 0.12);
+  border-color: rgba(255, 200, 0, 0.2);
+  color: #ffcc00;
+}
+
+.dashboard-gear-btn.gear-r.active {
+  background: rgba(255, 80, 50, 0.15);
+  border-color: rgba(255, 80, 50, 0.25);
+  color: #ff5535;
+}
+
+.gear-indicator {
+  color: #88ccff;
+}
+
+.gear-indicator.reverse {
+  color: #ff5535;
 }
 
 /* ---- Control pads (3x3 grids) ---- */

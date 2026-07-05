@@ -21,10 +21,12 @@ function Dashboard() {
   const direction = useSpaceshipStore(s => s.direction);
   const thrustMagnitude = useSpaceshipStore(s => s.thrustMagnitude);
   const exploded = useSpaceshipStore(s => s.exploded);
+  const gear = useSpaceshipStore(s => s.gear);
   const setForwardThrust = useSpaceshipStore(s => s.setForwardThrust);
   const setLateralThrust = useSpaceshipStore(s => s.setLateralThrust);
   const setVerticalThrust = useSpaceshipStore(s => s.setVerticalThrust);
   const setThrustMagnitude = useSpaceshipStore(s => s.setThrustMagnitude);
+  const setGear = useSpaceshipStore(s => s.setGear);
   const yaw = useSpaceshipStore(s => s.yaw);
   const pitch = useSpaceshipStore(s => s.pitch);
   const setDirection = useSpaceshipStore(s => s.setDirection);
@@ -35,10 +37,7 @@ function Dashboard() {
   const setTargetBody = useSpaceshipStore(s => s.setTargetBody);
   const navigationPlan = useSpaceshipStore(s => s.navigationPlan);
   const activePhaseIndex = useSpaceshipStore(s => s.activePhaseIndex);
-  const activeSubStepIndex = useSpaceshipStore(s => s.activeSubStepIndex);
   const deviationWarning = useSpaceshipStore(s => s.deviationWarning);
-  const windowReady = useSpaceshipStore(s => s.windowReady);
-  const windowRemainingDays = useSpaceshipStore(s => s.windowRemainingDays);
   const [showTargetModal, setShowTargetModal] = useState(false);
 
   const sliderTrackRef = useRef<HTMLDivElement>(null);
@@ -51,7 +50,14 @@ function Dashboard() {
     const x = clientX - rect.left;
     const pct = Math.max(0, Math.min(100, Math.round((x / rect.width) * 100)));
     setThrustMagnitude(pct);
-    setForwardThrust(pct > 0 ? 1 : 0);
+    const currentGear = useSpaceshipStore.getState().gear;
+    if (currentGear === 'N') {
+      setForwardThrust(0);
+    } else if (currentGear === 'R') {
+      setForwardThrust(pct > 0 ? -1 : 0);
+    } else {
+      setForwardThrust(pct > 0 ? 1 : 0);
+    }
   }, [setThrustMagnitude, setForwardThrust]);
 
   const handleTrackMouseDown = useCallback((e: React.MouseEvent) => {
@@ -119,17 +125,35 @@ function Dashboard() {
             <div className="dashboard-column">
               <div className="dashboard-column-title">飞行控制</div>
 
-              <div className="dashboard-thrust-row" ref={sliderTrackRef}
-                onMouseDown={handleTrackMouseDown}
-                onTouchStart={handleTrackTouchStart}>
-                <div className="dashboard-thrust-track" />
-                <div className="dashboard-thrust-fill" style={{ width: `${thrustMagnitude}%` }} />
-                <div className="dashboard-thrust-thumb" style={{ left: `${thrustMagnitude}%` }} />
-                <div className="dashboard-thrust-labels">
-                  <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+              <div className="dashboard-thrust-gear-row">
+                <div className="dashboard-thrust-row" ref={sliderTrackRef}
+                  onMouseDown={handleTrackMouseDown}
+                  onTouchStart={handleTrackTouchStart}>
+                  <div className="dashboard-thrust-track" />
+                  <div className="dashboard-thrust-fill" style={{ width: `${thrustMagnitude}%` }} />
+                  <div className="dashboard-thrust-thumb" style={{ left: `${thrustMagnitude}%` }} />
+                  <div className="dashboard-thrust-labels">
+                    <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+                  </div>
+                </div>
+                <div className="dashboard-gear-separator" />
+                <div className="dashboard-gear-buttons">
+                  <button className={`dashboard-gear-btn gear-d${gear === 'D' ? ' active' : ''}`}
+                    onMouseDown={(e) => { e.preventDefault(); setGear('D'); }}
+                  >D</button>
+                  <button className={`dashboard-gear-btn gear-n${gear === 'N' ? ' active' : ''}`}
+                    onMouseDown={(e) => { e.preventDefault(); setGear('N'); }}
+                  >N</button>
+                  <button className={`dashboard-gear-btn gear-r${gear === 'R' ? ' active' : ''}`}
+                    onMouseDown={(e) => { e.preventDefault(); setGear('R'); }}
+                  >R</button>
                 </div>
               </div>
-              <div className="dashboard-thrust-value">推力 {thrustMagnitude} MN</div>
+              <div className="dashboard-thrust-value">
+                推力 {thrustMagnitude} MN
+                {gear === 'N' && <span className="gear-indicator"> [N]</span>}
+                {gear === 'R' && <span className="gear-indicator reverse"> [R]</span>}
+              </div>
 
               <div className="dashboard-pads-row">
                 <div className="dashboard-pad-group">
@@ -250,17 +274,12 @@ function Dashboard() {
                           </div>
                           <div className="dashboard-nav-phase-detail">
                             {phase.name.startsWith('等待')
-                                ? (windowReady
-                                    ? '已进入发射窗口期 · 请点火'
-                                    : `预计等待约 ${formatWaitDays(windowRemainingDays > 0 ? windowRemainingDays : (phase.expectedWaitDays ?? 0))}`)
+                                ? (phase.expectedWaitDays != null
+                                    ? `预计等待约 ${formatWaitDays(phase.expectedWaitDays)}`
+                                    : '等待发射窗口')
                                 : phase.thrustDirection === 'none'
                                   ? '无推力 · 等待转移'
                                   : `推力 ${phase.thrustDirection === 'forward' ? '↑' : '↓'}${phase.thrustMagnitude}MN · Δv ${phase.deltaV.toFixed(3)} AU/s`}
-                            {status === 'active' && phase.subSteps.length > 0 && (
-                              <span className="dashboard-nav-substep-count">
-                                {' · 子步骤 ' + (activeSubStepIndex + 1) + '/' + phase.subSteps.length}
-                              </span>
-                            )}
                           </div>
                         </div>
                       </div>

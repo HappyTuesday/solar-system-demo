@@ -69,8 +69,8 @@ export default function TimePanel() {
   return (
     <div className="time-panel">
       <div className="time-panel-left">
-        <div className="time-panel-date">{formatDate(simulatedTime)}</div>
-        <div className="time-panel-time">{formatTime(simulatedTime)}</div>
+        <span className="time-panel-date">{formatDate(simulatedTime)}</span>
+        <span className="time-panel-time">{formatTime(simulatedTime)}</span>
         {canTimeJump && (
           <button className="time-panel-jump-btn" onClick={() => setShowJumpPanel(v => !v)}>
             <span className="time-panel-jump-icon">⏱</span>

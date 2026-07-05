@@ -2,40 +2,34 @@
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 8px;
+  margin-top: 6px;
   z-index: 30;
-  background: rgba(5, 10, 30, 0.95);
+  background: rgba(5, 10, 30, 0.65);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(68, 136, 255, 0.25);
   border-radius: 8px;
-  padding: 16px 18px;
-  min-width: 260px;
+  padding: 10px 12px;
+  min-width: 220px;
   font-family: 'Courier New', monospace;
   user-select: none;
 }
 
-.time-jump-panel-title {
-  font-size: 12px;
-  color: #8af;
-  margin-bottom: 10px;
-}
-
 .time-jump-row {
   display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 5px;
   align-items: center;
 }
 
 .time-jump-btn {
   flex: 1;
-  padding: 8px 0;
+  padding: 5px 0;
   background: rgba(68, 136, 255, 0.12);
   border: 1px solid rgba(68, 136, 255, 0.2);
-  border-radius: 5px;
+  border-radius: 4px;
   color: #aaccee;
-  font-size: 12px;
+  font-size: 11px;
   font-family: 'Courier New', monospace;
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s;
@@ -48,73 +42,14 @@
   color: #ddeeff;
 }
 
-.time-jump-divider {
-  border: none;
-  border-top: 1px solid rgba(68, 136, 255, 0.15);
-  margin: 10px 0;
-}
-
-.time-jump-custom-label {
-  font-size: 10px;
-  color: #667;
-  margin-bottom: 6px;
-}
-
-.time-jump-custom-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.time-jump-custom-input {
-  width: 50px;
-  padding: 5px 6px;
-  background: #112233;
-  border: 1px solid #334;
-  border-radius: 4px;
-  color: #ccf;
-  font-size: 12px;
-  font-family: 'Courier New', monospace;
-  text-align: center;
-  outline: none;
-}
-
-.time-jump-custom-input:focus {
-  border-color: #4488ff;
-}
-
-.time-jump-custom-text {
-  font-size: 12px;
-  color: #889;
-  flex-shrink: 0;
-}
-
-.time-jump-custom-go {
-  padding: 5px 12px;
-  background: rgba(68, 136, 255, 0.15);
-  border: 1px solid rgba(68, 136, 255, 0.25);
-  border-radius: 4px;
-  color: #aaccee;
-  font-size: 12px;
-  font-family: 'Courier New', monospace;
-  cursor: pointer;
-  margin-left: auto;
-}
-
-.time-jump-custom-go:hover {
-  background: rgba(68, 136, 255, 0.3);
-  color: #ddeeff;
-}
-
 .time-jump-today {
   width: 100%;
-  padding: 8px 0;
+  padding: 5px 0;
   background: #4488ff;
   border: none;
-  border-radius: 5px;
+  border-radius: 4px;
   color: #fff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   font-family: 'Courier New', monospace;
   cursor: pointer;
@@ -123,17 +58,4 @@
 
 .time-jump-today:hover {
   background: #5599ff;
-}
-
-.time-jump-close {
-  display: block;
-  text-align: center;
-  font-size: 10px;
-  color: #445566;
-  margin-top: 8px;
-  cursor: pointer;
-}
-
-.time-jump-close:hover {
-  color: #8899bb;
 }

@@ -1,0 +1,123 @@
+- generic [ref=e2]:
+  - navigation [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: ☀
+      - generic [ref=e6]: 太阳系探索
+    - list [ref=e7]:
+      - listitem [ref=e8]:
+        - link "首页" [ref=e9] [cursor=pointer]:
+          - /url: /
+      - listitem [ref=e10]:
+        - link "搭建太阳系" [ref=e11] [cursor=pointer]:
+          - /url: /builder
+      - listitem [ref=e12]:
+        - link "探索太阳系" [ref=e13] [cursor=pointer]:
+          - /url: /explore
+      - listitem [ref=e14]:
+        - link "探索地月系统" [ref=e15] [cursor=pointer]:
+          - /url: /earth-moon
+      - listitem [ref=e16]:
+        - link "关于" [ref=e17] [cursor=pointer]:
+          - /url: /about
+  - generic [ref=e18]:
+    - generic [ref=e20]:
+      - generic [ref=e22]: 后视镜
+      - generic [ref=e25]: 左
+      - generic [ref=e28]: 右
+      - generic [ref=e30]:
+        - generic [ref=e31]:
+          - generic [ref=e32]: 2031-12-31
+          - generic [ref=e33]: 03:19:25
+          - button "⏱ 跳转到" [ref=e101] [cursor=pointer]:
+            - generic [ref=e102]: ⏱
+            - generic [ref=e103]: 跳转到
+        - generic [ref=e37]:
+          - generic [ref=e38]: 1 秒 ≈ 1.2 模拟天
+          - slider [ref=e39] [cursor=pointer]: "5"
+          - generic [ref=e40]:
+            - generic [ref=e41] [cursor=pointer]: "1"
+            - generic [ref=e42] [cursor=pointer]: "10"
+            - generic [ref=e43] [cursor=pointer]: "100"
+            - generic [ref=e44] [cursor=pointer]: "1000"
+            - generic [ref=e45] [cursor=pointer]: "10000"
+            - generic [ref=e46] [cursor=pointer]: "100000"
+            - generic [ref=e47] [cursor=pointer]: "1000000"
+    - generic:
+      - generic:
+        - generic:
+          - text: X 0.2472 Y 1.8712 Z -0.0000 速度
+          - generic: 26 km/s
+          - text: 有效速度
+          - generic: 3 km/s
+          - text: 推力
+          - generic: 0 MN
+          - generic: 距地球
+          - text: 1.887 AU
+          - generic: 距火星
+          - text: 2.060 AU 黄道面
+          - generic: 471 km
+    - generic [ref=e51]:
+      - generic [ref=e52]:
+        - generic [ref=e53]: 飞行控制
+        - generic [ref=e56]:
+          - generic [ref=e57]: "0"
+          - generic [ref=e58]: "25"
+          - generic [ref=e59]: "50"
+          - generic [ref=e60]: "75"
+          - generic [ref=e61]: "100"
+        - generic [ref=e62]: 推力 0 MN
+        - generic [ref=e63]:
+          - generic [ref=e64]:
+            - generic [ref=e65]: 姿态调整
+            - generic [ref=e66]:
+              - button "▲" [ref=e68] [cursor=pointer]
+              - button "◀" [ref=e70] [cursor=pointer]
+              - button "⇄" [ref=e71] [cursor=pointer]
+              - button "▶" [ref=e72] [cursor=pointer]
+              - button "▼" [ref=e74] [cursor=pointer]
+          - generic [ref=e76]:
+            - generic [ref=e77]: 平移推力
+            - generic [ref=e78]:
+              - button "▲" [ref=e80] [cursor=pointer]
+              - button "◀" [ref=e82] [cursor=pointer]
+              - button "▶" [ref=e84] [cursor=pointer]
+              - button "▼" [ref=e86] [cursor=pointer]
+        - generic [ref=e88]:
+          - button "惯性保持" [ref=e89] [cursor=pointer]
+          - button "顺向保持" [ref=e90] [cursor=pointer]
+          - button "指向火星" [ref=e104] [cursor=pointer]
+      - generic [ref=e92]:
+        - generic [ref=e93]: 导航路线
+        - generic [ref=e94] [cursor=pointer]: 目的地：火星（修改）
+        - generic [ref=e105]:
+          - generic [ref=e106]:
+            - generic [ref=e107]: ✓
+            - generic [ref=e108]:
+              - generic [ref=e109]: 阶段1：提升远日点
+              - generic [ref=e110]: 推力 ↑100MN · Δv 0.000 AU/s
+          - generic [ref=e111]:
+            - generic [ref=e112]: →
+            - generic [ref=e113]:
+              - generic [ref=e114]: 阶段2：转移轨道滑行
+              - generic [ref=e115]: 无推力 · 等待转移 · 子步骤 1/1
+          - generic [ref=e116]:
+            - generic [ref=e117]: ○
+            - generic [ref=e118]:
+              - generic [ref=e119]: 阶段3：目标捕获制动
+              - generic [ref=e120]: 推力 ↓100MN · Δv 0.000 AU/s
+          - generic [ref=e121]:
+            - generic [ref=e122]: ○
+            - generic [ref=e123]:
+              - generic [ref=e124]: 阶段4：绕飞圆化
+              - generic [ref=e125]: 推力 ↑50MN · Δv 0.000 AU/s
+      - generic [ref=e97]: 导航地图
+    - generic:
+      - generic: 阶段2：转移轨道滑行 操作指引
+      - generic:
+        - generic: →
+        - generic:
+          - generic: 关闭推力，沿转移椭圆轨道惯性滑行
+          - generic:
+            - generic: 无需任何操作
+            - generic: 耐心等待约半个转移周期
+          - generic: ✓ 沿转移轨道惯性滑行（当前满足）

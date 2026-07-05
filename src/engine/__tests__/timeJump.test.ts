@@ -8,7 +8,7 @@ import {
   jumpSpaceshipState,
   simulateToTime,
 } from '../timeJump';
-import { REAL_DATA, MU_SUN_AU, G_AU } from '../constants';
+import { REAL_DATA, MU_SUN_AU, G_AU, AU_TO_KM } from '../constants';
 import { computeBodyState } from '../navigation';
 import { type BodyInfo } from '../spaceship';
 
@@ -239,6 +239,45 @@ describe('jumpSpaceshipState', () => {
         jumped.direction[2] * jumped.velocity[2] / vMag
       );
       expect(dirDot).toBeCloseTo(1, 10);
+    }
+  });
+
+  it('should numerically jump Earth escape trajectories without producing NaN state', () => {
+    const earthState = computeBodyState('earth', julianDate(J2000));
+    expect(earthState).not.toBeNull();
+    if (!earthState) return;
+
+    const earthSpeed = Math.sqrt(
+      earthState.velocity[0] ** 2 + earthState.velocity[1] ** 2 + earthState.velocity[2] ** 2,
+    );
+    const earthPrograde: [number, number, number] = [
+      earthState.velocity[0] / earthSpeed,
+      earthState.velocity[1] / earthSpeed,
+      earthState.velocity[2] / earthSpeed,
+    ];
+    const radial: [number, number, number] = [-earthPrograde[1], earthPrograde[0], 0];
+    const parkingRadius = REAL_DATA.earth.radius + 400 / AU_TO_KM;
+    const escapeSpeed = 12.5 / AU_TO_KM;
+    const ship: SpaceshipState = {
+      position: [
+        earthState.position[0] + radial[0] * parkingRadius,
+        earthState.position[1] + radial[1] * parkingRadius,
+        earthState.position[2],
+      ],
+      velocity: [
+        earthState.velocity[0] + earthPrograde[0] * escapeSpeed,
+        earthState.velocity[1] + earthPrograde[1] * escapeSpeed,
+        earthState.velocity[2] + earthPrograde[2] * escapeSpeed,
+      ],
+      direction: earthPrograde,
+      thrust: [0, 0, 0],
+      thrustMagnitude: 0,
+      exploded: false,
+    };
+
+    const jumped = jumpSpaceshipState(ship, 'earth', J2000, J2000 + 30 * 86400000);
+    for (const value of [...jumped.position, ...jumped.velocity, ...jumped.direction]) {
+      expect(Number.isFinite(value)).toBe(true);
     }
   });
 });

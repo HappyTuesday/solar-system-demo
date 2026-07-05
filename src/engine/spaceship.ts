@@ -75,9 +75,9 @@ export function computeSpaceshipAcceleration(
   }
 
   const thrustWorld = spaceship.thrust;
-  ax += thrustWorld[0] / SPACECRAFT_CONFIG.mass;
-  ay += thrustWorld[1] / SPACECRAFT_CONFIG.mass;
-  az += thrustWorld[2] / SPACECRAFT_CONFIG.mass;
+  ax += thrustWorld[0];
+  ay += thrustWorld[1];
+  az += thrustWorld[2];
 
   return [ax, ay, az];
 }

@@ -4,7 +4,6 @@ import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { REAL_DATA, MU_SUN_AU as MU_SUN, AU_TO_KM } from '../../engine/constants';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
 import { predictTrajectory, applyThrustInBodyFrame, type BodyInfo } from '../../engine/spaceship';
-import { getSubStepTargetOrbit } from '../../engine/navigation';
 import type { SpaceshipState } from '../../types';
 
 const NORMAL_W = 212;
@@ -601,23 +600,16 @@ function MiniMap() {
         const expectedActivePhaseIdx = useSpaceshipStore.getState().activePhaseIndex;
         if (expectedActivePhaseIdx >= 0 && expectedActivePhaseIdx < navPlanExpected.phases.length) {
           const expectedPhase = navPlanExpected.phases[expectedActivePhaseIdx];
-          const expectedSSIdx = useSpaceshipStore.getState().activeSubStepIndex;
-          if (expectedSSIdx >= 0 && expectedSSIdx < expectedPhase.subSteps.length) {
-            const activeSS = expectedPhase.subSteps[expectedSSIdx];
-            const aTarget = REAL_DATA[navPlanExpected.destinationId]?.semiMajorAxis ?? 0;
-            if (aTarget > 0) {
-              const aTransfer = (expectedPhase.targetOrbit.semiMajorAxis + aTarget) / 2;
-              const destEcc = REAL_DATA[navPlanExpected.destinationId]?.orbital?.eccentricity ?? 0;
-              const expectedOrbit = getSubStepTargetOrbit(activeSS, aTransfer, aTarget, destEcc);
-              if (expectedOrbit) {
-                const expAPx = expectedOrbit.semiMajorAxis * scale;
-                if (expAPx > 0.5 && expAPx < usable * 5) {
+          const aTarget = REAL_DATA[navPlanExpected.destinationId]?.semiMajorAxis ?? 0;
+          if (aTarget > 0) {
+            const expAPx = expectedPhase.targetOrbit.semiMajorAxis * scale;
+            if (expAPx > 0.5 && expAPx < usable * 5) {
                   ctx.save();
                   ctx.strokeStyle = 'rgba(68, 136, 255, 0.5)';
                   ctx.lineWidth = 1;
                   ctx.setLineDash([4, 3]);
                   ctx.beginPath();
-                  const bExp = expAPx * Math.sqrt(1 - expectedOrbit.eccentricity * expectedOrbit.eccentricity);
+                  const bExp = expAPx * Math.sqrt(1 - expectedPhase.targetOrbit.eccentricity * expectedPhase.targetOrbit.eccentricity);
                   for (let i = 0; i <= 128; i++) {
                     const angle = (i / 128) * Math.PI * 2;
                     const ox = cx + Math.cos(angle) * expAPx;
@@ -628,10 +620,8 @@ function MiniMap() {
                   ctx.stroke();
                   ctx.setLineDash([]);
                   ctx.restore();
-                }
               }
             }
-          }
         }
       }
 

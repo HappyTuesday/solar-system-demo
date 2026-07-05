@@ -1,0 +1,102 @@
+- generic [ref=f18e2]:
+  - navigation [ref=f18e3]:
+    - generic [ref=f18e4]:
+      - generic [ref=f18e5]: ☀
+      - generic [ref=f18e6]: 太阳系探索
+    - list [ref=f18e7]:
+      - listitem [ref=f18e8]:
+        - link "首页" [ref=f18e9] [cursor=pointer]:
+          - /url: /
+      - listitem [ref=f18e10]:
+        - link "搭建太阳系" [ref=f18e11] [cursor=pointer]:
+          - /url: /builder
+      - listitem [ref=f18e12]:
+        - link "探索太阳系" [ref=f18e13] [cursor=pointer]:
+          - /url: /explore
+      - listitem [ref=f18e14]:
+        - link "探索地月系统" [ref=f18e15] [cursor=pointer]:
+          - /url: /earth-moon
+      - listitem [ref=f18e16]:
+        - link "关于" [ref=f18e17] [cursor=pointer]:
+          - /url: /about
+  - generic [ref=f18e18]:
+    - generic [ref=f18e20]:
+      - generic [ref=f18e22]: 后视镜
+      - generic [ref=f18e25]: 左
+      - generic [ref=f18e28]: 右
+      - generic [ref=f18e30]:
+        - generic [ref=f18e31]:
+          - generic [ref=f18e32]: 2026-07-01
+          - generic [ref=f18e33]: 06:32:45
+          - button "⏱ 跳转到" [ref=f18e34] [cursor=pointer]:
+            - generic [ref=f18e35]: ⏱
+            - generic [ref=f18e36]: 跳转到
+        - generic [ref=f18e37]:
+          - generic [ref=f18e38]: 1 秒 ≈ 1.7 模拟分
+          - slider [ref=f18e39] [cursor=pointer]: "2"
+          - generic [ref=f18e40]:
+            - generic [ref=f18e41] [cursor=pointer]: "1"
+            - generic [ref=f18e42] [cursor=pointer]: "10"
+            - generic [ref=f18e43] [cursor=pointer]: "100"
+            - generic [ref=f18e44] [cursor=pointer]: "1000"
+            - generic [ref=f18e45] [cursor=pointer]: "10000"
+            - generic [ref=f18e46] [cursor=pointer]: "100000"
+            - generic [ref=f18e47] [cursor=pointer]: "1000000"
+    - generic:
+      - generic:
+        - generic:
+          - text: 绕飞 · 地球 相位
+          - generic: 261.4°
+          - text: 高度
+          - generic: 400 km
+          - text: 速度
+          - generic: 7.67 km/s
+          - text: 角速度
+          - generic: 0.0649 °/s
+          - text: 周期
+          - generic: 92.4 min
+          - text: 船身夹角
+          - generic: 0.0°
+        - generic:
+          - text: X 0.1754 Y -1.0015 Z 0.0000 速度
+          - generic: 31 km/s
+          - text: 有效速度
+          - generic: 12 km/s
+          - text: 推力
+          - generic: 0 MN
+          - generic: 距地球
+          - text: 6771 km 黄道面
+          - generic: 0 km
+    - generic [ref=f18e51]:
+      - generic [ref=f18e52]:
+        - generic [ref=f18e53]: 飞行控制
+        - generic [ref=f18e56]:
+          - generic [ref=f18e57]: "0"
+          - generic [ref=f18e58]: "25"
+          - generic [ref=f18e59]: "50"
+          - generic [ref=f18e60]: "75"
+          - generic [ref=f18e61]: "100"
+        - generic [ref=f18e62]: 推力 0 MN
+        - generic [ref=f18e63]:
+          - generic [ref=f18e64]:
+            - generic [ref=f18e65]: 姿态调整
+            - generic [ref=f18e66]:
+              - button "▲" [ref=f18e68] [cursor=pointer]
+              - button "◀" [ref=f18e70] [cursor=pointer]
+              - button "⇄" [ref=f18e71] [cursor=pointer]
+              - button "▶" [ref=f18e72] [cursor=pointer]
+              - button "▼" [ref=f18e74] [cursor=pointer]
+          - generic [ref=f18e76]:
+            - generic [ref=f18e77]: 平移推力
+            - generic [ref=f18e78]:
+              - button "▲" [ref=f18e80] [cursor=pointer]
+              - button "◀" [ref=f18e82] [cursor=pointer]
+              - button "▶" [ref=f18e84] [cursor=pointer]
+              - button "▼" [ref=f18e86] [cursor=pointer]
+        - generic [ref=f18e88]:
+          - button "惯性保持" [ref=f18e89] [cursor=pointer]
+          - button "顺向保持" [ref=f18e90] [cursor=pointer]
+      - generic [ref=f18e92]:
+        - generic [ref=f18e93]: 导航路线
+        - generic [ref=f18e94] [cursor=pointer]: 前往目的地
+      - generic [ref=f18e97]: 导航地图

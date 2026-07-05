@@ -169,6 +169,79 @@ function computeBodyStateAtJd(templateId: string, jd: number): { position: [numb
   );
 }
 
+function bodyInfosAtTime(timeMs: number): BodyInfo[] {
+  const states = computeAllBodyStates(julianDate(timeMs));
+  return Object.entries(states).map(([id, state]) => {
+    const data = REAL_DATA[id];
+    return {
+      id,
+      position: [state.position[0], state.position[1], state.position[2]],
+      mass: data?.mass ?? REAL_DATA.sun.mass,
+      radius: data?.radius ?? REAL_DATA.sun.radius,
+    };
+  });
+}
+
+function directionFromVelocity(
+  velocity: [number, number, number],
+  fallback: [number, number, number],
+): [number, number, number] {
+  const speed = Math.sqrt(velocity[0] ** 2 + velocity[1] ** 2 + velocity[2] ** 2);
+  if (speed <= 0 || !Number.isFinite(speed)) return [...fallback];
+  return [velocity[0] / speed, velocity[1] / speed, velocity[2] / speed];
+}
+
+function allFinite(values: number[]): boolean {
+  return values.every(Number.isFinite);
+}
+
+function numericallyJumpSpaceshipState(
+  shipState: SpaceshipState,
+  currentTime: number,
+  targetTime: number,
+): SpaceshipState {
+  const totalDelta = (targetTime - currentTime) / 1000;
+  if (totalDelta === 0) {
+    return {
+      ...shipState,
+      position: [...shipState.position],
+      velocity: [...shipState.velocity],
+      direction: [...shipState.direction],
+    };
+  }
+
+  const maxStepSec = 1800;
+  const steps = Math.max(1, Math.ceil(Math.abs(totalDelta) / maxStepSec));
+  const dt = totalDelta / steps;
+  const simulated: SpaceshipState = {
+    ...shipState,
+    position: [...shipState.position],
+    velocity: [...shipState.velocity],
+    direction: [...shipState.direction],
+    thrust: shipState.thrust ? [shipState.thrust[0], shipState.thrust[1], shipState.thrust[2]] : [0, 0, 0],
+    thrustMagnitude: shipState.thrustMagnitude ?? 0,
+    exploded: shipState.exploded ?? false,
+  };
+
+  let elapsed = 0;
+  for (let i = 0; i < steps; i += 1) {
+    const stepStart = elapsed;
+    rk4StepSpaceshipWithMovingBodies(
+      simulated,
+      (offset: number) => bodyInfosAtTime(currentTime + (stepStart + offset) * 1000),
+      dt,
+    );
+    elapsed += dt;
+  }
+
+  return {
+    ...simulated,
+    position: [...simulated.position],
+    velocity: [...simulated.velocity],
+    direction: directionFromVelocity(simulated.velocity, shipState.direction),
+  };
+}
+
 export function jumpSpaceshipState(
   shipState: SpaceshipState,
   orbitingBodyId: string,
@@ -222,6 +295,15 @@ export function jumpSpaceshipState(
   }
 
   const elements = cartesianToKepler(relPos, relVel, muOrbit);
+  if (
+    !Number.isFinite(elements.semiMajorAxis)
+    || !Number.isFinite(elements.eccentricity)
+    || !Number.isFinite(elements.period)
+    || elements.semiMajorAxis <= 0
+    || elements.eccentricity >= 1
+  ) {
+    return numericallyJumpSpaceshipState(shipState, currentTime, targetTime);
+  }
   const period = elements.period;
 
   // Advance mean anomaly by time difference
@@ -259,11 +341,12 @@ export function jumpSpaceshipState(
     newRel.velocity[2] + bodyAtTarget.velocity[2],
   ];
 
+  if (!allFinite([...newPosition, ...newVelocity])) {
+    return numericallyJumpSpaceshipState(shipState, currentTime, targetTime);
+  }
+
   // Update direction vector to match new velocity
-  const vMag = Math.sqrt(newVelocity[0] ** 2 + newVelocity[1] ** 2 + newVelocity[2] ** 2);
-  const newDirection: [number, number, number] = vMag > 0
-    ? [newVelocity[0] / vMag, newVelocity[1] / vMag, newVelocity[2] / vMag]
-    : [...shipState.direction];
+  const newDirection = directionFromVelocity(newVelocity, shipState.direction);
 
   return {
     position: newPosition,

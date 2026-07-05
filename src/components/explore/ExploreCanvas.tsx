@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
-import { REAL_DATA, MU_SUN_AU as MU_SUN, AU_TO_KM } from '../../engine/constants';
+import { stateVectors } from '../../engine/orbital';
+import { REAL_DATA, MU_SUN_AU as MU_SUN } from '../../engine/constants';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { useExploreStore } from '../../stores/exploreStore';
-import { rk4StepSpaceship, applyThrustInBodyFrame, checkSpaceshipCollision, type BodyInfo } from '../../engine/spaceship';
+import { checkSpaceshipCollision } from '../../engine/spaceship';
 import { NAVIGATION_CONFIG } from '../../engine/constants';
-import type { SpaceshipState } from '../../types';
+import { advanceExploreShipPhysics } from '../../engine/exploreSimulation';
 import TimePanel from './TimePanel';
 
 const ORBIT_LINE_POINTS = 256;
@@ -24,27 +24,6 @@ const EXPLOSION_FLASH_INTENSITY = 25;
 const EXPLOSION_FLASH_DURATION = 0.8;
 const SHAKE_MAX_DURATION = 2.0;
 const SHAKE_INITIAL_AMPLITUDE = 0.003;
-
-function computeBodyPosition(templateId: string, jd: number): [number, number, number] | null {
-  const state = computeBodyState(templateId, jd);
-  return state ? state.position : null;
-}
-
-function computeBodyState(templateId: string, jd: number): { position: [number, number, number]; velocity: [number, number, number] } | null {
-  const data = REAL_DATA[templateId];
-  if (!data || !data.semiMajorAxis || !data.orbital || templateId === 'sun') return null;
-  const o = data.orbital;
-  const period = orbitalPeriod(data.semiMajorAxis, MU_SUN);
-  const M = meanAnomalyAtTime(o.meanAnomalyAtEpoch, period, o.epoch, jd);
-  const Mmod = ((M % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-  const E = solveKepler(Mmod, o.eccentricity);
-  const nu = trueAnomaly(E, o.eccentricity);
-  const sv = stateVectors(data.semiMajorAxis, o.eccentricity, o.inclination, o.longitudeAscendingNode, o.argumentOfPeriapsis, nu, MU_SUN);
-  return {
-    position: [sv.position[0], sv.position[1], sv.position[2]],
-    velocity: [sv.velocity[0], sv.velocity[1], sv.velocity[2]],
-  };
-}
 
 function createOrbitLine(templateId: string, color: number): THREE.Line {
   const data = REAL_DATA[templateId];
@@ -358,6 +337,7 @@ function ExploreCanvas() {
     const leftFrame = leftFrameRef.current;
     const rightFrame = rightFrameRef.current;
     if (!rearFrame || !leftFrame || !rightFrame) return;
+    const disposables = disposablesRef.current;
 
     const rect = container.getBoundingClientRect();
     const w = rect.width;
@@ -506,97 +486,54 @@ function ExploreCanvas() {
 
         simulatedTime = store.simulatedTime;
 
-        const worldThrust = applyThrustInBodyFrame(
-          store.thrust[0],
-          store.thrust[1],
-          store.thrust[2],
-          store.thrustMagnitude,
-          store.direction,
-        );
-
-        const shipState: SpaceshipState = {
-          position: store.position,
-          velocity: store.velocity,
-          direction: store.direction,
-          thrust: worldThrust,
-          thrustMagnitude: store.thrustMagnitude,
-          exploded: store.exploded,
-        };
-
         const timeScale = useExploreStore.getState().timeScale;
-        const simDelta = clampedDt * timeScale;
-        const steps = Math.min(Math.max(1, Math.floor(simDelta / 0.016)), 200);
-        const subDt = simDelta / steps;
+        const physics = advanceExploreShipPhysics({
+          ship: {
+            position: store.position,
+            velocity: store.velocity,
+            direction: store.direction,
+            thrust: store.thrust,
+            thrustMagnitude: store.thrustMagnitude,
+            exploded: store.exploded,
+          },
+          simulatedTime,
+          frameDt: clampedDt,
+          timeScale,
+          bodyIds: allIds,
+        });
+        const shipState = physics.ship;
+        store.updateFlightStats(physics.travelKm, physics.speedKms);
 
-        for (let s = 0; s < steps; s++) {
-          const subSimTime = simulatedTime + s * subDt * 1000;
-          const subJd = julianDate(subSimTime);
-
-          const bodyStates: { pos: [number, number, number]; vel: [number, number, number]; mass: number; radius: number }[] = [];
-          for (const id of allIds) {
-            const data = REAL_DATA[id];
-            if (id === 'sun') {
-              bodyStates.push({ pos: [0, 0, 0], vel: [0, 0, 0], mass: data.mass, radius: data.radius });
-            } else {
-              const state = computeBodyState(id, subJd);
-              if (state) {
-                bodyStates.push({ pos: state.position, vel: state.velocity, mass: data.mass, radius: data.radius });
-              }
-            }
-          }
-
-          const getBodies = (tOffset: number): BodyInfo[] => {
-            return bodyStates.map((b, bi) => ({
-              id: allIds[bi] ?? '',
-              position: [
-                b.pos[0] + b.vel[0] * tOffset,
-                b.pos[1] + b.vel[1] * tOffset,
-                b.pos[2] + b.vel[2] * tOffset,
-              ],
-              mass: b.mass,
-              radius: b.radius,
-            }));
-          };
-
-          rk4StepSpaceship(shipState, getBodies, subDt);
-        }
-
-        const speedKms = Math.sqrt(
-          shipState.velocity[0] ** 2 + shipState.velocity[1] ** 2 + shipState.velocity[2] ** 2,
-        ) * AU_TO_KM;
-        const travelKm = speedKms * simDelta;
-        store.updateFlightStats(travelKm, speedKms);
-
-        simulatedTime += simDelta * 1000;
+        simulatedTime = physics.simulatedTime;
         store.setSimulatedTime(simulatedTime);
 
         {
           const navStore = useSpaceshipStore.getState();
           const elapsed = (simulatedTime - navStore.lastDeviationCheckTime) / 1000;
-          if (elapsed > NAVIGATION_CONFIG.deviationCheckInterval) {
+          // Check every frame when thrust is active so burn sub-steps can
+          // auto-complete at the right moment without overshooting.
+          if (elapsed > NAVIGATION_CONFIG.deviationCheckInterval || navStore.thrustMagnitude > 0) {
             useSpaceshipStore.setState({ lastDeviationCheckTime: simulatedTime });
             navStore.checkNavigationalDeviation();
           }
         }
 
-        const finalJd = julianDate(simulatedTime);
+        const finalBodies = physics.finalBodies;
+        const finalBodyMap = new Map(finalBodies.map(body => [body.id, body]));
         const screenH = sizeRef.current.h || 800;
         const MIN_BODY_PX = 10;
 
         for (const id of allIds) {
           if (id === 'sun') continue;
           const mesh = bodyMeshes.get(id);
-          if (!mesh) continue;
           const data = REAL_DATA[id];
-          if (!data) continue;
-          const pos = computeBodyPosition(id, finalJd);
-          if (pos) {
-            mesh.position.set(pos[0], pos[1], pos[2]);
-            const dist = camera.position.distanceTo(mesh.position);
-            const bodyR = data.radius;
-            const pixelSize = screenH * bodyR / Math.max(dist, 1e-10);
-            mesh.scale.setScalar(pixelSize < MIN_BODY_PX ? MIN_BODY_PX / pixelSize : 1);
-          }
+          const body = finalBodyMap.get(id);
+          if (!mesh || !data || !body) continue;
+          mesh.position.set(body.position[0], body.position[1], body.position[2]);
+          const dist = camera.position.distanceTo(mesh.position);
+          const bodyR = data.radius;
+          const pixelSize = screenH * bodyR / Math.max(dist, 1e-10);
+          mesh.scale.setScalar(pixelSize < MIN_BODY_PX ? MIN_BODY_PX / pixelSize : 1);
         }
 
         const sunMesh = bodyMeshes.get('sun');
@@ -607,25 +544,12 @@ function ExploreCanvas() {
           sunMesh.scale.setScalar(sunPx < MIN_BODY_PX ? MIN_BODY_PX / sunPx : 1);
         }
 
-        const bodyInfos: BodyInfo[] = [];
-        for (const id of allIds) {
-          const mesh = bodyMeshes.get(id);
-          const data = REAL_DATA[id];
-          if (!mesh || !data) continue;
-          bodyInfos.push({
-            id,
-            position: [mesh.position.x, mesh.position.y, mesh.position.z],
-            mass: data.mass,
-            radius: data.radius,
-          });
-        }
-
-        const hitBodyId = checkSpaceshipCollision(shipState, bodyInfos);
+        const hitBodyId = checkSpaceshipCollision(shipState, finalBodies);
         if (hitBodyId) {
           wasExplodedRef.current = true;
           setEngineVolume(0);
           playExplosionSound();
-          const hitBody = bodyInfos.find(b => b.id === hitBodyId);
+          const hitBody = finalBodies.find(b => b.id === hitBodyId);
           store.setExploded(
             hitBodyId,
             [shipState.position[0], shipState.position[1], shipState.position[2]],
@@ -720,27 +644,20 @@ function ExploreCanvas() {
             let nearestId = 'sun';
             let orbitingId = 'sun';
             for (const id of allIds) {
-              if (!REAL_DATA[id]) continue;
-              if (id === 'sun') {
-                const dx = shipState.position[0], dy = shipState.position[1], dz = shipState.position[2];
-                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (dist < nearestDist) { nearestDist = dist; nearestId = 'sun'; }
-              } else {
-                const bs = computeBodyState(id, finalJd);
-                if (!bs) continue;
-                const dx = bs.position[0] - shipState.position[0];
-                const dy = bs.position[1] - shipState.position[1];
-                const dz = bs.position[2] - shipState.position[2];
-                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (dist < nearestDist) { nearestDist = dist; nearestId = id; }
+              const data = REAL_DATA[id];
+              const body = finalBodyMap.get(id);
+              if (!data || !body) continue;
+              const dx = body.position[0] - shipState.position[0];
+              const dy = body.position[1] - shipState.position[1];
+              const dz = body.position[2] - shipState.position[2];
+              const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+              if (dist < nearestDist) { nearestDist = dist; nearestId = id; }
 
-                // Hill sphere check for orbiting body
-                const data = REAL_DATA[id];
-                if (data?.semiMajorAxis) {
-                  const aBodyAU = data.semiMajorAxis;
-                  const hillR = aBodyAU * Math.pow(data.mass / (3 * REAL_DATA.sun.mass), 1 / 3);
-                  if (dist < hillR) orbitingId = id;
-                }
+              // Hill sphere check for orbiting body
+              if (id !== 'sun' && data.semiMajorAxis) {
+                const aBodyAU = data.semiMajorAxis;
+                const hillR = aBodyAU * Math.pow(data.mass / (3 * REAL_DATA.sun.mass), 1 / 3);
+                if (dist < hillR) orbitingId = id;
               }
             }
             store.setNearestBodyId(nearestId);
@@ -755,17 +672,14 @@ function ExploreCanvas() {
             let nearestVel: [number, number, number] = [0, 0, 0];
 
             for (const id of allIds) {
-              if (!REAL_DATA[id]) continue;
-              if (id === 'sun') {
-                const dx = spPos[0], dy = spPos[1], dz = spPos[2];
-                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (dist < nearestDist) { nearestDist = dist; nearestPos = [0, 0, 0]; nearestVel = [0, 0, 0]; }
-              } else {
-                const bs = computeBodyState(id, finalJd);
-                if (!bs) continue;
-                const dx = bs.position[0] - spPos[0], dy = bs.position[1] - spPos[1], dz = bs.position[2] - spPos[2];
-                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (dist < nearestDist) { nearestDist = dist; nearestPos = bs.position; nearestVel = bs.velocity; }
+              const body = finalBodyMap.get(id);
+              if (!body) continue;
+              const dx = body.position[0] - spPos[0], dy = body.position[1] - spPos[1], dz = body.position[2] - spPos[2];
+              const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+              if (dist < nearestDist) {
+                nearestDist = dist;
+                nearestPos = body.position;
+                nearestVel = body.velocity;
               }
             }
 
@@ -776,6 +690,22 @@ function ExploreCanvas() {
               const rv = Math.sqrt(rvx * rvx + rvy * rvy + rvz * rvz);
               if (rv > 1e-15) {
                 store.setDirection([rvx / rv, rvy / rv, rvz / rv]);
+              }
+            } else if (store.attitudeMode === 'heliocentric-tangential-prograde') {
+              const tangential = new THREE.Vector3(-spPos[1], spPos[0], 0);
+              const len = tangential.length();
+              if (len > 1e-15) {
+                store.setDirection([tangential.x / len, tangential.y / len, 0]);
+              }
+            } else if (store.attitudeMode === 'heliocentric-prograde' || store.attitudeMode === 'heliocentric-retrograde') {
+              const speed = Math.sqrt(spVel[0] * spVel[0] + spVel[1] * spVel[1] + spVel[2] * spVel[2]);
+              if (speed > 1e-15) {
+                const sign = store.attitudeMode === 'heliocentric-retrograde' ? -1 : 1;
+                store.setDirection([
+                  sign * spVel[0] / speed,
+                  sign * spVel[1] / speed,
+                  sign * spVel[2] / speed,
+                ]);
               }
             } else if (store.attitudeMode === 'nadir') {
               const dx = nearestPos[0] - spPos[0];
@@ -790,8 +720,8 @@ function ExploreCanvas() {
               if (store.targetBodyId === 'sun') {
                 targetPos = [0, 0, 0];
               } else {
-                const bs = computeBodyState(store.targetBodyId, finalJd);
-                if (bs) targetPos = bs.position;
+                const targetBody = finalBodyMap.get(store.targetBodyId);
+                if (targetBody) targetPos = targetBody.position;
               }
               if (targetPos) {
                 const dx = targetPos[0] - spPos[0];
@@ -890,7 +820,7 @@ function ExploreCanvas() {
         }
       }
 
-      const { w: rw, h: rh, dpr: rdpr } = sizeRef.current;
+      const { w: rw, h: rh } = sizeRef.current;
       if (rw <= 0 || rh <= 0) { animRef.current = requestAnimationFrame(animate); return; }
 
       const rearWCss = clampMirrorSize(Math.round(rw * 0.28), 150, 380);
@@ -1006,7 +936,7 @@ function ExploreCanvas() {
         scene.remove(expRef.flashLight);
       }
 
-      const d = disposablesRef.current;
+      const d = disposables;
       for (const line of d.lines) scene.remove(line);
       for (const [, mesh] of bodyMeshes) scene.remove(mesh);
       scene.remove(stars);

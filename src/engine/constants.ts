@@ -483,7 +483,7 @@ export const SPACECRAFT_CONFIG = SPACECRAFT_DRAGON2;
 export const NAVIGATION_CONFIG = {
   deviationCheckInterval: 5,
   deviationThresholdAU: 0.01,
-  phaseCompletionThresholdAU: 0.005,
+  phaseCompletionThresholdAU: 0.02,
   rePlanCooldownSec: 30,
   thrustWindowMinDeg: 30,
   thrustWindowMaxDeg: 150,
