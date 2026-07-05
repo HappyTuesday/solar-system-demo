@@ -480,4 +480,49 @@ describe('spaceshipStore navigation lifecycle', () => {
     expect(s.thrust[1]).toBe(0);
     expect(s.thrust[2]).toBe(0);
   });
+
+  it('park gear brakes while moving forward and returns to neutral after crossing zero', () => {
+    useSpaceshipStore.setState({
+      position: [1, 0, 0],
+      velocity: [0, 2e-7, 0],
+      direction: [1, 0, 0],
+      attitudeMode: 'prograde',
+      gear: 'N',
+      thrustMagnitude: 0,
+    });
+
+    useSpaceshipStore.getState().setGear('P');
+    useSpaceshipStore.getState().updateParkGear();
+
+    let s = useSpaceshipStore.getState();
+    expect(s.gear).toBe('P');
+    expect(s.thrust).toEqual([-1, 0, 0]);
+    expect(s.direction[1]).toBeCloseTo(1, 12);
+    expect(s.attitudeMode).toBe('inertial');
+    expect(s.thrustMagnitude).toBeGreaterThan(0);
+
+    // Velocity has crossed through zero to the opposite direction
+    useSpaceshipStore.setState({ velocity: [0, -2e-7, 0] });
+    useSpaceshipStore.getState().updateParkGear();
+
+    s = useSpaceshipStore.getState();
+    expect(s.gear).toBe('N');
+    expect(s.thrust).toEqual([0, 0, 0]);
+    expect(s.thrustMagnitude).toBe(0);
+    expect(s.parkInitialDirection).toBeNull();
+  });
+
+  it('updateParkGear is a no-op when not in P gear', () => {
+    useSpaceshipStore.setState({
+      gear: 'D',
+      thrust: [1, 0, 0],
+      thrustMagnitude: 50,
+    });
+    useSpaceshipStore.getState().updateParkGear();
+
+    const s = useSpaceshipStore.getState();
+    expect(s.gear).toBe('D');
+    expect(s.thrust).toEqual([1, 0, 0]);
+    expect(s.thrustMagnitude).toBe(50);
+  });
 });

@@ -250,7 +250,31 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
         ] as [number, number, number],
     };
   }),
-  updateParkGear: () => {},
+  updateParkGear: () => set(s => {
+    if (s.gear !== 'P') return {};
+    if (!s.parkInitialDirection) {
+      return {
+        gear: 'N' as Gear,
+        thrust: [0, 0, 0] as [number, number, number],
+        thrustMagnitude: 0,
+      };
+    }
+    const snap = parkBrakeSnapshot(s.velocity, s.parkInitialDirection);
+    if (snap.reachedStop) {
+      return {
+        gear: 'N' as Gear,
+        thrust: [0, 0, 0] as [number, number, number],
+        thrustMagnitude: 0,
+        parkInitialDirection: null,
+      };
+    }
+    return {
+      direction: snap.facingDirection,
+      attitudeMode: 'inertial' as AttitudeMode,
+      thrust: [-1, 0, 0] as [number, number, number],
+      thrustMagnitude: snap.thrustMagnitude,
+    };
+  }),
   updateTangentialCorrectionGear: () => set(s => {
     if (s.gear !== 'T') return {};
     const tangential = directTangentialSpeedSnapshot(s.position, s.velocity, s.navigationPlan);
