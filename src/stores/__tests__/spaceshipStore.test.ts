@@ -416,4 +416,68 @@ describe('spaceshipStore navigation lifecycle', () => {
     expect(s2.navigationPlan).not.toBeNull();
     expect(s2.activePhaseIndex).toBeLessThanOrEqual(oldPhaseIdx + 1);
   });
+
+  it('setGear(P) faces prograde, applies reverse brake thrust, and records initial direction', () => {
+    useSpaceshipStore.setState({
+      position: [1, 0, 0],
+      velocity: [0, 2e-7, 0],
+      direction: [1, 0, 0],
+      attitudeMode: 'prograde',
+      gear: 'N',
+      thrustMagnitude: 0,
+    });
+
+    useSpaceshipStore.getState().setGear('P');
+
+    const s = useSpaceshipStore.getState();
+    expect(s.gear).toBe('P');
+    expect(s.thrust).toEqual([-1, 0, 0]);
+    expect(s.direction[0]).toBeCloseTo(0, 12);
+    expect(s.direction[1]).toBeCloseTo(1, 12);
+    expect(s.attitudeMode).toBe('inertial');
+    expect(s.thrustMagnitude).toBeGreaterThan(0);
+    expect(s.parkInitialDirection).not.toBeNull();
+  });
+
+  it('setGear(P) falls back to N when speed is essentially zero', () => {
+    useSpaceshipStore.setState({
+      velocity: [0, 0, 0],
+      gear: 'N',
+    });
+
+    useSpaceshipStore.getState().setGear('P');
+
+    const s = useSpaceshipStore.getState();
+    expect(s.gear).toBe('N');
+    expect(s.parkInitialDirection).toBeNull();
+  });
+
+  it('leaving P clears parkInitialDirection', () => {
+    useSpaceshipStore.setState({
+      velocity: [0, 2e-7, 0],
+      gear: 'N',
+      thrustMagnitude: 0,
+    });
+    useSpaceshipStore.getState().setGear('P');
+    expect(useSpaceshipStore.getState().parkInitialDirection).not.toBeNull();
+
+    useSpaceshipStore.getState().setGear('N');
+    expect(useSpaceshipStore.getState().parkInitialDirection).toBeNull();
+  });
+
+  it('thrust setters are inert while in P gear', () => {
+    useSpaceshipStore.setState({
+      velocity: [0, 2e-7, 0],
+      gear: 'N',
+      thrustMagnitude: 0,
+    });
+    useSpaceshipStore.getState().setGear('P');
+
+    useSpaceshipStore.getState().setLateralThrust(1);
+    useSpaceshipStore.getState().setVerticalThrust(1);
+
+    const s = useSpaceshipStore.getState();
+    expect(s.thrust[1]).toBe(0);
+    expect(s.thrust[2]).toBe(0);
+  });
 });

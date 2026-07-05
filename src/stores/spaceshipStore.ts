@@ -5,10 +5,10 @@ import type { NavigationPlan } from '../engine/navigation';
 import { planDirectRendezvousTransfer, checkDeviation, checkPhaseCompleted } from '../engine/navigation';
 import { NAVIGATION_CONFIG, MU_SUN_AU, AU_TO_KM } from '../engine/constants';
 import { jumpSpaceshipState } from '../engine/timeJump';
-import { hasEffectiveThrust } from '../engine/spaceship';
+import { hasEffectiveThrust, parkBrakeSnapshot, parkBrakeThrustMagnitude, PARK_BRAKE_EPS_AU_PER_SEC } from '../engine/spaceship';
 
 export type ExplosionPhase = 'none' | 'exploding' | 'complete';
-export type Gear = 'D' | 'N' | 'R' | 'T';
+export type Gear = 'D' | 'N' | 'R' | 'T' | 'P';
 
 const DEG_TO_RAD = Math.PI / 180;
 const TANGENTIAL_CORRECTION_EPS_AU_PER_SEC = 0.01 / AU_TO_KM;
@@ -35,6 +35,7 @@ export interface SpaceshipStore extends SpaceshipState {
   gear: Gear;
   tangentialCorrectionSign: number | null;
   tangentialCorrectionLastAbs: number | null;
+  parkInitialDirection: [number, number, number] | null;
   totalDistanceKm: number;
   maxSpeedKms: number;
   sessionStartTime: number;
@@ -51,6 +52,7 @@ export interface SpaceshipStore extends SpaceshipState {
   setExplosionPhase: (phase: ExplosionPhase) => void;
   setGear: (g: Gear) => void;
   updateTangentialCorrectionGear: () => void;
+  updateParkGear: () => void;
   updateFlightStats: (distanceKm: number, speedKms: number) => void;
   toggleRunning: () => void;
   toggleDashboard: () => void;
@@ -184,6 +186,7 @@ const initialState = {
   gear: 'N' as Gear,
   tangentialCorrectionSign: null as number | null,
   tangentialCorrectionLastAbs: null as number | null,
+  parkInitialDirection: null as [number, number, number] | null,
   totalDistanceKm: 0,
   maxSpeedKms: 0,
   sessionStartTime: now,
@@ -195,9 +198,9 @@ const initialState = {
 export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
   ...initialState,
 
-  setForwardThrust: (v) => set(s => ({ thrust: [s.gear === 'N' || s.gear === 'T' ? 0 : v, s.thrust[1], s.thrust[2]] })),
-  setLateralThrust: (v) => set(s => ({ thrust: [s.thrust[0], s.gear === 'N' || s.gear === 'T' ? 0 : v, s.thrust[2]] })),
-  setVerticalThrust: (v) => set(s => ({ thrust: [s.thrust[0], s.thrust[1], s.gear === 'N' || s.gear === 'T' ? 0 : v] })),
+  setForwardThrust: (v) => set(s => ({ thrust: [s.gear === 'N' || s.gear === 'T' || s.gear === 'P' ? 0 : v, s.thrust[1], s.thrust[2]] })),
+  setLateralThrust: (v) => set(s => ({ thrust: [s.thrust[0], s.gear === 'N' || s.gear === 'T' || s.gear === 'P' ? 0 : v, s.thrust[2]] })),
+  setVerticalThrust: (v) => set(s => ({ thrust: [s.thrust[0], s.thrust[1], s.gear === 'N' || s.gear === 'T' || s.gear === 'P' ? 0 : v] })),
   setThrustMagnitude: (m) => set({ thrustMagnitude: m }),
   setDirection: (d) => set({ direction: d }),
   setExploded: (bodyId, position, bodyPosition) => set({
@@ -209,18 +212,45 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     crashBodyPosition: bodyPosition,
   }),
   setExplosionPhase: (phase) => set({ explosionPhase: phase }),
-  setGear: (g) => set(s => ({
-    gear: g,
-    tangentialCorrectionSign: g === 'T' ? null : s.tangentialCorrectionSign,
-    tangentialCorrectionLastAbs: g === 'T' ? null : s.tangentialCorrectionLastAbs,
-    thrust: g === 'N' || g === 'T'
-      ? [0, 0, 0] as [number, number, number]
-      : [
-        g === 'R' ? (s.thrustMagnitude > 0 ? -1 : 0) : (s.thrustMagnitude > 0 ? 1 : 0),
-        s.thrust[1],
-        s.thrust[2],
-      ] as [number, number, number],
-  })),
+  setGear: (g) => set(s => {
+    if (g === 'P') {
+      const speed = vectorLength(s.velocity);
+      if (speed <= PARK_BRAKE_EPS_AU_PER_SEC) {
+        return {
+          gear: 'N' as Gear,
+          thrust: [0, 0, 0] as [number, number, number],
+          parkInitialDirection: null,
+          tangentialCorrectionSign: null,
+          tangentialCorrectionLastAbs: null,
+        };
+      }
+      const initialDir = vectorNormalize(s.velocity);
+      return {
+        gear: 'P' as Gear,
+        parkInitialDirection: initialDir,
+        attitudeMode: 'inertial' as AttitudeMode,
+        direction: initialDir,
+        thrust: [-1, 0, 0] as [number, number, number],
+        thrustMagnitude: parkBrakeThrustMagnitude(speed),
+        tangentialCorrectionSign: null,
+        tangentialCorrectionLastAbs: null,
+      };
+    }
+    return {
+      gear: g,
+      parkInitialDirection: null,
+      tangentialCorrectionSign: g === 'T' ? null : s.tangentialCorrectionSign,
+      tangentialCorrectionLastAbs: g === 'T' ? null : s.tangentialCorrectionLastAbs,
+      thrust: g === 'N' || g === 'T'
+        ? [0, 0, 0] as [number, number, number]
+        : [
+          g === 'R' ? (s.thrustMagnitude > 0 ? -1 : 0) : (s.thrustMagnitude > 0 ? 1 : 0),
+          s.thrust[1],
+          s.thrust[2],
+        ] as [number, number, number],
+    };
+  }),
+  updateParkGear: () => {},
   updateTangentialCorrectionGear: () => set(s => {
     if (s.gear !== 'T') return {};
     const tangential = directTangentialSpeedSnapshot(s.position, s.velocity, s.navigationPlan);
@@ -277,6 +307,7 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     gear: 'N' as Gear,
     tangentialCorrectionSign: null as number | null,
     tangentialCorrectionLastAbs: null as number | null,
+    parkInitialDirection: null as [number, number, number] | null,
     totalDistanceKm: 0,
     maxSpeedKms: 0,
     sessionStartTime: Date.now(),
