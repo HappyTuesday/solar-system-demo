@@ -535,6 +535,7 @@ function ExploreCanvas() {
 
     const animate = (time: number) => {
       useSpaceshipStore.getState().updateTangentialCorrectionGear();
+      useSpaceshipStore.getState().updateParkGear();
       const store = useSpaceshipStore.getState();
 
       const effectiveThrust = hasEffectiveThrust(store.thrust, store.thrustMagnitude);
