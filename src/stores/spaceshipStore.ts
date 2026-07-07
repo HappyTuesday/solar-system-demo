@@ -32,6 +32,7 @@ export interface SpaceshipStore extends SpaceshipState {
   gear: Gear;
   tangentialCorrectionSign: number | null;
   tangentialCorrectionLastAbs: number | null;
+  tangentialCorrectionPrevAttitude: AttitudeMode | null;
   parkInitialDirection: [number, number, number] | null;
   totalDistanceKm: number;
   maxSpeedKms: number;
@@ -179,6 +180,7 @@ const initialState = {
   gear: 'N' as Gear,
   tangentialCorrectionSign: null as number | null,
   tangentialCorrectionLastAbs: null as number | null,
+  tangentialCorrectionPrevAttitude: null as AttitudeMode | null,
   parkInitialDirection: null as [number, number, number] | null,
   totalDistanceKm: 0,
   maxSpeedKms: 0,
@@ -234,6 +236,7 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
       parkInitialDirection: null,
       tangentialCorrectionSign: g === 'T' ? null : s.tangentialCorrectionSign,
       tangentialCorrectionLastAbs: g === 'T' ? null : s.tangentialCorrectionLastAbs,
+      tangentialCorrectionPrevAttitude: g === 'T' ? s.attitudeMode : s.tangentialCorrectionPrevAttitude,
       thrust: g === 'N' || g === 'T'
         ? [0, 0, 0] as [number, number, number]
         : [
@@ -278,6 +281,8 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
         thrustMagnitude: 0,
         tangentialCorrectionSign: null,
         tangentialCorrectionLastAbs: null,
+        attitudeMode: (s.tangentialCorrectionPrevAttitude ?? s.attitudeMode) as AttitudeMode,
+        tangentialCorrectionPrevAttitude: null,
       };
     }
     if (s.tangentialCorrectionSign != null && tangential.sign !== s.tangentialCorrectionSign) {
@@ -287,6 +292,8 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
         thrustMagnitude: 0,
         tangentialCorrectionSign: null,
         tangentialCorrectionLastAbs: null,
+        attitudeMode: (s.tangentialCorrectionPrevAttitude ?? s.attitudeMode) as AttitudeMode,
+        tangentialCorrectionPrevAttitude: null,
       };
     }
     return {
@@ -321,6 +328,7 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     gear: 'N' as Gear,
     tangentialCorrectionSign: null as number | null,
     tangentialCorrectionLastAbs: null as number | null,
+    tangentialCorrectionPrevAttitude: null as AttitudeMode | null,
     parkInitialDirection: null as [number, number, number] | null,
     totalDistanceKm: 0,
     maxSpeedKms: 0,

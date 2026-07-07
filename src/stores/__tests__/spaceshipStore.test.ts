@@ -366,3 +366,35 @@ describe('spaceshipStore navigation lifecycle', () => {
     expect(s.thrustMagnitude).toBe(50);
   });
 });
+
+describe('T-gear attitude restore', () => {
+  beforeEach(() => {
+    useSpaceshipStore.getState().reset();
+  });
+
+  it('restores previous attitude mode after tangential correction completes', () => {
+    const plan = makeDirectPlan([2, 0, 0]);
+    useSpaceshipStore.setState({
+      navigationPlan: plan,
+      targetBodyId: 'mars',
+      position: [1, 0, 0],
+      velocity: [0.001, 0.001, 0], // tangential non-zero -> T engages
+      attitudeMode: 'rendezvous',
+    });
+
+    useSpaceshipStore.getState().setGear('T');
+    expect(useSpaceshipStore.getState().gear).toBe('T');
+
+    // Run the active correction so attitude flips to 'inertial'.
+    useSpaceshipStore.getState().updateTangentialCorrectionGear();
+    expect(useSpaceshipStore.getState().attitudeMode).toBe('inertial');
+
+    // Force tangential to zero so the correction completes and returns to N.
+    useSpaceshipStore.setState({ velocity: [0.001, 0, 0] });
+    useSpaceshipStore.getState().updateTangentialCorrectionGear();
+
+    const s = useSpaceshipStore.getState();
+    expect(s.gear).toBe('N');
+    expect(s.attitudeMode).toBe('rendezvous');
+  });
+});
