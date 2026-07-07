@@ -202,7 +202,7 @@ function Dashboard() {
                 </div>
               </div>
               <div className="dashboard-thrust-value">
-                推力 {thrustMagnitude} MN
+                推力 {Math.round(thrustMagnitude)} MN
                 {gear === 'N' && <span className="gear-indicator"> [N]</span>}
                 {gear === 'R' && <span className="gear-indicator reverse"> [R]</span>}
                 {gear === 'T' && <span className="gear-indicator tangential"> [T切向]</span>}

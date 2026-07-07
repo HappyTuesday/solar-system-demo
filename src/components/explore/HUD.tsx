@@ -137,7 +137,7 @@ export default function HUD() {
           <span className="hud-label">&nbsp;&nbsp;Z</span> <span className="hud-value-green">{position[2].toFixed(4)}</span>
           <span className="hud-label">&nbsp;&nbsp;速度</span> <span className="hud-value-yellow">{speedMs.toFixed(0)} km/s</span>
           <span className="hud-label">&nbsp;&nbsp;有效速度</span> <span className="hud-value-green">{effectiveSpeedKms.toFixed(0)} km/s</span>
-          <span className="hud-label">&nbsp;&nbsp;推力</span> <span className="hud-value-cyan">{thrustMagnitude} MN</span>
+          <span className="hud-label">&nbsp;&nbsp;推力</span> <span className="hud-value-cyan">{Math.round(thrustMagnitude)} MN</span>
           <span className="hud-label">&nbsp;&nbsp;距{nearestBodyName}</span> <span className="hud-value-brown">{orbDistAU < 0.01 ? `${orbDistKm.toFixed(0)} km` : `${orbDistAU.toFixed(3)} AU`}</span>
           {targetBodyId && (
             <>
