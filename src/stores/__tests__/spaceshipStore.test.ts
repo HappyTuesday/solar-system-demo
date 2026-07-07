@@ -398,3 +398,79 @@ describe('T-gear attitude restore', () => {
     expect(s.attitudeMode).toBe('rendezvous');
   });
 });
+
+describe('cruise mode', () => {
+  beforeEach(() => {
+    useSpaceshipStore.getState().reset();
+  });
+
+  function setupCruisable() {
+    const plan = makeDirectPlan([2, 0, 0]);
+    useSpaceshipStore.setState({
+      navigationPlan: plan,
+      targetBodyId: 'mars',
+      position: [1, 0, 0],
+      velocity: [1e-6, 0, 0], // radial positive, tiny
+      thrust: [0, 0, 0],
+      thrustMagnitude: 0,
+      gear: 'N',
+      attitudeMode: 'prograde',
+      cruiseActive: false,
+    });
+  }
+
+  it('toggleCruise enables only when preconditions hold and sets rendezvous attitude', () => {
+    setupCruisable();
+    useSpaceshipStore.getState().toggleCruise();
+    const s = useSpaceshipStore.getState();
+    expect(s.cruiseActive).toBe(true);
+    expect(s.attitudeMode).toBe('rendezvous');
+  });
+
+  it('toggleCruise does nothing when radial velocity is non-positive', () => {
+    setupCruisable();
+    useSpaceshipStore.setState({ velocity: [-1e-6, 0, 0] });
+    useSpaceshipStore.getState().toggleCruise();
+    expect(useSpaceshipStore.getState().cruiseActive).toBe(false);
+  });
+
+  it('updateCruise exits when rendezvous disappears', () => {
+    setupCruisable();
+    useSpaceshipStore.setState({ cruiseActive: true, navigationPlan: null });
+    useSpaceshipStore.getState().updateCruise();
+    expect(useSpaceshipStore.getState().cruiseActive).toBe(false);
+  });
+
+  it('updateCruise exits when user takes over with D gear', () => {
+    setupCruisable();
+    useSpaceshipStore.setState({ cruiseActive: true, gear: 'D' });
+    useSpaceshipStore.getState().updateCruise();
+    expect(useSpaceshipStore.getState().cruiseActive).toBe(false);
+  });
+
+  it('updateCruise exits when radial velocity turns non-positive', () => {
+    setupCruisable();
+    useSpaceshipStore.setState({ cruiseActive: true, velocity: [-1e-6, 0, 0] });
+    useSpaceshipStore.getState().updateCruise();
+    expect(useSpaceshipStore.getState().cruiseActive).toBe(false);
+  });
+
+  it('updateCruise engages T gear when tangential exceeds threshold', () => {
+    setupCruisable();
+    useSpaceshipStore.setState({ cruiseActive: true, velocity: [1e-6, 1e-6, 0] });
+    useSpaceshipStore.getState().updateCruise();
+    const s = useSpaceshipStore.getState();
+    expect(s.gear).toBe('T');
+    expect(s.cruiseActive).toBe(true);
+  });
+
+  it('updateCruise engages P gear and exits when brake is predicted to reach', () => {
+    setupCruisable();
+    // Fast radial velocity so predicted stop overshoots the 1 AU gap.
+    useSpaceshipStore.setState({ cruiseActive: true, velocity: [4e-4, 0, 0] });
+    useSpaceshipStore.getState().updateCruise();
+    const s = useSpaceshipStore.getState();
+    expect(s.gear).toBe('P');
+    expect(s.cruiseActive).toBe(false);
+  });
+});

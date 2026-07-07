@@ -6,6 +6,7 @@ import { planDirectRendezvousTransfer } from '../engine/navigation';
 import { AU_TO_KM } from '../engine/constants';
 import { jumpSpaceshipState } from '../engine/timeJump';
 import { parkBrakeSnapshot, parkBrakeThrustMagnitude, PARK_BRAKE_EPS_AU_PER_SEC } from '../engine/spaceship';
+import { canEnableCruise, computeCruiseGuidance } from '../engine/cruise';
 
 export type ExplosionPhase = 'none' | 'exploding' | 'complete';
 export type Gear = 'D' | 'N' | 'R' | 'T' | 'P';
@@ -34,6 +35,7 @@ export interface SpaceshipStore extends SpaceshipState {
   tangentialCorrectionLastAbs: number | null;
   tangentialCorrectionPrevAttitude: AttitudeMode | null;
   parkInitialDirection: [number, number, number] | null;
+  cruiseActive: boolean;
   totalDistanceKm: number;
   maxSpeedKms: number;
   sessionStartTime: number;
@@ -51,6 +53,8 @@ export interface SpaceshipStore extends SpaceshipState {
   setGear: (g: Gear) => void;
   updateTangentialCorrectionGear: () => void;
   updateParkGear: () => void;
+  toggleCruise: () => void;
+  updateCruise: () => void;
   updateFlightStats: (distanceKm: number, speedKms: number) => void;
   toggleRunning: () => void;
   toggleDashboard: () => void;
@@ -182,6 +186,7 @@ const initialState = {
   tangentialCorrectionLastAbs: null as number | null,
   tangentialCorrectionPrevAttitude: null as AttitudeMode | null,
   parkInitialDirection: null as [number, number, number] | null,
+  cruiseActive: false,
   totalDistanceKm: 0,
   maxSpeedKms: 0,
   sessionStartTime: now,
@@ -271,6 +276,42 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
       thrustMagnitude: snap.thrustMagnitude,
     };
   }),
+  toggleCruise: () => set(s => {
+    if (s.cruiseActive) {
+      return { cruiseActive: false };
+    }
+    if (!canEnableCruise(s.position, s.velocity, s.thrust, s.thrustMagnitude, s.navigationPlan)) {
+      return {};
+    }
+    return { cruiseActive: true, attitudeMode: 'rendezvous' as AttitudeMode };
+  }),
+  updateCruise: () => {
+    const s = useSpaceshipStore.getState();
+    if (!s.cruiseActive) return;
+    if (!s.navigationPlan?.rendezvous) {
+      useSpaceshipStore.setState({ cruiseActive: false });
+      return;
+    }
+    if (s.gear === 'D' || s.gear === 'R') {
+      useSpaceshipStore.setState({ cruiseActive: false });
+      return;
+    }
+    const g = computeCruiseGuidance(s.position, s.velocity, s.navigationPlan);
+    if (!g.radialPositive) {
+      useSpaceshipStore.setState({ cruiseActive: false });
+      return;
+    }
+    if (s.gear === 'T') return;
+    if (g.shouldBrake) {
+      useSpaceshipStore.getState().setGear('P');
+      useSpaceshipStore.setState({ cruiseActive: false });
+      return;
+    }
+    if (g.shouldCorrectTangential) {
+      useSpaceshipStore.getState().setGear('T');
+      return;
+    }
+  },
   updateTangentialCorrectionGear: () => set(s => {
     if (s.gear !== 'T') return {};
     const tangential = directTangentialSpeedSnapshot(s.position, s.velocity, s.navigationPlan);
@@ -330,6 +371,7 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     tangentialCorrectionLastAbs: null as number | null,
     tangentialCorrectionPrevAttitude: null as AttitudeMode | null,
     parkInitialDirection: null as [number, number, number] | null,
+    cruiseActive: false,
     totalDistanceKm: 0,
     maxSpeedKms: 0,
     sessionStartTime: Date.now(),
