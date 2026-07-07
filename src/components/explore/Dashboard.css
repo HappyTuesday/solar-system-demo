@@ -215,7 +215,7 @@
 .dashboard-cruise-cell {
   display: flex;
   align-items: stretch;
-  flex: 0 0 40px;
+  flex: 0 0 26px;
 }
 
 .dashboard-cruise-btn {
@@ -256,8 +256,8 @@
 
 .dashboard-pad-group.compact .dashboard-pad-grid {
   flex: 0 0 auto;
-  width: 54px;
-  height: 54px;
+  width: 44px;
+  height: 44px;
   margin: 0 auto;
 }
 

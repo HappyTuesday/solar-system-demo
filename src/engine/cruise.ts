@@ -2,7 +2,7 @@ import { AU_TO_KM, SPACECRAFT_CONFIG } from './constants';
 import { parkBrakeThrustMagnitude, hasEffectiveThrust } from './spaceship';
 import type { NavigationPlan } from './navigation';
 
-export const CRUISE_TANGENTIAL_TRIGGER_AU_PER_SEC = 0.1 / AU_TO_KM;
+export const CRUISE_TANGENTIAL_TRIGGER_AU_PER_SEC = 1 / AU_TO_KM;
 
 function vectorLength(v: [number, number, number]): number {
   return Math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2);

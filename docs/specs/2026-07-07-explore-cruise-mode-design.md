@@ -61,7 +61,7 @@
 ### 引擎层 `src/engine/cruise.ts`（新增，纯函数）
 
 ```ts
-export const CRUISE_TANGENTIAL_TRIGGER_AU_PER_SEC = 0.1 / AU_TO_KM;
+export const CRUISE_TANGENTIAL_TRIGGER_AU_PER_SEC = 1 / AU_TO_KM;
 
 export function computeParkStopDistanceAU(speedAUPerSec: number): number;
 
