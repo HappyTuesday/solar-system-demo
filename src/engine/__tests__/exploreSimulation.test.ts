@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { REAL_DATA } from '../constants';
+import { REAL_DATA, AU_TO_KM } from '../constants';
 import {
   advanceExploreShipPhysics,
   computeExploreBodyStates,
@@ -66,5 +66,28 @@ describe('exploreSimulation', () => {
 
     expect(result.simDelta).toBeCloseTo(0.5, 12);
     expect(result.ship.velocity[1]).toBeCloseTo(ship.velocity[1], 15);
+  });
+
+  it('caps ship speed at 1000 km/s even under sustained full thrust', () => {
+    let ship = makeShip({ thrust: [1, 0, 0], thrustMagnitude: 100, direction: [0, 1, 0] });
+    let simulatedTime = Date.UTC(2026, 6, 4);
+
+    for (let i = 0; i < 200; i++) {
+      const result = advanceExploreShipPhysics({
+        ship,
+        simulatedTime,
+        frameDt: 0.1,
+        timeScale: 1000,
+      });
+      ship = result.ship;
+      simulatedTime = result.simulatedTime;
+      expect(result.speedKms).toBeLessThanOrEqual(1000 + 1e-6);
+    }
+
+    const finalSpeedKms = Math.sqrt(
+      ship.velocity[0] ** 2 + ship.velocity[1] ** 2 + ship.velocity[2] ** 2,
+    ) * AU_TO_KM;
+    expect(finalSpeedKms).toBeGreaterThan(900);
+    expect(finalSpeedKms).toBeLessThanOrEqual(1000 + 1e-6);
   });
 });

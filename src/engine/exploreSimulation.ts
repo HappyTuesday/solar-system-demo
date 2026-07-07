@@ -6,6 +6,8 @@ import {
   applyThrustInBodyFrame,
   hasEffectiveThrust,
   rk4StepSpaceship,
+  clampSpeedToMax,
+  MAX_SHIP_SPEED_AU_PER_SEC,
   type BodyInfo,
 } from './spaceship';
 
@@ -128,6 +130,10 @@ export function advanceExploreShipPhysics(
     const bodyStates = computeExploreBodyStates(subSimTime, bodyIds);
     const getBodies = (timeOffset: number): BodyInfo[] => bodyInfosAtOffset(bodyStates, timeOffset);
     rk4StepSpaceship(ship, getBodies, subDt);
+    const capped = clampSpeedToMax(ship.velocity, MAX_SHIP_SPEED_AU_PER_SEC);
+    ship.velocity[0] = capped[0];
+    ship.velocity[1] = capped[1];
+    ship.velocity[2] = capped[2];
   }
 
   const speedKms = Math.sqrt(

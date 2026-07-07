@@ -206,6 +206,20 @@ export const PARK_BRAKE_MAX_THRUST_MN = 100;
 export const PARK_BRAKE_MIN_THRUST_MN = 1;
 export const PARK_BRAKE_EPS_AU_PER_SEC = 0.01 / AU_TO_KM;
 
+export const MAX_SHIP_SPEED_AU_PER_SEC = 1000 / AU_TO_KM;
+
+export function clampSpeedToMax(
+  velocity: [number, number, number],
+  maxSpeedAUPerSec: number,
+): [number, number, number] {
+  const speed = vec3Length(velocity);
+  if (speed <= maxSpeedAUPerSec || speed < 1e-20) {
+    return [velocity[0], velocity[1], velocity[2]];
+  }
+  const scale = maxSpeedAUPerSec / speed;
+  return [velocity[0] * scale, velocity[1] * scale, velocity[2] * scale];
+}
+
 export function parkBrakeThrustMagnitude(speedAUPerSec: number): number {
   const scaled = (speedAUPerSec / PARK_BRAKE_REFERENCE_AU_PER_SEC) * PARK_BRAKE_MAX_THRUST_MN;
   return Math.max(

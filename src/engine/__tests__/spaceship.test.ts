@@ -9,6 +9,8 @@ import {
   predictTrajectory,
   parkBrakeThrustMagnitude,
   parkBrakeSnapshot,
+  clampSpeedToMax,
+  MAX_SHIP_SPEED_AU_PER_SEC,
   type BodyInfo,
 } from '../spaceship';
 import { MU_SUN_AU, AU_TO_KM } from '../constants';
@@ -160,6 +162,31 @@ describe('spaceship', () => {
     it('should report stopped when speed is essentially zero', () => {
       const snap = parkBrakeSnapshot([0, 0, 0], [0, 1, 0]);
       expect(snap.reachedStop).toBe(true);
+    });
+  });
+
+  describe('clampSpeedToMax', () => {
+    it('returns velocity unchanged when below the cap', () => {
+      const v: [number, number, number] = [1e-7, 0, 0];
+      expect(clampSpeedToMax(v, MAX_SHIP_SPEED_AU_PER_SEC)).toEqual(v);
+    });
+
+    it('caps speed at 1000 km/s', () => {
+      expect(MAX_SHIP_SPEED_AU_PER_SEC * AU_TO_KM).toBeCloseTo(1000, 6);
+    });
+
+    it('scales an over-cap velocity to exactly the cap, preserving direction', () => {
+      const over: [number, number, number] = [3 * MAX_SHIP_SPEED_AU_PER_SEC, 4 * MAX_SHIP_SPEED_AU_PER_SEC, 0];
+      const clamped = clampSpeedToMax(over, MAX_SHIP_SPEED_AU_PER_SEC);
+      const speed = Math.sqrt(clamped[0] ** 2 + clamped[1] ** 2 + clamped[2] ** 2);
+      expect(speed).toBeCloseTo(MAX_SHIP_SPEED_AU_PER_SEC, 15);
+      // original direction was (0.6, 0.8, 0)
+      expect(clamped[0] / speed).toBeCloseTo(0.6, 12);
+      expect(clamped[1] / speed).toBeCloseTo(0.8, 12);
+    });
+
+    it('returns a zero vector safely', () => {
+      expect(clampSpeedToMax([0, 0, 0], MAX_SHIP_SPEED_AU_PER_SEC)).toEqual([0, 0, 0]);
     });
   });
 });
