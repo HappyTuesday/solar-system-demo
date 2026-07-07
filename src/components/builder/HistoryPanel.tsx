@@ -45,7 +45,6 @@ export default function HistoryPanel() {
   const loadRecords = useHistoryStore(s => s.loadRecords);
   const saveCurrentRecord = useHistoryStore(s => s.saveCurrentRecord);
   const switchToRecord = useHistoryStore(s => s.switchToRecord);
-  const setCurrentRecordId = useHistoryStore(s => s.setCurrentRecordId);
   const buildStore = useBuildStore();
 
   const handleClickRecord = (record: BuildRecord) => {

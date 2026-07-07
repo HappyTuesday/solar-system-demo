@@ -13,8 +13,6 @@ import {
 } from '../coordinateTransform';
 
 describe('coordinateTransform', () => {
-  const EPSILON = 1e-10;
-
   beforeEach(() => {
     // Reset to default scale
     setLinearScale(1);

@@ -340,70 +340,47 @@
   color: #556677;
 }
 
-.dashboard-nav-phases {
+.dashboard-rendezvous-params {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   font-size: 8px;
   flex: 1;
   overflow-y: auto;
 }
 
-.dashboard-nav-phase {
+.dashboard-rendezvous-params > div {
   display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 3px 4px;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(80, 120, 150, 0.12);
 }
 
-.dashboard-nav-phase.pending {
-  opacity: 0.45;
-}
-
-.dashboard-nav-phase.active {
-  border-left: 2px solid rgba(255, 200, 0, 0.35);
-}
-
-.dashboard-nav-phase-icon {
-  font-size: 8px;
+.dashboard-rendezvous-params span {
+  color: #6688aa;
   flex-shrink: 0;
 }
 
-.dashboard-nav-phase-icon.completed {
-  color: #00ff88;
+.dashboard-rendezvous-params strong {
+  color: #d8f8ff;
+  font-weight: 500;
+  text-align: right;
 }
 
-.dashboard-nav-phase-icon.active {
-  color: #ffcc00;
+.dashboard-rendezvous-params,
+.dashboard-rendezvous-params * {
+  min-width: 0;
 }
 
-.dashboard-nav-phase-icon.pending {
-  color: #6688bb;
+.dashboard-rendezvous-params strong {
+  overflow-wrap: anywhere;
 }
 
-.dashboard-nav-phase-name.completed {
-  color: #00ff88;
-}
-
-.dashboard-nav-phase-name.active {
-  color: #ffcc00;
-}
-
-.dashboard-nav-phase-name.pending {
-  color: #6688bb;
-}
-
-.dashboard-nav-phase-detail {
+.dashboard-nav-empty {
   font-size: 7px;
   color: #556677;
-}
-
-/* ---- Navigation warning ---- */
-.dashboard-nav-warning {
-  font-size: 7px;
-  color: #ff8855;
-  text-align: center;
-  padding: 2px;
 }
 
 /* ---- MiniMap ---- */

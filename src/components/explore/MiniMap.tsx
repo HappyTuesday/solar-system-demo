@@ -4,7 +4,7 @@ import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { REAL_DATA, MU_SUN_AU as MU_SUN, AU_TO_KM } from '../../engine/constants';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from '../../engine/orbital';
 import { predictTrajectory, applyThrustInBodyFrame, hasEffectiveThrust, type BodyInfo } from '../../engine/spaceship';
-import { computeRendezvousPulse, selectMiniMapVelocityVector } from '../../engine/navigationVisual';
+import { computeRendezvousPulse } from '../../engine/navigationVisual';
 import type { SpaceshipState } from '../../types';
 
 const NORMAL_W = 212;
@@ -18,6 +18,15 @@ const SUN_RADIUS_PX = 4;
 const ZOOM_THRESHOLD_AU = 0.005;
 const ZOOM_BODY_RADIUS_PX = 8;
 const ZOOM_LERP = 0.08;
+
+// Deferred frame rotation: freeze view while actively turning, then ease back
+const TURN_RATE_THRESHOLD = 0.006;
+const STABLE_FRAMES_REQUIRED = 20;
+const ROT_LERP = 0.06;
+
+function wrapAngle(a: number): number {
+  return Math.atan2(Math.sin(a), Math.cos(a));
+}
 
 const ALL_IDS = ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
 
@@ -172,7 +181,9 @@ function MiniMap() {
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
   const trailRef = useRef<[number, number][]>([]);
-  const wasZoomedRef = useRef(false);
+  const smoothRotRef = useRef<number | null>(null);
+  const prevHeadingRef = useRef<number | null>(null);
+  const stableFramesRef = useRef(0);
   const [enlarged, setEnlarged] = useState(false);
   const [size, setSize] = useState({ w: NORMAL_W, h: NORMAL_H });
 
@@ -246,17 +257,48 @@ function MiniMap() {
         isZoomed = true;
       }
 
-      if (isZoomed !== wasZoomedRef.current) {
-        trailRef.current = [];
-        wasZoomedRef.current = isZoomed;
-      }
-
       smoothViewRange += (targetViewRange - smoothViewRange) * ZOOM_LERP;
       const viewRange = smoothViewRange;
 
       const scale = usable / (2 * viewRange);
-      const anchorX = isZoomed ? nearestX : sp.position[0];
-      const anchorY = isZoomed ? nearestY : sp.position[1];
+
+      // Unified top-down transform: always center on ship, rotate so ship
+      // heading points to screen-up. All spatial content goes through `project`.
+      const shipX = sp.position[0];
+      const shipY = sp.position[1];
+      const heading = Math.atan2(sp.direction[1], sp.direction[0]);
+
+      // Deferred rotation: freeze the frame while actively turning, then ease
+      // it back so the ship heading returns to screen-up once heading is stable.
+      if (smoothRotRef.current === null) smoothRotRef.current = Math.PI / 2 - heading;
+      if (prevHeadingRef.current === null) prevHeadingRef.current = heading;
+      const turnRate = Math.abs(wrapAngle(heading - prevHeadingRef.current));
+      prevHeadingRef.current = heading;
+      if (turnRate < TURN_RATE_THRESHOLD) {
+        stableFramesRef.current = Math.min(stableFramesRef.current + 1, 100000);
+      } else {
+        stableFramesRef.current = 0;
+      }
+      if (stableFramesRef.current >= STABLE_FRAMES_REQUIRED) {
+        const targetRot = Math.PI / 2 - heading;
+        const diff = wrapAngle(targetRot - smoothRotRef.current);
+        smoothRotRef.current += diff * ROT_LERP;
+      }
+      const rot = smoothRotRef.current;
+      const cosR = Math.cos(rot);
+      const sinR = Math.sin(rot);
+      const shipScreenAngle = -(heading + rot);
+      const project = (wx: number, wy: number): { sx: number; sy: number } => {
+        const dx = wx - shipX;
+        const dy = wy - shipY;
+        const rx = dx * cosR - dy * sinR;
+        const ry = dx * sinR + dy * cosR;
+        return { sx: cx + rx * scale, sy: cy - ry * scale };
+      };
+      const rotateDir = (vx: number, vy: number): { x: number; y: number } => ({
+        x: vx * cosR - vy * sinR,
+        y: vx * sinR + vy * cosR,
+      });
 
       // Adaptive grid & scale bar unit
       const useKm = viewRange < 0.001;
@@ -275,21 +317,38 @@ function MiniMap() {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
       ctx.fillRect(0, 0, cw, ch);
 
-      // Grid lines
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-      ctx.lineWidth = 0.5;
-      const gridStep = gridStepPx;
-      for (let gx = cx % gridStep; gx < cw; gx += gridStep) {
+      // Grid lines — world-aligned, rotate/translate with the frame
+      {
+        ctx.save();
         ctx.beginPath();
-        ctx.moveTo(gx, PADDING);
-        ctx.lineTo(gx, ch - PADDING);
-        ctx.stroke();
-      }
-      for (let gy = cy % gridStep; gy < ch; gy += gridStep) {
-        ctx.beginPath();
-        ctx.moveTo(PADDING, gy);
-        ctx.lineTo(cw - PADDING, gy);
-        ctx.stroke();
+        ctx.rect(PADDING, PADDING, usableW, usableH);
+        ctx.clip();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+        ctx.lineWidth = 0.5;
+        const R = viewRange * 1.6;
+        const kMinX = Math.floor((shipX - R) / gridStepAU);
+        const kMaxX = Math.ceil((shipX + R) / gridStepAU);
+        for (let k = kMinX; k <= kMaxX; k++) {
+          const wx = k * gridStepAU;
+          const a = project(wx, shipY - R);
+          const b = project(wx, shipY + R);
+          ctx.beginPath();
+          ctx.moveTo(a.sx, a.sy);
+          ctx.lineTo(b.sx, b.sy);
+          ctx.stroke();
+        }
+        const kMinY = Math.floor((shipY - R) / gridStepAU);
+        const kMaxY = Math.ceil((shipY + R) / gridStepAU);
+        for (let k = kMinY; k <= kMaxY; k++) {
+          const wy = k * gridStepAU;
+          const a = project(shipX - R, wy);
+          const b = project(shipX + R, wy);
+          ctx.beginPath();
+          ctx.moveTo(a.sx, a.sy);
+          ctx.lineTo(b.sx, b.sy);
+          ctx.stroke();
+        }
+        ctx.restore();
       }
 
       // Border
@@ -297,16 +356,13 @@ function MiniMap() {
       ctx.lineWidth = 1;
       ctx.strokeRect(PADDING, PADDING, usableW, usableH);
 
-      // Compute all body screen positions (relative to anchor)
+      // Compute all body screen positions (unified projection)
       const bodies: BodyDrawInfo[] = [];
-      let shipSx: number;
-      let shipSy: number;
+      const shipSx = cx;
+      const shipSy = cy;
       for (const id of ALL_IDS) {
         if (id === 'sun') {
-          const dx = 0 - anchorX;
-          const dy = 0 - anchorY;
-          const sx = cx + dx * scale;
-          const sy = cy - dy * scale;
+          const { sx, sy } = project(0, 0);
           const distPx = Math.sqrt((sx - cx) ** 2 + (sy - cy) ** 2);
           bodies.push({
             id, color: BODY_COLORS[id],
@@ -316,10 +372,7 @@ function MiniMap() {
         } else {
           const pos2d = computeBodyPos2D(id, jd);
           if (!pos2d) continue;
-          const dx = pos2d.x - anchorX;
-          const dy = pos2d.y - anchorY;
-          const sx = cx + dx * scale;
-          const sy = cy - dy * scale;
+          const { sx, sy } = project(pos2d.x, pos2d.y);
           const distPx = Math.sqrt((sx - cx) ** 2 + (sy - cy) ** 2);
           bodies.push({
             id, color: BODY_COLORS[id] || '#888888',
@@ -329,22 +382,10 @@ function MiniMap() {
         }
       }
 
-      // Ship screen position (relative to anchor)
-      {
-        const dx = sp.position[0] - anchorX;
-        const dy = sp.position[1] - anchorY;
-        shipSx = cx + dx * scale;
-        shipSy = cy - dy * scale;
-      }
-
       // --- Motion trail ---
       {
         const trail = trailRef.current;
-        if (isZoomed) {
-          trail.push([sp.position[0] - nearestX, sp.position[1] - nearestY]);
-        } else {
-          trail.push([sp.position[0], sp.position[1]]);
-        }
+        trail.push([shipX, shipY]);
         const maxTrail = 500;
         while (trail.length > maxTrail) trail.shift();
 
@@ -363,17 +404,7 @@ function MiniMap() {
             ctx.beginPath();
             let first = true;
             for (let i = start; i < end; i++) {
-              let sx: number;
-              let sy: number;
-              if (isZoomed) {
-                sx = cx + trail[i][0] * scale;
-                sy = cy - trail[i][1] * scale;
-              } else {
-                const dx = trail[i][0] - anchorX;
-                const dy = trail[i][1] - anchorY;
-                sx = cx + dx * scale;
-                sy = cy - dy * scale;
-              }
+              const { sx, sy } = project(trail[i][0], trail[i][1]);
               if (first) { ctx.moveTo(sx, sy); first = false; }
               else { ctx.lineTo(sx, sy); }
             }
@@ -385,30 +416,13 @@ function MiniMap() {
         }
       }
 
-      // --- Velocity direction arrow ---
+      // --- Velocity direction arrow (absolute ship velocity, rotated with frame) ---
       if (!sp.exploded) {
-        let nearestBodyVelocity: [number, number, number] | null = null;
-        if (isZoomed && nearestId) {
-          const nbState = nearestId === 'sun'
-            ? { vx: 0, vy: 0, vz: 0 }
-            : computeBodyState2D(nearestId, jd);
-          if (nbState) {
-            nearestBodyVelocity = [nbState.vx, nbState.vy, 'vz' in nbState ? nbState.vz : 0];
-          }
-        }
-        const navMethod = useSpaceshipStore.getState().navigationPlan?.method ?? null;
-        const velocityVector = selectMiniMapVelocityVector({
-          shipVelocity: sp.velocity,
-          nearestBodyVelocity,
-          isZoomed,
-          navigationMethod: navMethod,
-        });
-        const vx = velocityVector[0];
-        const vy = velocityVector[1];
-        const speed = Math.sqrt(vx * vx + vy * vy);
+        const rv = rotateDir(sp.velocity[0], sp.velocity[1]);
+        const speed = Math.sqrt(rv.x * rv.x + rv.y * rv.y);
         if (speed > 1e-9) {
-          const nx = vx / speed;
-          const ny = vy / speed;
+          const nx = rv.x / speed;
+          const ny = rv.y / speed;
           const gap = 8;
           const lineLen = 25;
           const startX = shipSx + nx * gap;
@@ -423,7 +437,7 @@ function MiniMap() {
           ctx.lineWidth = 1.5;
           ctx.stroke();
 
-          const arrowAngle = Math.atan2(-vy, vx);
+          const arrowAngle = Math.atan2(-rv.y, rv.x);
           ctx.fillStyle = 'rgba(0, 255, 128, 0.6)';
           drawDirectionArrow(ctx, endX, endY, arrowAngle, 5);
         }
@@ -494,11 +508,6 @@ function MiniMap() {
         const predSteps = 200;
         const trajectory = predictTrajectory(predShip, getBodiesPred, predDt, predSteps, onStep);
 
-        const predBodyIdx = ALL_IDS.indexOf(nearestId);
-        const predBodyState = isZoomed && predBodyIdx >= 0 && predBodyIdx < bodyStates3D.length
-          ? bodyStates3D[predBodyIdx]
-          : null;
-
         ctx.save();
         const segmentCount = 10;
         const pointsPerSegment = Math.ceil(trajectory.length / segmentCount);
@@ -514,20 +523,7 @@ function MiniMap() {
           let first = true;
           for (let i = startIdx; i < endIdx; i++) {
             const pt = trajectory[i];
-            let sx: number;
-            let sy: number;
-            if (predBodyState) {
-              const t = i * predDt;
-              const bodyX = predBodyState.pos[0] + predBodyState.vel[0] * t;
-              const bodyY = predBodyState.pos[1] + predBodyState.vel[1] * t;
-              sx = cx + (pt[0] - bodyX) * scale;
-              sy = cy - (pt[1] - bodyY) * scale;
-            } else {
-              const dx = pt[0] - anchorX;
-              const dy = pt[1] - anchorY;
-              sx = cx + dx * scale;
-              sy = cy - dy * scale;
-            }
+            const { sx, sy } = project(pt[0], pt[1]);
             if (first) { ctx.moveTo(sx, sy); first = false; }
             else { ctx.lineTo(sx, sy); }
           }
@@ -542,23 +538,18 @@ function MiniMap() {
 
       // --- Navigation orbit lines ---
       const navPlan = useSpaceshipStore.getState().navigationPlan;
-      if (navPlan && navPlan.phases.length > 0) {
-        if (navPlan.method === 'direct-rendezvous' && navPlan.rendezvous) {
+      if (navPlan) {
+        if (navPlan.rendezvous) {
           const rv = navPlan.rendezvous.point;
-          const rvSx = cx + (rv[0] - anchorX) * scale;
-          const rvSy = cy - (rv[1] - anchorY) * scale;
-          const shipDx = sp.position[0] - anchorX;
-          const shipDy = sp.position[1] - anchorY;
-          const currentShipSx = cx + shipDx * scale;
-          const currentShipSy = cy - shipDy * scale;
+          const rvP = project(rv[0], rv[1]);
 
           ctx.save();
           ctx.strokeStyle = 'rgba(0, 255, 136, 0.55)';
           ctx.lineWidth = 1;
           ctx.setLineDash([4, 3]);
           ctx.beginPath();
-          ctx.moveTo(currentShipSx, currentShipSy);
-          ctx.lineTo(rvSx, rvSy);
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(rvP.sx, rvP.sy);
           ctx.stroke();
           ctx.setLineDash([]);
 
@@ -569,7 +560,7 @@ function MiniMap() {
           });
           for (const ring of pulse.rings) {
             ctx.beginPath();
-            ctx.arc(rvSx, rvSy, ring.radius, 0, Math.PI * 2);
+            ctx.arc(rvP.sx, rvP.sy, ring.radius, 0, Math.PI * 2);
             ctx.strokeStyle = `rgba(0, 255, 136, ${ring.alpha.toFixed(3)})`;
             ctx.lineWidth = 1.2;
             ctx.stroke();
@@ -577,42 +568,12 @@ function MiniMap() {
 
           ctx.fillStyle = `rgba(120, 255, 190, ${pulse.coreAlpha.toFixed(3)})`;
           ctx.beginPath();
-          ctx.arc(rvSx, rvSy, pulse.coreRadius, 0, Math.PI * 2);
+          ctx.arc(rvP.sx, rvP.sy, pulse.coreRadius, 0, Math.PI * 2);
           ctx.fill();
           ctx.strokeStyle = 'rgba(215, 255, 232, 0.85)';
           ctx.lineWidth = 1;
           ctx.stroke();
           ctx.restore();
-        }
-
-        const navActivePhase = useSpaceshipStore.getState().activePhaseIndex;
-        if (navPlan.method !== 'direct-rendezvous' && navActivePhase >= 0 && navActivePhase < navPlan.phases.length) {
-          const phase = navPlan.phases[navActivePhase];
-
-          // Green dashed: active phase target navigation orbit
-          const navOrbitAU = phase.targetOrbit.semiMajorAxis;
-          const navEcc = phase.targetOrbit.eccentricity;
-          const navAPx = navOrbitAU * scale;
-
-          if (navAPx > 0.5 && navAPx < usable * 5) {
-            ctx.save();
-            ctx.strokeStyle = 'rgba(0, 255, 136, 0.5)';
-            ctx.lineWidth = 1;
-            ctx.setLineDash([3, 2]);
-            ctx.beginPath();
-
-            const b = navAPx * Math.sqrt(1 - navEcc * navEcc);
-            for (let i = 0; i <= 128; i++) {
-              const angle = (i / 128) * Math.PI * 2;
-              const ox = cx + Math.cos(angle) * navAPx;
-              const oy = cy - Math.sin(angle) * b;
-              if (i === 0) ctx.moveTo(ox, oy);
-              else ctx.lineTo(ox, oy);
-            }
-            ctx.stroke();
-            ctx.setLineDash([]);
-            ctx.restore();
-          }
         }
 
         // Red dashed: destination body's orbital path
@@ -629,11 +590,10 @@ function MiniMap() {
             ctx.setLineDash([4, 2]);
             ctx.beginPath();
 
-            const bDest = destPx * Math.sqrt(1 - destEcc * destEcc);
+            const bDestWorld = destAU * Math.sqrt(1 - destEcc * destEcc);
             for (let i = 0; i <= 128; i++) {
               const angle = (i / 128) * Math.PI * 2;
-              const ox = cx + Math.cos(angle) * destPx;
-              const oy = cy - Math.sin(angle) * bDest;
+              const { sx: ox, sy: oy } = project(Math.cos(angle) * destAU, Math.sin(angle) * bDestWorld);
               if (i === 0) ctx.moveTo(ox, oy);
               else ctx.lineTo(ox, oy);
             }
@@ -644,47 +604,17 @@ function MiniMap() {
         }
       }
 
-      // --- Blue dashed: expected orbit for current sub-step ---
-      const navPlanExpected = useSpaceshipStore.getState().navigationPlan;
-      if (navPlanExpected && navPlanExpected.method !== 'direct-rendezvous' && navPlanExpected.phases.length > 0) {
-        const expectedActivePhaseIdx = useSpaceshipStore.getState().activePhaseIndex;
-        if (expectedActivePhaseIdx >= 0 && expectedActivePhaseIdx < navPlanExpected.phases.length) {
-          const expectedPhase = navPlanExpected.phases[expectedActivePhaseIdx];
-          const aTarget = REAL_DATA[navPlanExpected.destinationId]?.semiMajorAxis ?? 0;
-          if (aTarget > 0) {
-            const expAPx = expectedPhase.targetOrbit.semiMajorAxis * scale;
-            if (expAPx > 0.5 && expAPx < usable * 5) {
-                  ctx.save();
-                  ctx.strokeStyle = 'rgba(68, 136, 255, 0.5)';
-                  ctx.lineWidth = 1;
-                  ctx.setLineDash([4, 3]);
-                  ctx.beginPath();
-                  const bExp = expAPx * Math.sqrt(1 - expectedPhase.targetOrbit.eccentricity * expectedPhase.targetOrbit.eccentricity);
-                  for (let i = 0; i <= 128; i++) {
-                    const angle = (i / 128) * Math.PI * 2;
-                    const ox = cx + Math.cos(angle) * expAPx;
-                    const oy = cy - Math.sin(angle) * bExp;
-                    if (i === 0) ctx.moveTo(ox, oy);
-                    else ctx.lineTo(ox, oy);
-                  }
-                  ctx.stroke();
-                  ctx.setLineDash([]);
-                  ctx.restore();
-              }
-            }
-        }
-      }
-
       // Blue: current orbit around nearest body (use nearestDistAU as radius)
       if (isZoomed && nearestDistAU > 1e-12) {
         const orbitRadiusPx = nearestDistAU * scale;
         if (orbitRadiusPx > 2 && orbitRadiusPx < usable * 3) {
+          const center = project(nearestX, nearestY);
           ctx.save();
           ctx.strokeStyle = 'rgba(68, 136, 255, 0.5)';
           ctx.lineWidth = 1;
           ctx.setLineDash([]);
           ctx.beginPath();
-          ctx.arc(cx, cy, orbitRadiusPx, 0, Math.PI * 2);
+          ctx.arc(center.sx, center.sy, orbitRadiusPx, 0, Math.PI * 2);
           ctx.stroke();
           ctx.restore();
         }
@@ -810,21 +740,20 @@ function MiniMap() {
         }
       }
 
-      // Spaceship — use ship heading direction
-      const shipAngle = Math.atan2(sp.direction[1], sp.direction[0]);
-
+      // Spaceship — always centered; heading eases back to screen-up when stable,
+      // and visually rotates while actively turning (frame frozen).
       // Direction line
       const dirLen = isZoomed ? 10 : 14;
       ctx.beginPath();
       ctx.moveTo(shipSx, shipSy);
-      ctx.lineTo(shipSx + Math.cos(shipAngle) * dirLen, shipSy - Math.sin(shipAngle) * dirLen);
+      ctx.lineTo(shipSx + Math.cos(shipScreenAngle) * dirLen, shipSy + Math.sin(shipScreenAngle) * dirLen);
       ctx.strokeStyle = 'rgba(0, 255, 128, 0.3)';
       ctx.lineWidth = 1;
       ctx.stroke();
 
       // Spaceship
       ctx.fillStyle = '#00b8ff';
-      drawSpaceship(ctx, shipSx, shipSy, -shipAngle, isZoomed ? 10 : 12, hasEffectiveThrust(sp.thrust, sp.thrustMagnitude) ? sp.thrustMagnitude : 0);
+      drawSpaceship(ctx, shipSx, shipSy, shipScreenAngle, isZoomed ? 10 : 12, hasEffectiveThrust(sp.thrust, sp.thrustMagnitude) ? sp.thrustMagnitude : 0);
 
       // Scale indicator
       const scaleBarPx = gridStepPx;
@@ -852,10 +781,7 @@ function MiniMap() {
       // Legend
       ctx.textAlign = 'left';
       ctx.fillStyle = '#334455';
-      const legendText = isZoomed
-        ? `▲ ${REAL_DATA[nearestId]?.name || '天体'} · 绕飞视图`
-        : '▲ 飞船 · 俯视图';
-      ctx.fillText(legendText, 4, ch - 4);
+      ctx.fillText('▲ 飞船 · 俯视图', 4, ch - 4);
 
       // --- Legend at bottom (only when navigation plan exists) ---
       const navPlanLegend = useSpaceshipStore.getState().navigationPlan;
@@ -886,7 +812,7 @@ function MiniMap() {
         ctx.fillStyle = '#445566';
         ctx.fillText('目标绕飞', cw - 94, legendY + 2.5);
 
-        // Green dash = rendezvous route / nav orbit
+        // Green dash = rendezvous line
         ctx.strokeStyle = 'rgba(0,255,136,0.6)';
         ctx.lineWidth = 1;
         ctx.setLineDash([2, 1.5]);
@@ -896,19 +822,7 @@ function MiniMap() {
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle = '#445566';
-        ctx.fillText(navPlanLegend.method === 'direct-rendezvous' ? '汇合点' : '导航轨道', cw - 29, legendY + 2.5);
-
-        // Blue dash = expected orbit
-        ctx.strokeStyle = 'rgba(68,136,255,0.6)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 2]);
-        ctx.beginPath();
-        ctx.moveTo(cw + 5, legendY);
-        ctx.lineTo(cw + 25, legendY);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = '#445566';
-        ctx.fillText('期望轨道', cw + 31, legendY + 2.5);
+        ctx.fillText('汇合点', cw - 29, legendY + 2.5);
 
         ctx.restore();
       }

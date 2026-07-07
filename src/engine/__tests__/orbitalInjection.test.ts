@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { createSpaceshipState } from '../orbitalInjection';
-import { REAL_DATA, SPACECRAFT_CONFIG, MU_SUN_AU } from '../constants';
-
-const EPSILON = 1e-10;
 
 describe('orbitalInjection', () => {
   describe('createSpaceshipState', () => {

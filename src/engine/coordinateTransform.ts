@@ -1,4 +1,4 @@
-import { SIMPLIFIED_RADII, AU_TO_M } from './constants';
+import { SIMPLIFIED_RADII } from './constants';
 
 // src/engine/coordinateTransform.ts
 // 纯函数，无 React/Three.js 依赖，属于 engine/ 层

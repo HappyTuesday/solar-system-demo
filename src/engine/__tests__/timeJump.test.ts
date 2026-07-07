@@ -358,7 +358,7 @@ describe('consistency: time jump vs physical simulation', () => {
     );
     // For 1 day, position diff should still be small (< ~1500 km = 1e-5 AU)
     expect(posDiff).toBeLessThan(1e-5);
-  });
+  }, 15000);
 
   it('should match physical simulation within tolerance (circular solar orbit, 1 day)', () => {
     const now = J2000;

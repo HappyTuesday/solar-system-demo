@@ -1,35 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useSpaceshipStore } from '../spaceshipStore';
-import type { NavigationPhase, NavigationPlan } from '../../engine/navigation';
-import { computeBodyState } from '../../engine/navigation';
-import { REAL_DATA, MU_SUN_AU, G_AU, AU_TO_KM } from '../../engine/constants';
-import { julianDate } from '../../engine/orbital';
-
-function makePhase(
-  name: string, thrustDir: 'forward' | 'backward' | 'none', mag: number, targetSMA: number,
-): NavigationPhase {
-  return {
-    index: 0, name, thrustDirection: thrustDir, thrustMagnitude: mag,
-    deltaV: 0.01, expectedSpeedKms: 3, targetOrbit: { semiMajorAxis: targetSMA, eccentricity: 0.3 },
-  };
-}
+import type { NavigationPlan } from '../../engine/navigation';
+import { REAL_DATA, MU_SUN_AU, AU_TO_KM } from '../../engine/constants';
 
 function makeDirectPlan(point: [number, number, number] = [2, 0, 0]): NavigationPlan {
   return {
-    method: 'direct-rendezvous',
     destinationId: 'mars',
     plannedAt: 0,
-    phases: [
-      {
-        index: 0,
-        name: '加速到汇合滑行速度',
-        thrustDirection: 'forward',
-        thrustMagnitude: 100,
-        deltaV: 0,
-        expectedSpeedKms: 0,
-        targetOrbit: { semiMajorAxis: REAL_DATA.mars.semiMajorAxis!, eccentricity: 0.2 },
-      },
-    ],
     rendezvous: {
       point,
       plannedFrom: [1, 0, 0],
@@ -59,8 +36,8 @@ describe('spaceshipStore navigation lifecycle', () => {
     useSpaceshipStore.getState().setTargetBody('mars');
     const s = useSpaceshipStore.getState();
     expect(s.navigationPlan).not.toBeNull();
-    expect(s.activePhaseIndex).toBe(0);
-    expect(s.navigationPlan!.phases.length).toBeGreaterThanOrEqual(4);
+    expect(s.navigationPlan?.destinationId).toBe('mars');
+    expect(s.navigationPlan?.rendezvous).toBeDefined();
   });
 
   it('setTargetBody(null) should clear plan', () => {
@@ -68,185 +45,54 @@ describe('spaceshipStore navigation lifecycle', () => {
     useSpaceshipStore.getState().setTargetBody(null);
     const s = useSpaceshipStore.getState();
     expect(s.navigationPlan).toBeNull();
-    expect(s.activePhaseIndex).toBe(-1);
   });
 
-  it('checkNavigationalDeviation should NOT advance phase when burn is incomplete', () => {
-    useSpaceshipStore.getState().setTargetBody('mars');
-    const s = useSpaceshipStore.getState();
-    const plan = s.navigationPlan!;
-    // Replace phases with test phase that won't complete
-    plan.phases = [
-      makePhase('提升远日点', 'forward', 100, 2.0),
-    ];
-    useSpaceshipStore.setState({ navigationPlan: { ...plan }, activePhaseIndex: 0 });
-
-    const phaseBefore = useSpaceshipStore.getState().activePhaseIndex;
-    useSpaceshipStore.getState().checkNavigationalDeviation();
-    expect(useSpaceshipStore.getState().activePhaseIndex).toBe(phaseBefore);
-  });
-
-  it('checkNavigationalDeviation should advance phase when burn is complete', () => {
-    useSpaceshipStore.getState().setTargetBody('mars');
-    const s = useSpaceshipStore.getState();
-    const aTransferAU = (1.0 + REAL_DATA.mars.semiMajorAxis!) / 2;
-    const plan = s.navigationPlan!;
-    plan.phases = [
-      makePhase('提升远日点', 'forward', 100, aTransferAU),
-      makePhase('转移轨道滑行', 'none', 0, aTransferAU),
-    ];
-    // Ship far from Earth (in interplanetary space) with correct transfer orbit velocity
-    const shipR = 1.01; // slightly beyond 1 AU, away from Earth
-    const vBurn = Math.sqrt(MU_SUN_AU * (2 / shipR - 1 / aTransferAU));
-    useSpaceshipStore.setState({
-      navigationPlan: { ...plan },
-      targetBodyId: 'venus',
-      activePhaseIndex: 0,
-      position: [shipR, 0, 0],
-      velocity: [0, vBurn, 0],
-      orbitingBodyId: 'sun', // ensure we skip SOI check
-    });
-
-    useSpaceshipStore.getState().checkNavigationalDeviation();
-    const s2 = useSpaceshipStore.getState();
-    expect(s2.activePhaseIndex).toBe(1);
-  });
-
-  it('checkNavigationalDeviation should NOT crash when no plan', () => {
-    useSpaceshipStore.getState().setTargetBody(null);
-    expect(() => useSpaceshipStore.getState().checkNavigationalDeviation()).not.toThrow();
-  });
-
-  it('phase advance should not change manual thrust controls', () => {
-    useSpaceshipStore.getState().setTargetBody('mars');
-    const s = useSpaceshipStore.getState();
-    const aTransferAU = (1.0 + REAL_DATA.mars.semiMajorAxis!) / 2;
-    const plan = s.navigationPlan!;
-    plan.phases = [
-      makePhase('提升远日点', 'forward', 100, aTransferAU),
-      makePhase('转移轨道滑行', 'none', 0, aTransferAU),
-    ];
-    const shipR = 1.01;
-    const vBurn = Math.sqrt(MU_SUN_AU * (2 / shipR - 1 / aTransferAU));
-    useSpaceshipStore.setState({
-      navigationPlan: { ...plan },
-      targetBodyId: 'venus',
-      activePhaseIndex: 0,
-      position: [shipR, 0, 0],
-      velocity: [0, vBurn, 0],
-      orbitingBodyId: 'sun',
-      thrustMagnitude: 100,
-      thrust: [1, 0, 0],
-      gear: 'D',
-    });
-
-    useSpaceshipStore.getState().checkNavigationalDeviation();
-    const s2 = useSpaceshipStore.getState();
-    expect(s2.activePhaseIndex).toBe(1);
-    expect(s2.gear).toBe('D');
-    expect(s2.thrustMagnitude).toBe(100);
-    expect(s2.thrust).toEqual([1, 0, 0]);
-  });
-
-  it('Mars live directives should not let the legacy plan check clear freshly applied thrust', () => {
-    useSpaceshipStore.getState().setTargetBody('mars');
-    const s = useSpaceshipStore.getState();
-    const plan = s.navigationPlan!;
-    plan.method = 'hohmann';
-    plan.phases = [
-      makePhase('提升远日点', 'forward', 100, 1),
-      makePhase('转移轨道滑行', 'none', 0, 1),
-    ];
+  it('maybeReplanRendezvous should replace an expired uncaptured rendezvous plan', () => {
+    const now = Date.UTC(2027, 4, 13, 6);
+    const oldPlan = makeDirectPlan([2, 0, 0]);
+    oldPlan.plannedAt = now - 10_000;
+    oldPlan.rendezvous!.rendezvousTime = now - 1;
     useSpaceshipStore.setState({
       targetBodyId: 'mars',
-      navigationPlan: { ...plan },
-      activePhaseIndex: 0,
+      navigationPlan: oldPlan,
+      simulatedTime: now,
+      orbitingBodyId: 'sun',
       position: [1, 0, 0],
       velocity: [0, Math.sqrt(MU_SUN_AU), 0],
-      orbitingBodyId: 'sun',
-      thrustMagnitude: 1,
-      thrust: [1, 0, 0],
-      gear: 'D',
     });
 
-    useSpaceshipStore.getState().checkNavigationalDeviation();
+    useSpaceshipStore.getState().maybeReplanRendezvous();
     const s2 = useSpaceshipStore.getState();
 
-    expect(s2.activePhaseIndex).toBe(0);
-    expect(s2.thrustMagnitude).toBe(1);
-    expect(s2.thrust).toEqual([1, 0, 0]);
-    expect(s2.gear).toBe('D');
+    expect(s2.navigationPlan?.rendezvous?.rendezvousTime).toBeGreaterThan(now);
+    expect(s2.navigationPlan?.rendezvous?.point).not.toEqual([2, 0, 0]);
   });
 
-  it('direct Mars route should advance after escaping Earth so the route UI updates', () => {
-    const now = Date.UTC(2026, 6, 5);
-    const earthState = computeBodyState('earth', julianDate(now));
-    expect(earthState).not.toBeNull();
-    if (!earthState) return;
-
-    const relativeDistanceAU = 0.0001;
-    const earthMu = G_AU * REAL_DATA.earth.mass;
-    const escapeSpeedAUPerSec = Math.sqrt((2 * earthMu) / relativeDistanceAU);
+  it('maybeReplanRendezvous should keep the plan before rendezvous time or after target capture', () => {
+    const now = Date.UTC(2027, 4, 13, 6);
+    const futurePlan = makeDirectPlan([2, 0, 0]);
+    futurePlan.rendezvous!.rendezvousTime = now + 1_000;
     useSpaceshipStore.setState({
+      targetBodyId: 'mars',
+      navigationPlan: futurePlan,
       simulatedTime: now,
-      position: [
-        earthState.position[0] + relativeDistanceAU,
-        earthState.position[1],
-        earthState.position[2],
-      ],
-      velocity: [
-        earthState.velocity[0],
-        earthState.velocity[1] + escapeSpeedAUPerSec * 1.05,
-        earthState.velocity[2],
-      ],
-      orbitingBodyId: 'earth',
+      orbitingBodyId: 'sun',
     });
-    useSpaceshipStore.getState().setTargetBody('mars');
 
-    expect(useSpaceshipStore.getState().navigationPlan?.method).toBe('direct-rendezvous');
-    expect(useSpaceshipStore.getState().activePhaseIndex).toBe(0);
+    useSpaceshipStore.getState().maybeReplanRendezvous();
+    expect(useSpaceshipStore.getState().navigationPlan?.rendezvous?.point).toEqual([2, 0, 0]);
 
-    useSpaceshipStore.getState().checkNavigationalDeviation();
-
-    expect(useSpaceshipStore.getState().activePhaseIndex).toBe(1);
-  });
-
-  it('direct route should keep D thrust when advancing into the next forward acceleration stage', () => {
-    const now = Date.UTC(2026, 6, 5);
-    const earthState = computeBodyState('earth', julianDate(now));
-    expect(earthState).not.toBeNull();
-    if (!earthState) return;
-
-    const relativeDistanceAU = 0.0001;
-    const earthMu = G_AU * REAL_DATA.earth.mass;
-    const escapeSpeedAUPerSec = Math.sqrt((2 * earthMu) / relativeDistanceAU);
+    const capturedPlan = makeDirectPlan([3, 0, 0]);
+    capturedPlan.rendezvous!.rendezvousTime = now - 1;
     useSpaceshipStore.setState({
+      targetBodyId: 'mars',
+      navigationPlan: capturedPlan,
       simulatedTime: now,
-      position: [
-        earthState.position[0] + relativeDistanceAU,
-        earthState.position[1],
-        earthState.position[2],
-      ],
-      velocity: [
-        earthState.velocity[0],
-        earthState.velocity[1] + escapeSpeedAUPerSec * 1.05,
-        earthState.velocity[2],
-      ],
-      orbitingBodyId: 'earth',
+      orbitingBodyId: 'mars',
     });
-    useSpaceshipStore.getState().setTargetBody('mars');
-    useSpaceshipStore.getState().setThrustMagnitude(100);
-    useSpaceshipStore.getState().setGear('D');
 
-    useSpaceshipStore.getState().checkNavigationalDeviation();
-
-    const s = useSpaceshipStore.getState();
-    expect(s.navigationPlan?.method).toBe('direct-rendezvous');
-    expect(s.activePhaseIndex).toBe(1);
-    expect(s.navigationPlan?.phases[1]?.name).toBe('加速到汇合滑行速度');
-    expect(s.gear).toBe('D');
-    expect(s.thrustMagnitude).toBe(100);
-    expect(s.thrust[0]).toBe(1);
+    useSpaceshipStore.getState().maybeReplanRendezvous();
+    expect(useSpaceshipStore.getState().navigationPlan?.rendezvous?.point).toEqual([3, 0, 0]);
   });
 
   it('guided D gear setup should keep visible thrust magnitude and actual forward thrust in sync', () => {
@@ -277,7 +123,6 @@ describe('spaceshipStore navigation lifecycle', () => {
     useSpaceshipStore.setState({
       navigationPlan: makeDirectPlan(),
       targetBodyId: 'mars',
-      activePhaseIndex: 0,
       position: [1, 0, 0],
       velocity: [0, 1e-7, 0],
       direction: [1, 0, 0],
@@ -380,16 +225,13 @@ describe('spaceshipStore navigation lifecycle', () => {
       simulatedTime: timeBefore,
       targetBodyId: 'mars',
       navigationPlan: plan,
-      activePhaseIndex: 2,
       orbitingBodyId: 'sun',
     });
 
     useSpaceshipStore.getState().timeJump(timeBefore + 3600 * 1000);
 
     const s = useSpaceshipStore.getState();
-    expect(s.navigationPlan?.method).toBe('direct-rendezvous');
     expect(s.navigationPlan?.rendezvous?.point).toEqual([2, 0.5, 0]);
-    expect(s.activePhaseIndex).toBe(2);
   });
 
   it('timeJump should be a no-op when orbitingBodyId is null', () => {
@@ -405,16 +247,14 @@ describe('spaceshipStore navigation lifecycle', () => {
     expect(s.simulatedTime).toBe(timeBefore);
   });
 
-  it('replanNavigation should generate new plan and keep phase index close', () => {
+  it('replanNavigation should generate a fresh rendezvous-only plan', () => {
     useSpaceshipStore.getState().setTargetBody('mars');
-    const s = useSpaceshipStore.getState();
-    expect(s.navigationPlan).not.toBeNull();
-    const oldPhaseIdx = s.activePhaseIndex;
 
     useSpaceshipStore.getState().replanNavigation();
     const s2 = useSpaceshipStore.getState();
     expect(s2.navigationPlan).not.toBeNull();
-    expect(s2.activePhaseIndex).toBeLessThanOrEqual(oldPhaseIdx + 1);
+    expect(s2.navigationPlan?.destinationId).toBe('mars');
+    expect(s2.navigationPlan?.rendezvous).toBeDefined();
   });
 
   it('setGear(P) faces prograde, applies reverse brake thrust, and records initial direction', () => {

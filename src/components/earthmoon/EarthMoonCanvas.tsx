@@ -286,10 +286,13 @@ function EarthMoonCanvas() {
     };
     const onTE = () => { touchMid0 = null; touchDist0 = 0; };
 
+    interface GestureScaleEvent extends Event {
+      scale?: number;
+    }
     let gestureScale0 = 0;
-    const onGS = (e: Event) => { gestureScale0 = (e as any).scale || 1; };
+    const onGS = (e: GestureScaleEvent) => { gestureScale0 = e.scale || 1; };
     const onGC = (e: Event) => {
-      const s = (e as any).scale || 1;
+      const s = (e as GestureScaleEvent).scale || 1;
       zoomRef.current = Math.max(1, Math.min(60, zoomRef.current / (s / gestureScale0)));
       const aspect = Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
       updateOrthoZoom(camera, aspect, zoomRef.current);

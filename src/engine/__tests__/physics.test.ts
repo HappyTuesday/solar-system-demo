@@ -8,7 +8,7 @@ import {
   vec3Length,
   getBodyRadius,
 } from '../physics';
-import { PHYSICAL_CONSTANTS, G_AU, MU_SUN_AU } from '../constants';
+import { PHYSICAL_CONSTANTS, MU_SUN_AU } from '../constants';
 
 function makeBody(
   id: string,

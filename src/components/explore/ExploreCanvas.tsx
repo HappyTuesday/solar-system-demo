@@ -5,9 +5,9 @@ import { REAL_DATA, MU_SUN_AU as MU_SUN } from '../../engine/constants';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { useExploreStore } from '../../stores/exploreStore';
 import { checkSpaceshipCollision, hasEffectiveThrust } from '../../engine/spaceship';
-import { NAVIGATION_CONFIG } from '../../engine/constants';
 import { advanceExploreShipPhysics } from '../../engine/exploreSimulation';
 import { computeRendezvousPulse } from '../../engine/navigationVisual';
+import { computeRendezvousDirection } from '../../engine/navigation';
 import TimePanel from './TimePanel';
 
 const ORBIT_LINE_POINTS = 256;
@@ -479,6 +479,26 @@ function ExploreCanvas() {
     }
     scene.add(rendezvousGroup);
 
+    const rendezvousLineGeometry = new THREE.BufferGeometry();
+    rendezvousLineGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    const rendezvousLineMaterial = new THREE.LineDashedMaterial({
+      color: 0x00ff88,
+      transparent: true,
+      opacity: 0.55,
+      linewidth: 1,
+      dashSize: 0.02,
+      gapSize: 0.012,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const rendezvousLine = new THREE.Line(rendezvousLineGeometry, rendezvousLineMaterial);
+    rendezvousLine.visible = false;
+    rendezvousLine.renderOrder = 940;
+    scene.add(rendezvousLine);
+    disposablesRef.current.geometries.push(rendezvousLineGeometry);
+    disposablesRef.current.materials.push(rendezvousLineMaterial);
+    disposablesRef.current.lines.push(rendezvousLine);
+
     const bodyMeshes = new Map<string, THREE.Mesh>();
     const allIds = allIdsRef.current;
     const loader = new THREE.TextureLoader();
@@ -582,16 +602,7 @@ function ExploreCanvas() {
         simulatedTime = physics.simulatedTime;
         store.setSimulatedTime(simulatedTime);
 
-        {
-          const navStore = useSpaceshipStore.getState();
-          const elapsed = (simulatedTime - navStore.lastDeviationCheckTime) / 1000;
-          // Check every frame when thrust is active so burn sub-steps can
-          // auto-complete at the right moment without overshooting.
-          if (elapsed > NAVIGATION_CONFIG.deviationCheckInterval || hasEffectiveThrust(navStore.thrust, navStore.thrustMagnitude)) {
-            useSpaceshipStore.setState({ lastDeviationCheckTime: simulatedTime });
-            navStore.checkNavigationalDeviation();
-          }
-        }
+        useSpaceshipStore.getState().maybeReplanRendezvous();
 
         const finalBodies = physics.finalBodies;
         const finalBodyMap = new Map(finalBodies.map(body => [body.id, body]));
@@ -807,6 +818,11 @@ function ExploreCanvas() {
                   store.setDirection([dx / dist, dy / dist, dz / dist]);
                 }
               }
+            } else if (store.attitudeMode === 'rendezvous') {
+              const direction = computeRendezvousDirection(spPos, store.navigationPlan);
+              if (direction) {
+                store.setDirection(direction);
+              }
             }
           }
         }
@@ -930,10 +946,16 @@ function ExploreCanvas() {
 
       {
         const navPlan = useSpaceshipStore.getState().navigationPlan;
-        if (navPlan?.method === 'direct-rendezvous' && navPlan.rendezvous) {
+        if (navPlan?.rendezvous) {
           const point = navPlan.rendezvous.point;
           rendezvousGroup.visible = true;
           rendezvousGroup.position.set(point[0], point[1], point[2]);
+          rendezvousLine.visible = true;
+          const positions = rendezvousLineGeometry.getAttribute('position') as THREE.BufferAttribute;
+          positions.setXYZ(0, sp.position[0], sp.position[1], sp.position[2]);
+          positions.setXYZ(1, point[0], point[1], point[2]);
+          positions.needsUpdate = true;
+          rendezvousLine.computeLineDistances();
           const distance = Math.max(camera.position.distanceTo(rendezvousGroup.position), 1e-6);
           const baseWorldSize = Math.max(0.003, Math.min(0.08, distance * 0.018));
           const pulse = computeRendezvousPulse(time, {
@@ -954,6 +976,7 @@ function ExploreCanvas() {
           }
         } else {
           rendezvousGroup.visible = false;
+          rendezvousLine.visible = false;
         }
       }
 

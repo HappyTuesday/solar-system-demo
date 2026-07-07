@@ -1,4 +1,4 @@
-import { REAL_DATA, PHYSICAL_CONSTANTS, G_AU, SPACECRAFT_CONFIG, MU_SUN_AU } from './constants';
+import { REAL_DATA, G_AU, SPACECRAFT_CONFIG, MU_SUN_AU } from './constants';
 import { stateVectors, julianDate, solveKepler, trueAnomaly, orbitalPeriod, meanAnomalyAtTime } from './orbital';
 import type { SpaceshipState } from '../types';
 

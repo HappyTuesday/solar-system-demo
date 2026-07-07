@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { AU_TO_KM, REAL_DATA } from '../../engine/constants';
 import type { AttitudeMode } from '../../types';
-import type { NavigationPlan } from '../../engine/navigation';
+import { computeRendezvousDisplayParams } from '../../engine/navigation';
 import MiniMap from './MiniMap';
 import TargetSelectionModal from './TargetSelectionModal';
 import './Dashboard.css';
@@ -14,15 +14,6 @@ const ATTITUDE_HOLD_INTERVAL_MS = 80;
 const ATTITUDE_MEDIUM_AFTER_MS = 600;
 const ATTITUDE_LARGE_AFTER_MS = 1600;
 
-function formatWaitDays(days: number): string {
-  if (days <= 0.00001) return '即将就绪';
-  const totalSec = days * 86400;
-  if (totalSec < 60) return `${Math.max(1, Math.round(totalSec))} 秒`;
-  if (totalSec < 3600) return `${Math.round(totalSec / 60)} 分`;
-  if (totalSec < 86400) return `${Math.round(totalSec / 3600)} 小时`;
-  return `${Math.round(days)} 天`;
-}
-
 function formatDurationSec(seconds: number): string {
   if (!Number.isFinite(seconds)) return '不可达';
   if (seconds < 3600) return `${Math.max(1, Math.round(seconds / 60))} 分`;
@@ -30,19 +21,19 @@ function formatDurationSec(seconds: number): string {
   return `${Math.round(seconds / 86400)} 天`;
 }
 
-function directPhaseDetail(phaseName: string, navigationPlan: NavigationPlan): string {
-  const rendezvous = navigationPlan.rendezvous;
-  if (!rendezvous) return '实时评估阶段目标';
-  if (phaseName === '加速到汇合滑行速度') {
-    return `目标有效速度 ${(rendezvous.shipIdealCruiseSpeedAUPerSec * AU_TO_KM).toFixed(1)} km/s`;
-  }
-  if (phaseName === '滑行接近汇合点') {
-    return `目标到达汇合点约 ${formatDurationSec(rendezvous.targetTimeToRendezvousSec)}`;
-  }
-  if (phaseName === '汇合前减速') {
-    return `相对速度降至 ${(rendezvous.arrivalMaxRelativeSpeedAUPerSec * AU_TO_KM).toFixed(2)} km/s 以下`;
-  }
-  return '阶段目标实时判定';
+function formatSignedSpeed(speedAUPerSec: number): string {
+  const speed = speedAUPerSec * AU_TO_KM;
+  return `${speed >= 0 ? '+' : ''}${speed.toFixed(2)} km/s`;
+}
+
+function formatSignedAngle(angleDeg: number): string {
+  return `${angleDeg >= 0 ? '+' : ''}${angleDeg.toFixed(1)}°`;
+}
+
+function formatDistance(distanceAU: number): string {
+  const distanceKm = distanceAU * AU_TO_KM;
+  if (distanceKm >= 1_000_000) return `${(distanceKm / 1_000_000).toFixed(2)} 百万 km`;
+  return `${Math.round(distanceKm).toLocaleString('zh-CN')} km`;
 }
 
 function Dashboard() {
@@ -64,13 +55,25 @@ function Dashboard() {
   const targetBodyId = useSpaceshipStore(s => s.targetBodyId);
   const setTargetBody = useSpaceshipStore(s => s.setTargetBody);
   const navigationPlan = useSpaceshipStore(s => s.navigationPlan);
-  const activePhaseIndex = useSpaceshipStore(s => s.activePhaseIndex);
-  const deviationWarning = useSpaceshipStore(s => s.deviationWarning);
+  const position = useSpaceshipStore(s => s.position);
+  const velocity = useSpaceshipStore(s => s.velocity);
+  const simulatedTime = useSpaceshipStore(s => s.simulatedTime);
+  const orbitingBodyId = useSpaceshipStore(s => s.orbitingBodyId);
   const [showTargetModal, setShowTargetModal] = useState(false);
-  const showTangentialGear = navigationPlan?.method === 'direct-rendezvous' && Boolean(navigationPlan.rendezvous);
+  const showTangentialGear = Boolean(navigationPlan?.rendezvous);
 
   const sliderTrackRef = useRef<HTMLDivElement>(null);
-  const navPhasesRef = useRef<HTMLDivElement>(null);
+  const rendezvousParams = useMemo(() => {
+    if (!navigationPlan?.rendezvous) return null;
+    return computeRendezvousDisplayParams(
+      position,
+      velocity,
+      direction,
+      navigationPlan,
+      simulatedTime,
+      orbitingBodyId,
+    );
+  }, [direction, navigationPlan, orbitingBodyId, position, simulatedTime, velocity]);
 
   const updateThrustFromClientX = useCallback((clientX: number) => {
     const track = sliderTrackRef.current;
@@ -146,20 +149,6 @@ function Dashboard() {
       applyStep(step);
     }, ATTITUDE_HOLD_INTERVAL_MS);
   }, []);
-
-  useEffect(() => {
-    if (!navPhasesRef.current || activePhaseIndex < 0) return;
-    const activeEl = navPhasesRef.current.querySelector('.dashboard-nav-phase.active');
-    if (activeEl) {
-      activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
-  }, [activePhaseIndex]);
-
-  const getPhaseStatus = (phaseIdx: number): 'completed' | 'active' | 'pending' => {
-    if (phaseIdx < activePhaseIndex) return 'completed';
-    if (phaseIdx === activePhaseIndex) return 'active';
-    return 'pending';
-  };
 
   return (
     <div className="dashboard-container">
@@ -295,6 +284,13 @@ function Dashboard() {
                     onClick={() => setAttitudeMode('target' as AttitudeMode)}
                   >指向{REAL_DATA[targetBodyId]?.name || ''}</button>
                 )}
+                {navigationPlan?.rendezvous && (
+                  <button
+                    className={`dashboard-mode-btn${attitudeMode === 'rendezvous' ? ' active' : ''}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setAttitudeMode('rendezvous' as AttitudeMode)}
+                  >指向汇合点</button>
+                )}
               </div>
             </div>
 
@@ -321,39 +317,30 @@ function Dashboard() {
                 </div>
               )}
 
-              {navigationPlan && navigationPlan.phases.length > 0 ? (
-                <div className="dashboard-nav-phases" ref={navPhasesRef}>
-                  {navigationPlan.phases.map((phase) => {
-                    const status = getPhaseStatus(phase.index);
-                    const icon = status === 'completed' ? '✓' : status === 'active' ? '→' : '○';
-                    return (
-                      <div key={phase.index} className={`dashboard-nav-phase ${status}`}>
-                        <span className={`dashboard-nav-phase-icon ${status}`}>{icon}</span>
-                        <div>
-                          <div className={`dashboard-nav-phase-name ${status}`}>
-                            阶段{phase.index + 1}：{phase.name}
-                          </div>
-                          <div className="dashboard-nav-phase-detail">
-                            {navigationPlan.method === 'direct-rendezvous'
-                              ? directPhaseDetail(phase.name, navigationPlan)
-                              : phase.name.startsWith('等待')
-                                ? (phase.expectedWaitDays != null
-                                    ? `预计等待约 ${formatWaitDays(phase.expectedWaitDays)}`
-                                    : '等待发射窗口')
-                                : phase.thrustDirection === 'none'
-                                  ? '无推力 · 等待转移'
-                                  : `推力 ${phase.thrustDirection === 'forward' ? '↑' : '↓'}${phase.thrustMagnitude}MN · Δv ${phase.deltaV.toFixed(3)} AU/s`}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+              {rendezvousParams ? (
+                <div className="dashboard-rendezvous-params">
+                  <div><span>目标到达汇合点</span><strong>{formatDurationSec(rendezvousParams.targetTimeToRendezvousSec)}</strong></div>
+                  <div><span>飞船到达汇合点</span><strong>{formatDurationSec(rendezvousParams.shipTimeToRendezvousSec)}</strong></div>
+                  <div><span>径向 / 切向速度</span><strong>{formatSignedSpeed(rendezvousParams.radialSpeedAUPerSec)} / {formatSignedSpeed(rendezvousParams.tangentialSpeedAUPerSec)}</strong></div>
+                  <div><span>船身与汇合线</span><strong>{formatSignedAngle(rendezvousParams.noseAngleDeg)}</strong></div>
+                  <div><span>速度与汇合线</span><strong>{formatSignedAngle(rendezvousParams.velocityAngleDeg)}</strong></div>
+                  <div>
+                    <span>捕获日心速率</span>
+                    <strong>
+                      {(rendezvousParams.captureHelioSpeedMinAUPerSec * AU_TO_KM).toFixed(2)}
+                      {' - '}
+                      {(rendezvousParams.captureHelioSpeedMaxAUPerSec * AU_TO_KM).toFixed(2)} km/s
+                    </strong>
+                  </div>
+                  {rendezvousParams.escapeSpeedAUPerSec != null && (
+                    <div><span>逃逸速度</span><strong>{(rendezvousParams.escapeSpeedAUPerSec * AU_TO_KM).toFixed(2)} km/s</strong></div>
+                  )}
+                  <div>
+                    <span>目标 / 汇合点距离</span>
+                    <strong>{formatDistance(rendezvousParams.distanceToTargetAU)} / {formatDistance(rendezvousParams.distanceToRendezvousAU)}</strong>
+                  </div>
                 </div>
               ) : null}
-
-              {deviationWarning && (
-                <div className="dashboard-nav-warning">{deviationWarning}</div>
-              )}
             </div>
 
             {/* Separator */}

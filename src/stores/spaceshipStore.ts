@@ -2,10 +2,10 @@ import { create } from 'zustand';
 import type { SpaceshipState, AttitudeMode } from '../types';
 import { createSpaceshipState } from '../engine/orbitalInjection';
 import type { NavigationPlan } from '../engine/navigation';
-import { planDirectRendezvousTransfer, checkDeviation, checkPhaseCompleted } from '../engine/navigation';
-import { NAVIGATION_CONFIG, MU_SUN_AU, AU_TO_KM } from '../engine/constants';
+import { planDirectRendezvousTransfer } from '../engine/navigation';
+import { AU_TO_KM } from '../engine/constants';
 import { jumpSpaceshipState } from '../engine/timeJump';
-import { hasEffectiveThrust, parkBrakeSnapshot, parkBrakeThrustMagnitude, PARK_BRAKE_EPS_AU_PER_SEC } from '../engine/spaceship';
+import { parkBrakeSnapshot, parkBrakeThrustMagnitude, PARK_BRAKE_EPS_AU_PER_SEC } from '../engine/spaceship';
 
 export type ExplosionPhase = 'none' | 'exploding' | 'complete';
 export type Gear = 'D' | 'N' | 'R' | 'T' | 'P';
@@ -26,9 +26,6 @@ export interface SpaceshipStore extends SpaceshipState {
   orbitingBodyId: string | null;
 
   navigationPlan: NavigationPlan | null;
-  activePhaseIndex: number;
-  deviationWarning: string | null;
-  lastDeviationCheckTime: number;
   lastReplanTime: number;
 
   explosionPhase: ExplosionPhase;
@@ -68,8 +65,7 @@ export interface SpaceshipStore extends SpaceshipState {
   setNearestBodyId: (id: string | null) => void;
   setOrbitingBodyId: (id: string | null) => void;
   setNavigationPlan: (plan: NavigationPlan | null) => void;
-  setActivePhaseIndex: (idx: number) => void;
-  checkNavigationalDeviation: () => void;
+  maybeReplanRendezvous: () => void;
   replanNavigation: () => void;
   timeJump: (targetTime: number) => void;
 }
@@ -127,7 +123,7 @@ function directTangentialSpeedSnapshot(
   velocity: [number, number, number],
   plan: NavigationPlan | null,
 ): { sign: number; tangentialAbs: number; correctionDirection: [number, number, number] } | null {
-  if (plan?.method !== 'direct-rendezvous' || !plan.rendezvous) return null;
+  if (!plan?.rendezvous) return null;
   const toRendezvous: [number, number, number] = [
     plan.rendezvous.point[0] - position[0],
     plan.rendezvous.point[1] - position[1],
@@ -161,7 +157,7 @@ function tangentialCorrectionThrustMagnitude(tangentialAbs: number): number {
 }
 
 function shouldReplanAfterTimeJump(plan: NavigationPlan | null, targetTime: number): boolean {
-  if (plan?.method !== 'direct-rendezvous' || !plan.rendezvous) return true;
+  if (!plan?.rendezvous) return true;
   return targetTime > plan.rendezvous.rendezvousTime;
 }
 
@@ -178,9 +174,6 @@ const initialState = {
   nearestBodyId: 'earth' as string | null,
   orbitingBodyId: 'earth' as string | null,
   navigationPlan: null as NavigationPlan | null,
-  activePhaseIndex: -1 as number,
-  deviationWarning: null as string | null,
-  lastDeviationCheckTime: now as number,
   lastReplanTime: 0 as number,
   explosionPhase: 'none' as ExplosionPhase,
   gear: 'N' as Gear,
@@ -323,9 +316,6 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     nearestBodyId: 'earth' as string | null,
     orbitingBodyId: 'earth' as string | null,
     navigationPlan: null as NavigationPlan | null,
-    activePhaseIndex: -1 as number,
-    deviationWarning: null as string | null,
-    lastDeviationCheckTime: Date.now() as number,
     lastReplanTime: 0 as number,
     explosionPhase: 'none' as ExplosionPhase,
     gear: 'N' as Gear,
@@ -357,79 +347,33 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
       const plan = planDirectRendezvousTransfer(s.position, s.velocity, id, s.simulatedTime);
       return {
         targetBodyId: id,
-        navigationPlan: plan.phases.length > 0 ? plan : null,
-        activePhaseIndex: plan.phases.length > 0 ? 0 : -1,
-        deviationWarning: null,
+        navigationPlan: plan.rendezvous ? plan : null,
         lastReplanTime: s.simulatedTime,
       };
     }
     return {
       targetBodyId: null,
       navigationPlan: null,
-      activePhaseIndex: -1,
-      deviationWarning: null,
       gear: s.gear === 'T' ? 'N' as Gear : s.gear,
       tangentialCorrectionSign: null,
       tangentialCorrectionLastAbs: null,
     };
   }),
   setNavigationPlan: (plan) => set({ navigationPlan: plan }),
-  setActivePhaseIndex: (idx) => set({ activePhaseIndex: idx }),
-  checkNavigationalDeviation: () => {
+  maybeReplanRendezvous: () => {
     const s = useSpaceshipStore.getState();
-    if (s.targetBodyId === 'mars' && s.navigationPlan?.method !== 'direct-rendezvous') return;
-    if (!s.navigationPlan || s.activePhaseIndex < 0 || s.activePhaseIndex >= s.navigationPlan.phases.length) return;
-
-    const phase = s.navigationPlan.phases[s.activePhaseIndex];
-    if (!phase) return;
-
-    // Check if current phase is complete → advance to next phase
-    const done = checkPhaseCompleted(
-      phase, s.position, s.velocity,
-      s.navigationPlan.destinationId, s.simulatedTime,
-    );
-    if (done) {
-      const nextIdx = s.activePhaseIndex + 1;
-      if (nextIdx < s.navigationPlan.phases.length) {
-        useSpaceshipStore.setState({
-          activePhaseIndex: nextIdx,
-          deviationWarning: null,
-        });
-      }
-      return;
-    }
-
-    // Deviation check for burn phases (overshoot detection)
-    const isBurnPhase = phase.name.includes('提升') || phase.name.includes('降低') || phase.name.includes('捕获') || phase.name === '绕飞圆化';
-    if (isBurnPhase) {
-      const result = checkDeviation(s.position, s.velocity, s.navigationPlan, s.activePhaseIndex, s.simulatedTime);
-      if (result.deviated && hasEffectiveThrust(s.thrust, s.thrustMagnitude)) {
-        const r = Math.sqrt(s.position[0] ** 2 + s.position[1] ** 2 + s.position[2] ** 2);
-        const v2 = s.velocity[0] ** 2 + s.velocity[1] ** 2 + s.velocity[2] ** 2;
-        const aCurrent = 1 / (2 / r - v2 / MU_SUN_AU);
-        const aTarget = phase.targetOrbit.semiMajorAxis;
-        const isForwardBurn = phase.thrustDirection === 'forward';
-        const hasOvershot = isForwardBurn
-          ? (aCurrent > aTarget + NAVIGATION_CONFIG.deviationThresholdAU * 10)
-          : (aCurrent < aTarget - NAVIGATION_CONFIG.deviationThresholdAU * 10);
-        if (hasOvershot) {
-          const cooldown = s.simulatedTime - s.lastReplanTime;
-          if (cooldown > NAVIGATION_CONFIG.rePlanCooldownSec * 1000) {
-            useSpaceshipStore.setState({ deviationWarning: `偏离预定轨道 ${result.deviationKms.toFixed(0)} km，正在重规划...` });
-            useSpaceshipStore.getState().replanNavigation();
-          }
-        }
-      }
-    }
+    if (!s.navigationPlan?.rendezvous || !s.targetBodyId) return;
+    if (s.orbitingBodyId === s.targetBodyId) return;
+    if (s.simulatedTime < s.navigationPlan.rendezvous.rendezvousTime) return;
+    useSpaceshipStore.getState().replanNavigation();
   },
   replanNavigation: () => {
     const s = useSpaceshipStore.getState();
-    if (!s.navigationPlan || s.activePhaseIndex < 0) return;
-    const plan = planDirectRendezvousTransfer(s.position, s.velocity, s.navigationPlan.destinationId, s.simulatedTime);
+    const destinationId = s.targetBodyId ?? s.navigationPlan?.destinationId;
+    if (!destinationId) return;
+    const plan = planDirectRendezvousTransfer(s.position, s.velocity, destinationId, s.simulatedTime);
     useSpaceshipStore.setState({
-      navigationPlan: plan,
-      activePhaseIndex: Math.min(s.activePhaseIndex, plan.phases.length - 1),
-      deviationWarning: '路线已重规划',
+      navigationPlan: plan.rendezvous ? plan : null,
       lastReplanTime: s.simulatedTime,
     });
   },
@@ -451,11 +395,9 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     const updated = useSpaceshipStore.getState();
     if (updated.targetBodyId && shouldReplanAfterTimeJump(updated.navigationPlan, targetTime)) {
       const plan = planDirectRendezvousTransfer(newShip.position, newShip.velocity, updated.targetBodyId, targetTime);
-      if (plan.phases.length > 0) {
+      if (plan.rendezvous) {
         useSpaceshipStore.setState({
           navigationPlan: plan,
-          activePhaseIndex: 0,
-          deviationWarning: null,
         });
       }
     }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+/* eslint-disable react-refresh/only-export-components */
 
 interface BodyInfo {
   id: string;
@@ -40,8 +41,8 @@ export function computeOffScreenBodies(
     const clampedX = Math.max(0.03, Math.min(0.97, sx));
     const clampedY = Math.max(0.03, Math.min(0.97, sy));
 
-    let edgeX = clampedX;
-    let edgeY = clampedY;
+    let edgeX: number;
+    let edgeY: number;
 
     if (behindCamera) {
       edgeX = 0.5;

@@ -7,14 +7,11 @@ import {
 } from './setup';
 import { bodyMeshMap } from './bodies';
 import { useUIStore } from '../../stores/uiStore';
-import { useBuildStore } from '../../stores/buildStore';
 
 interface GestureEvent extends UIEvent {
   scale: number;
-  rotation: number;
 }
 
-const ROTATE_SENSITIVITY = 0.004;
 const ZOOM_SENSITIVITY = 0.012;
 const WHEEL_ZOOM_SENSITIVITY = 0.005;
 const WHEEL_PAN_SENSITIVITY = 0.5;
@@ -24,9 +21,6 @@ const INERTIA_STOP_THRESHOLD = 0.0003;
 let _canvas: HTMLCanvasElement | null = null;
 
 // --- Touch state ---
-let rotationActive = false;
-let lastRotationX = 0;
-let lastRotationY = 0;
 let pinchActive = false;
 let lastPinchDistance = 0;
 let lastMidX = 0;
@@ -34,7 +28,6 @@ let lastMidY = 0;
 const activeTouches: Map<number, { x: number; y: number }> = new Map();
 
 // --- Gesture (Safari pinch) state ---
-let gestureStartZoom = 0;
 let gestureLastScale = 1;
 
 // --- Zoom inertia ---
@@ -88,7 +81,6 @@ function handleTouchStart(e: TouchEvent): void {
     if (!hasToolSelected) e.preventDefault();
   } else if (e.touches.length === 2) {
     e.preventDefault();
-    rotationActive = false;
     pinchActive = true;
     const t0 = e.touches[0];
     const t1 = e.touches[1];
@@ -146,7 +138,7 @@ function handleTouchEnd(e: TouchEvent): void {
     startZoomInertia();
   }
   if (e.touches.length === 0) {
-    rotationActive = false;
+    pinchActive = false;
   }
 }
 
@@ -180,7 +172,6 @@ function handleWheel(e: WheelEvent): void {
 function handleGestureStart(e: Event): void {
   e.preventDefault();
   stopInertia();
-  gestureStartZoom = getZoom();
   gestureLastScale = 1;
 }
 
@@ -315,7 +306,6 @@ export function destroyTouchInteraction(): void {
   window.removeEventListener('mousemove', handleMouseMoveForRotation);
   window.removeEventListener('mouseup', handleMouseUpForRotation);
   _canvas = null;
-  rotationActive = false;
   pinchActive = false;
   mouseRotating = false;
   activeTouches.clear();

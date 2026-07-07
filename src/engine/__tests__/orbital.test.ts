@@ -9,8 +9,6 @@ import {
 } from '../orbital';
 import { MU_SUN_AU } from '../constants';
 
-const EPSILON = 1e-10;
-
 describe('orbital', () => {
   describe('solveKepler', () => {
     it('should converge for M=0, e=0', () => {
@@ -119,7 +117,6 @@ describe('orbital', () => {
     it('should increase by 2π over one orbital period', () => {
       const period = 10000; // seconds
       const epoch = 2451545.0;
-      const M0 = meanAnomalyAtTime(0, period, epoch, epoch);
       const M1 = meanAnomalyAtTime(0, period, epoch, epoch + period / 86400);
       expect(M1).toBeCloseTo(2 * Math.PI, 6);
     });

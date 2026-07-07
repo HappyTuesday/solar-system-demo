@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BUILD_DATA, type BuildBodyData } from '../buildData';
+import { BUILD_DATA } from '../buildData';
 import { G_AU } from '../constants';
 
 const EPSILON = 1e-12;

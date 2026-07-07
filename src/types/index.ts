@@ -117,7 +117,8 @@ export type AttitudeMode =
   | 'heliocentric-prograde'
   | 'heliocentric-retrograde'
   | 'nadir'
-  | 'target';
+  | 'target'
+  | 'rendezvous';
 
 export interface SpaceshipState {
   position: [number, number, number];

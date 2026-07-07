@@ -16,7 +16,6 @@ export default function ControlPanel() {
   const timeScale = useBuildStore(s => s.timeScale);
   const adjustTimeScale = useBuildStore(s => s.adjustTimeScale);
   const showTrails = useUIStore(s => s.showTrails);
-  const trailLength = useUIStore(s => s.trailLength);
 
   const [editingMass, setEditingMass] = useState<string>('');
   const [expanded, setExpanded] = useState(false);

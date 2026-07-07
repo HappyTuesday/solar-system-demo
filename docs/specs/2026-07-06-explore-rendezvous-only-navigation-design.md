@@ -21,6 +21,7 @@
 ## 非目标
 
 - 不改变 P 档（泊车）、T 档（切向修正）、姿态保持模式（惯性/顺向/指向目标）的既有行为，仅移除阶段与指引逻辑。
+- 设置目标并生成汇合点后，姿态保持增加“指向汇合点”模式，自动将船头指向当前 `navigationPlan.rendezvous.point`。当没有汇合点时不显示该模式。
 - 不改变物理仿真（`advanceExploreShipPhysics`、天体 Kepler 传播）。
 - 不新增 Hohmann 转移能力（本次为移除方向）。
 
@@ -35,7 +36,7 @@
 5. **速度与汇合线的夹角**：速度矢量与飞船→汇合点方向的有符号夹角，**顺时针为负**。
 6. **在汇合点能够被捕获的日心速度范围**：以目标天体在汇合点处的日心速率为中心，`[v_target − vCap, v_target + vCap]`，其中 `vCap = arrivalMaxRelativeSpeedAUPerSec`（≈0.65 km/s 的最大相对速度）。显示为折合后的日心速率范围（km/s）。
 7. **逃逸速度**：仅当飞船处于某天体引力范围内（`orbitingBodyId` 非空）时显示，`v_esc = sqrt(2·mu_body / r)`（r 为飞船到该天体距离）。
-8. **飞船到目标的直线距离**：飞船位置到目标天体当前位置的直线距离（注意：是到目标天体，不是到汇合点）。
+8. **飞船距离**：同一行显示飞船到目标天体当前位置的直线距离，以及飞船到当前 `navigationPlan.rendezvous.point` 的直线距离。
 
 单位约定遵循 AGENTS.md：引擎层统一 AU / AU·s⁻¹ / 秒；`.tsx` 仅在显示时折算为 km、km/s、度、天/小时/分。
 
@@ -60,6 +61,7 @@
     captureHelioSpeedMaxAUPerSec: number;   // 日心捕获速度范围上界
     escapeSpeedAUPerSec: number | null;     // 仅在天体引力范围内非空
     distanceToTargetAU: number;             // 飞船到目标天体直线距离
+    distanceToRendezvousAU: number;         // 飞船到汇合点直线距离
   }
   ```
 
@@ -91,6 +93,9 @@
   - 删除阶段列表渲染、`directPhaseDetail`、`formatWaitDays`、`deviationWarning`、`activePhaseIndex`、`navPhasesRef` 及滚动 effect。
   - 在"导航路线"面板目的地选择器下方，新增实时参数列表，数据来自 `computeRendezvousDisplayParams`，`.tsx` 仅做格式化（AU→km、AU/s→km/s、度、时间）。
   - T 档显隐条件由 `navigationPlan?.method === 'direct-rendezvous'` 改为 `Boolean(navigationPlan?.rendezvous)`。
+  - 在目的地已设置且 `navigationPlan.rendezvous` 存在时，姿态保持按钮组增加“指向汇合点”。
+- **`src/components/explore/ExploreCanvas.tsx`**：
+  - 新增 `rendezvous` 姿态保持分支，使用引擎纯函数计算飞船指向汇合点的单位方向。
 - **`src/components/explore/MiniMap.tsx`**：保留汇合点脉冲、汇合线、预测轨迹、当前绕飞圆；删除 Hohmann 目标/期望轨道椭圆与相应旧图例。
 - **删除文件**：`PhaseGuide.tsx`、`PhaseGuide.css`、`PhaseGuide.test.ts`、`FlightParametersPanel.tsx`、`FlightParametersPanel.css`、`FlightParametersPanel.test.ts`。
 
@@ -119,6 +124,7 @@ ExploreCanvas / MiniMap
   - 捕获日心速度范围（下界不小于 0，中心为目标日心速率）。
   - 逃逸速度出现条件（`orbitingBodyId` 为空时为 null）。
   - 飞船到目标直线距离。
+  - 飞船到汇合点直线距离。
 - `spaceshipStore`：`maybeReplanRendezvous` 触发/不触发条件测试；删除阶段相关测试。
 - 更新/删除受影响的组件测试（Dashboard、MiniMap）；删除 PhaseGuide/FlightParametersPanel/marsGuided/guidanceControls 相关测试。
 - 全量校验：`npm run build`（含 tsc 严格类型检查）与 `npm run lint` 通过。
