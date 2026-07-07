@@ -251,7 +251,7 @@ function Dashboard() {
                     <div />
                   </div>
                 </div>
-                <div className="dashboard-pad-group compact">
+                <div className="dashboard-pad-group">
                   <div className="dashboard-pad-label">平移推力</div>
                   <div className="dashboard-pad-grid">
                     <div />

@@ -250,17 +250,6 @@
   cursor: not-allowed;
 }
 
-.dashboard-pad-group.compact {
-  flex: 0 0 auto;
-}
-
-.dashboard-pad-group.compact .dashboard-pad-grid {
-  flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
-  margin: 0 auto;
-}
-
 .dashboard-pad-label {
   font-size: 6px;
   color: #445566;
