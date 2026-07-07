@@ -3,6 +3,7 @@ import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { AU_TO_KM, REAL_DATA } from '../../engine/constants';
 import type { AttitudeMode } from '../../types';
 import { computeRendezvousDisplayParams } from '../../engine/navigation';
+import { canEnableCruise } from '../../engine/cruise';
 import MiniMap from './MiniMap';
 import TargetSelectionModal from './TargetSelectionModal';
 import './Dashboard.css';
@@ -61,6 +62,13 @@ function Dashboard() {
   const orbitingBodyId = useSpaceshipStore(s => s.orbitingBodyId);
   const [showTargetModal, setShowTargetModal] = useState(false);
   const showTangentialGear = Boolean(navigationPlan?.rendezvous);
+  const cruiseActive = useSpaceshipStore(s => s.cruiseActive);
+  const toggleCruise = useSpaceshipStore(s => s.toggleCruise);
+  const thrust = useSpaceshipStore(s => s.thrust);
+  const cruiseEnabled = useMemo(
+    () => cruiseActive || canEnableCruise(position, velocity, thrust, thrustMagnitude, navigationPlan),
+    [cruiseActive, position, velocity, thrust, thrustMagnitude, navigationPlan],
+  );
 
   const sliderTrackRef = useRef<HTMLDivElement>(null);
   const rendezvousParams = useMemo(() => {
@@ -291,6 +299,13 @@ function Dashboard() {
                     onClick={() => setAttitudeMode('rendezvous' as AttitudeMode)}
                   >指向汇合点</button>
                 )}
+                <button
+                  className={`dashboard-mode-btn${cruiseActive ? ' active' : ''}`}
+                  disabled={!cruiseEnabled}
+                  title="巡航：自动挂T修正切向，预测将到达汇合点时挂P制动并停止"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => toggleCruise()}
+                >巡航</button>
               </div>
             </div>
 
