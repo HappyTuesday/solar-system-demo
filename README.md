@@ -1,73 +1,108 @@
-# React + TypeScript + Vite
+# 太阳系搭建演示
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+一个基于 React 和 Three.js 的交互式太阳系教育演示应用。项目将天体运动模拟、地月系统可视化和飞船探索结合在一起，用户可以从搭建太阳系开始，观察轨道与天文现象，再驾驶飞船探索太阳系。
 
-Currently, two official plugins are available:
+## 最新功能
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+### 搭建模式
 
-## React Compiler
+- 从天体目录中选择太阳、行星、卫星等天体并放置到场景中。
+- 设置天体的位置、质量和初速度，使用 N 体引力模拟观察系统演化。
+- 支持坐标显示、距离标尺、天体状态查看和近距离接近提示。
+- 支持历史记录、撤销与恢复，便于反复调整搭建方案。
+- 搭建完成后可与真实太阳系数据进行对比并获得评分。
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 地月系统
 
-## Expanding the ESLint configuration
+- 展示地球和月球的相对运动以及月相变化。
+- 模拟日食和月食，并显示对应的天文状态。
+- 支持时间控制和时间滑块，观察不同时间点的地月系统变化。
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### 探索模式
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- 采用第一人称驾驶舱视角，驾驶飞船在太阳系中自由飞行。
+- 飞船参与引力和推力共同作用的物理模拟，使用 RK4 积分推进运动状态。
+- 通过姿态控制精确调整船头方向，支持 0.1 度级别的微调和持续按压加速调整。
+- 提供 D、N、R、P、T 档位控制：
+  - `D/N/R`：前进、空挡和反向推力。
+  - `P`：泊车制动，自动朝向当前运动方向并反向减速，速度归零后自动回到 `N` 档。
+  - `T`：切向修正，帮助降低汇合过程中的横向速度。
+- 支持直接汇合导航。选择目标天体后，系统根据实时飞船状态持续规划汇合点和下一阶段目标。
+- 支持巡航模式，在满足条件时自动进行切向修正，并在合适时机进入泊车制动，使飞船自动到达并停在汇合点附近。
+- 支持模拟时间控制，包括时间倍率和时间跳转，便于观察长距离飞行过程。
+- 提供飞行仪表盘、速度与推力读数、导航指引、轨道参数和俯视导航图。
+- 导航图以飞船为中心并反映当前船身朝向，可显示天体、轨道、轨迹、速度方向和汇合点。
+- 飞船速度上限为 `1000 km/s`，达到上限后继续推力不会使速度继续增加。
+- 支持飞船碰撞检测和碰撞状态展示。
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## 技术栈
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- React 19
+- TypeScript 6（strict 模式）
+- Vite 8
+- Three.js
+- Zustand 5
+- React Router 7
+- Vitest
+
+## 运行项目
+
+环境要求：Node.js 20.19+ 或 Node.js 22.12+。
+
+安装依赖：
+
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+启动开发服务器：
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+构建生产版本：
+
+```bash
+npm run build
+```
+
+运行单元测试：
+
+```bash
+npm test
+```
+
+运行代码检查：
+
+```bash
+npm run lint
+```
+
+## 项目结构
+
+```text
+src/
+├── engine/          物理模拟、轨道计算、导航、评分等纯逻辑
+├── rendering/       Three.js 和 Canvas 2D 渲染封装
+├── persistence/     localStorage 持久化
+├── stores/          Zustand 状态管理
+├── hooks/           React 自定义 hooks
+├── components/      页面组件和交互控件
+├── pages/           首页、搭建、地月、探索和关于页面
+└── types/           TypeScript 类型定义
+docs/
+├── specs/           功能设计和行为规范
+└── plans/           功能实施计划
+```
+
+## 物理单位
+
+核心物理计算统一使用天文单位（AU）和 AU/s。界面展示时再将距离转换为千米、速度转换为 km/s。相关单位转换常量集中定义在 `src/engine/constants.ts` 中。
+
+## 渲染与数据说明
+
+- Three.js 是主要渲染后端，Canvas 2D 用作备用渲染后端。
+- 行星和其他天体的运动使用解析轨道状态与引力模型计算。
+- 飞船运动使用当前状态、天体引力和船体推力逐步积分，不直接跳过物理过程设置结果。
+- 本项目为纯前端单用户 SPA，当前使用 localStorage 保存本地数据。
