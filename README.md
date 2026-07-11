@@ -67,6 +67,14 @@ npm run dev
 npm run build
 ```
 
+## 发布到 GitHub Pages
+
+项目已配置 GitHub Actions。推送到 `main` 分支后，工作流会自动构建并发布到：
+
+`https://happytuesday.github.io/solar-system-demo/`
+
+首次启用时，请在 GitHub 仓库的 `Settings > Pages` 中将 `Source` 设置为 `GitHub Actions`。生产构建使用 `/solar-system-demo/` 作为资源基路径，并生成 `404.html` 以支持 React Router 的深层路径刷新。
+
 运行单元测试：
 
 ```bash
