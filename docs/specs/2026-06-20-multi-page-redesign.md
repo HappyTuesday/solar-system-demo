@@ -22,7 +22,7 @@
 
 ### 2.1 技术选型
 
-使用 `react-router-dom` v7（兼容 React 19），在 `main.tsx` 中包裹 `BrowserRouter`。
+使用 `react-router-dom` v7（兼容 React 19），在 `main.tsx` 中包裹 `BrowserRouter`。应用部署到 GitHub Pages 项目站点时使用 `/solar-system-demo/` 子路径，因此 `BrowserRouter` 的 `basename` 必须来自 Vite 的 `import.meta.env.BASE_URL`；本地根路径开发时该值为 `/`，不设置子路径前缀。
 
 ```typescript
 // 路由表
