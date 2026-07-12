@@ -2,7 +2,8 @@
   height: calc(100vh - var(--nav-height));
   display: flex;
   flex-direction: column;
-  background: #000;
+  background: #02040d;
+  color: #f8fbff;
 }
 
 .earthmoon-canvas-area {
@@ -11,4 +12,335 @@
   position: relative;
   display: flex;
   flex-direction: column;
+}
+
+.earthmoon-mission,
+.moon-phase-panel,
+.earthmoon-eclipse-panel {
+  background: linear-gradient(145deg, rgba(15, 24, 55, 0.96), rgba(7, 13, 34, 0.94));
+  border: 1px solid rgba(130, 189, 255, 0.32);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(12px);
+}
+
+.earthmoon-mission {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: 12;
+  width: min(330px, calc(100% - 48px));
+  padding: 18px;
+  border-radius: 22px;
+}
+
+.earthmoon-mission.all-complete {
+  border-color: rgba(255, 207, 90, 0.7);
+  background: linear-gradient(145deg, rgba(48, 35, 14, 0.97), rgba(17, 21, 45, 0.96));
+}
+
+.earthmoon-mission-header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 14px;
+}
+
+.earthmoon-guide-avatar {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 15px;
+  background: linear-gradient(145deg, #283f7c, #162654);
+  font-size: 1.55rem;
+}
+
+.earthmoon-eyebrow {
+  color: #a9cfff;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.earthmoon-mission-steps {
+  display: flex;
+  gap: 7px;
+  margin-top: 7px;
+}
+
+.earthmoon-mission-steps span {
+  width: 34px;
+  height: 6px;
+  border-radius: 99px;
+  background: #283451;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.earthmoon-mission-steps span.current {
+  background: #5ab9ff;
+  transform: scaleY(1.35);
+}
+
+.earthmoon-mission-steps span.complete {
+  background: #67dbad;
+}
+
+.earthmoon-mission-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #fff2a9;
+  font-size: 1.32rem;
+  font-weight: 800;
+}
+
+.earthmoon-mission-title span {
+  font-size: 1.55rem;
+}
+
+.earthmoon-mission p,
+.earthmoon-mission-result span {
+  display: block;
+  margin: 9px 0 0;
+  color: #dce9fa;
+  font-size: 0.96rem;
+  line-height: 1.6;
+}
+
+.earthmoon-mission button,
+.earthmoon-mission-result button {
+  min-height: 48px;
+  margin-top: 14px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 15px;
+  background: linear-gradient(135deg, #ffd45d, #ffad45);
+  color: #291900;
+  font-size: 0.94rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.earthmoon-mission-result strong {
+  display: block;
+  color: #ffe67f;
+  font-size: 1.35rem;
+}
+
+.earthmoon-light-note {
+  position: absolute;
+  left: 25%;
+  top: 22px;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 212, 86, 0.35);
+  border-radius: 99px;
+  background: rgba(65, 47, 8, 0.7);
+  color: #ffe9a1;
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+
+.earthmoon-light-note span {
+  font-size: 1.15rem;
+}
+
+.earthmoon-eclipse-panel {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  z-index: 11;
+  width: 260px;
+  padding: 17px;
+  border-radius: 20px;
+}
+
+.earthmoon-eclipse-title {
+  color: #b7dcff;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.earthmoon-eclipse-panel p {
+  margin: 8px 0 6px;
+  color: #edf5ff;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.earthmoon-eclipse-type {
+  font-size: 0.73rem;
+}
+
+.earthmoon-eclipse-forecast {
+  margin: 13px 0 7px;
+  color: #9eb1ca;
+  font-size: 0.77rem;
+}
+
+.earthmoon-eclipse-dates {
+  display: grid;
+  gap: 6px;
+}
+
+.earthmoon-eclipse-dates button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 1px solid #2a3a5d;
+  border-radius: 11px;
+  background: rgba(30, 45, 78, 0.64);
+  color: #f4f8ff;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.earthmoon-eclipse-dates button:hover {
+  border-color: #6dbdff;
+  background: rgba(48, 73, 119, 0.76);
+}
+
+.earthmoon-time-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 78px;
+  padding: 10px 20px;
+  border-top: 1px solid rgba(117, 168, 230, 0.2);
+  background: linear-gradient(180deg, #0b1226, #080d1b);
+}
+
+.earthmoon-time-intro {
+  display: flex;
+  flex-direction: column;
+  min-width: 165px;
+  margin-right: 8px;
+}
+
+.earthmoon-time-intro strong {
+  color: #f5f9ff;
+  font-size: 0.92rem;
+}
+
+.earthmoon-time-intro span {
+  margin-top: 3px;
+  color: #879ab6;
+  font-size: 0.72rem;
+}
+
+.earthmoon-time-controls button {
+  min-height: 50px;
+  padding: 0 18px;
+  border: 1px solid #30456f;
+  border-radius: 15px;
+  background: #121d38;
+  color: #dbeaff;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.16s, border-color 0.16s, background 0.16s;
+}
+
+.earthmoon-time-controls button:hover {
+  transform: translateY(-2px);
+  border-color: #70bfff;
+}
+
+.earthmoon-time-controls button.active {
+  border-color: #6dd8ba;
+  background: #173b3a;
+  color: #a9ffe3;
+}
+
+.earthmoon-time-controls .earthmoon-time-primary {
+  background: linear-gradient(135deg, #4b9fff, #706dff);
+  border-color: transparent;
+  color: white;
+}
+
+.earthmoon-time-primary span {
+  margin-right: 7px;
+}
+
+@media (max-width: 900px) {
+  .earthmoon-mission {
+    top: 12px;
+    left: 12px;
+    width: min(300px, calc(100% - 24px));
+    padding: 14px;
+  }
+
+  .earthmoon-light-note {
+    display: none;
+  }
+
+  .earthmoon-eclipse-panel {
+    right: 12px;
+    bottom: 12px;
+    width: 230px;
+    padding: 13px;
+  }
+
+  .earthmoon-eclipse-dates button:nth-child(n + 3) {
+    display: none;
+  }
+
+  .earthmoon-time-controls {
+    justify-content: flex-start;
+    overflow-x: auto;
+    min-height: 74px;
+    padding: 9px 12px;
+  }
+
+  .earthmoon-time-intro {
+    min-width: 140px;
+  }
+
+  .earthmoon-time-controls button {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .earthmoon-mission {
+    width: calc(100% - 24px);
+  }
+
+  .earthmoon-mission-header {
+    margin-bottom: 8px;
+  }
+
+  .earthmoon-guide-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .earthmoon-mission-title {
+    font-size: 1.08rem;
+  }
+
+  .earthmoon-mission p {
+    margin-top: 5px;
+    font-size: 0.84rem;
+  }
+
+  .earthmoon-mission button {
+    min-height: 42px;
+    margin-top: 9px;
+  }
+
+  .earthmoon-eclipse-panel {
+    width: calc(100% - 24px);
+    bottom: 8px;
+  }
+
+  .earthmoon-eclipse-dates {
+    grid-template-columns: 1fr 1fr;
+  }
 }

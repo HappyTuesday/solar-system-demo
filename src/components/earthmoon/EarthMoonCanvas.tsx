@@ -229,8 +229,10 @@ function EarthMoonCanvas() {
     // Touch
     let touchMid0: { x: number; y: number } | null = null;
     let touchDist0 = 0;
+    let touchMoved = false;
 
     const onTS = (e: TouchEvent) => {
+      touchMoved = false;
       if (e.touches.length === 1) {
         touchMid0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         touchDist0 = 0;
@@ -241,16 +243,28 @@ function EarthMoonCanvas() {
         touchDist0 = Math.hypot(x1 - x0, y1 - y0);
       }
     };
+    const selectBodyAtTouch = (touch: Touch) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const mx = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+      const my = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(new THREE.Vector2(mx, my), camera);
+      const hits = raycaster.intersectObjects([earth, moon]);
+      if (hits.length > 0) {
+        useEarthMoonStore.getState().setSelectedBodyId(hits[0].object === earth ? 'earth' : 'moon');
+      }
+    };
     const onTM = (e: TouchEvent) => {
       e.preventDefault();
       if (e.touches.length === 1 && touchMid0 && touchDist0 === 0) {
         const dx = e.touches[0].clientX - touchMid0.x;
         const dy = e.touches[0].clientY - touchMid0.y;
+        if (Math.hypot(dx, dy) >= 8) touchMoved = true;
         thetaRef.current -= dx * 0.005;
         phiRef.current = Math.max(0.001, Math.min(Math.PI - 0.001, phiRef.current + dy * 0.005));
         updateCamera(camera, centerRef.current, thetaRef.current, phiRef.current);
         touchMid0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       } else if (e.touches.length >= 2 && touchMid0) {
+        touchMoved = true;
         const t0x = e.touches[0].clientX, t0y = e.touches[0].clientY;
         const t1x = e.touches[1].clientX, t1y = e.touches[1].clientY;
         const curMid = { x: (t0x + t1x) / 2, y: (t0y + t1y) / 2 };
@@ -284,7 +298,16 @@ function EarthMoonCanvas() {
         touchDist0 = curDist;
       }
     };
-    const onTE = () => { touchMid0 = null; touchDist0 = 0; };
+    const onTE = (e: TouchEvent) => {
+      if (!touchMoved && e.changedTouches.length === 1 && touchMid0 && touchDist0 === 0) {
+        const touch = e.changedTouches[0];
+        if (Math.hypot(touch.clientX - touchMid0.x, touch.clientY - touchMid0.y) < 8) {
+          selectBodyAtTouch(touch);
+        }
+      }
+      touchMid0 = null;
+      touchDist0 = 0;
+    };
 
     interface GestureScaleEvent extends Event {
       scale?: number;

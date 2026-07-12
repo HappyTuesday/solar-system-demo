@@ -1,16 +1,38 @@
 .moon-phase-panel {
   position: absolute;
-  top: 20px;
-  right: 20px;
-  background: rgba(13, 13, 42, 0.92);
-  border: 1px solid #2a2a4a;
-  border-radius: 8px;
-  padding: 14px 18px;
+  top: 24px;
+  right: 24px;
+  border-radius: 22px;
+  padding: 16px 18px;
   text-align: center;
-  min-width: 140px;
-  z-index: 10;
+  width: 190px;
+  z-index: 11;
 }
 
-.moon-phase-icon { font-size: 2.2rem; margin-bottom: 6px; }
-.moon-phase-name { color: var(--accent); font-size: 0.95rem; font-weight: 600; margin-bottom: 6px; }
-.moon-phase-angle, .moon-phase-illumination { font-size: 0.78rem; color: var(--text-secondary); }
+.moon-phase-icon { font-size: 3rem; line-height: 1; margin-bottom: 8px; }
+.moon-phase-label { color: #8fa5c2; font-size: 0.72rem; }
+.moon-phase-name { color: #fff0a6; font-size: 1.1rem; font-weight: 800; margin: 3px 0 7px; }
+.moon-phase-description { color: #dfeafa; font-size: 0.8rem; line-height: 1.5; }
+.moon-phase-illumination { margin-top: 8px; color: #86d6ff; font-size: 0.74rem; font-weight: 700; }
+
+@media (max-width: 900px) {
+  .moon-phase-panel {
+    top: 12px;
+    right: 12px;
+    width: 155px;
+    padding: 12px;
+  }
+
+  .moon-phase-icon { font-size: 2.4rem; }
+  .moon-phase-description { display: none; }
+}
+
+@media (max-width: 600px) {
+  .moon-phase-panel {
+    top: 174px;
+    width: 118px;
+  }
+
+  .moon-phase-icon { font-size: 2rem; }
+  .moon-phase-name { font-size: 0.9rem; }
+}
