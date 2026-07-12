@@ -1,4 +1,4 @@
-import { REAL_DATA, MU_SUN_AU, AU_TO_KM, G_AU, SPACECRAFT_CONFIG } from './constants';
+import { REAL_DATA, MU_SUN_AU, AU_TO_KM, G_AU, SPACECRAFT_CONFIG, NAVIGATION_CONFIG } from './constants';
 import { julianDate, solveKepler, trueAnomaly, stateVectors, orbitalPeriod, meanAnomalyAtTime } from './orbital';
 
 export interface DirectRendezvousInfo {
@@ -16,6 +16,52 @@ export interface NavigationPlan {
   destinationId: string;
   plannedAt: number;
   rendezvous?: DirectRendezvousInfo;
+  stages?: readonly NavigationStage[];
+}
+
+export type NavigationTarget =
+  | { kind: 'rendezvous'; point: [number, number, number] }
+  | { kind: 'gravity-boundary'; bodyId: string }
+  | { kind: 'body'; bodyId: string };
+
+export interface NavigationStage {
+  id: 'rendezvous' | 'gravity-boundary' | 'destination';
+  target: NavigationTarget;
+}
+
+const GRAVITY_BOUNDARY_ARRIVAL_RATIO = 0.05;
+const GRAVITY_BOUNDARY_MIN_ARRIVAL_DISTANCE_AU = 10_000 / AU_TO_KM;
+const DESTINATION_ARRIVAL_ALTITUDE_AU = 100 / AU_TO_KM;
+
+export function navigationTargetArrivalDistanceAU(target: NavigationTarget): number {
+  if (target.kind === 'rendezvous') return NAVIGATION_CONFIG.arrivalDistanceAU;
+  if (target.kind === 'gravity-boundary') {
+    return Math.max(
+      GRAVITY_BOUNDARY_MIN_ARRIVAL_DISTANCE_AU,
+      hillRadiusForBody(target.bodyId) * GRAVITY_BOUNDARY_ARRIVAL_RATIO,
+    );
+  }
+  return (REAL_DATA[target.bodyId]?.radius ?? 0) + DESTINATION_ARRIVAL_ALTITUDE_AU;
+}
+
+export function formatNavigationStage(
+  stages: readonly NavigationStage[] | undefined,
+  currentStageIndex: number | null,
+  destinationName: string,
+): string | null {
+  if (currentStageIndex == null || !stages?.[currentStageIndex]) return null;
+  const prefix = `阶段 ${currentStageIndex + 1}/${stages.length}：`;
+  switch (stages[currentStageIndex].id) {
+    case 'rendezvous': return `${prefix}前往汇合点`;
+    case 'gravity-boundary': return `${prefix}进入${destinationName}引力范围`;
+    case 'destination': return `${prefix}前往${destinationName}中心`;
+  }
+}
+
+export interface ResolvedNavigationTarget {
+  kind: 'rendezvous' | 'body';
+  position: [number, number, number];
+  velocity: [number, number, number];
 }
 
 export interface DirectRendezvousMetrics {
@@ -46,6 +92,16 @@ export interface RendezvousDisplayParams {
   escapeSpeedAUPerSec: number | null;
   distanceToTargetAU: number;
   distanceToRendezvousAU: number;
+}
+
+export interface TargetStatusParams {
+  distanceToTargetAU: number;
+  relativeSpeedAUPerSec: number;
+  radialSpeedAUPerSec: number;
+  tangentialSpeedAUPerSec: number;
+  insideTargetGravityRange: boolean;
+  capturedByTarget: boolean;
+  timeToTargetGravityRangeSec: number;
 }
 
 export interface TargetRelativeOrbit {
@@ -109,6 +165,38 @@ export function computeBodyState(templateId: string, jd: number): { position: [n
     anomaly,
     MU_SUN_AU,
   );
+}
+
+export function resolveCurrentNavigationTarget(
+  target: NavigationTarget | null,
+  shipPosition: [number, number, number],
+  simulatedTime: number,
+): ResolvedNavigationTarget | null {
+  if (!target) return null;
+  if (target.kind === 'rendezvous') {
+    return {
+      kind: 'rendezvous',
+      position: target.point,
+      velocity: [0, 0, 0],
+    };
+  }
+  if (target.bodyId === 'sun') {
+    return { kind: 'body', position: [0, 0, 0], velocity: [0, 0, 0] };
+  }
+  const bodyState = computeBodyState(target.bodyId, julianDate(simulatedTime));
+  if (!bodyState) return null;
+  if (target.kind === 'body') return { kind: 'body', ...bodyState };
+  const direction = vectorNormalize(vectorSubtract(shipPosition, bodyState.position));
+  const radius = hillRadiusForBody(target.bodyId);
+  return {
+    kind: 'body',
+    position: [
+      bodyState.position[0] + direction[0] * radius,
+      bodyState.position[1] + direction[1] * radius,
+      bodyState.position[2] + direction[2] * radius,
+    ],
+    velocity: bodyState.velocity,
+  };
 }
 
 export function computeOrbitalSemiMajorAxis(
@@ -217,6 +305,50 @@ export function computeTargetRelativeOrbit(
   };
 }
 
+export function computeTargetStatusParams(
+  shipPosition: [number, number, number],
+  shipVelocity: [number, number, number],
+  destinationId: string,
+  simulatedTime: number,
+  orbitingBodyId: string | null,
+): TargetStatusParams | null {
+  const targetState = computeBodyState(destinationId, julianDate(simulatedTime));
+  if (!targetState) return null;
+
+  const relativePosition = vectorSubtract(shipPosition, targetState.position);
+  const relativeVelocity = vectorSubtract(shipVelocity, targetState.velocity);
+  const distanceToTargetAU = vectorLength(relativePosition);
+  const radialDirection = vectorNormalize(relativePosition);
+  const tangentialDirection = vectorNormalize([-radialDirection[1], radialDirection[0], 0]);
+  const radialSpeedAUPerSec = distanceToTargetAU > 1e-20
+    ? vectorDot(relativeVelocity, radialDirection)
+    : 0;
+  const hillRadius = hillRadiusForBody(destinationId);
+  const insideTargetGravityRange = distanceToTargetAU <= hillRadius;
+  const relativeSpeedSquared = vectorDot(relativeVelocity, relativeVelocity);
+  const approachQuadraticB = 2 * vectorDot(relativePosition, relativeVelocity);
+  const approachQuadraticC = vectorDot(relativePosition, relativePosition) - hillRadius * hillRadius;
+  const discriminant = approachQuadraticB * approachQuadraticB
+    - 4 * relativeSpeedSquared * approachQuadraticC;
+  const entryTimeSec = (-approachQuadraticB - Math.sqrt(Math.max(0, discriminant)))
+    / (2 * relativeSpeedSquared);
+  const timeToTargetGravityRangeSec = insideTargetGravityRange
+    ? 0
+    : relativeSpeedSquared <= 1e-40 || discriminant < 0
+      ? Infinity
+      : entryTimeSec >= 0 ? entryTimeSec : Infinity;
+
+  return {
+    distanceToTargetAU,
+    relativeSpeedAUPerSec: Math.sqrt(relativeSpeedSquared),
+    radialSpeedAUPerSec,
+    tangentialSpeedAUPerSec: vectorDot(relativeVelocity, tangentialDirection),
+    insideTargetGravityRange,
+    capturedByTarget: orbitingBodyId === destinationId,
+    timeToTargetGravityRangeSec,
+  };
+}
+
 export function isStableTargetOrbit(orbit: TargetRelativeOrbit, destinationId: string): boolean {
   return orbit.targetId === destinationId
     && orbit.energy < 0
@@ -300,6 +432,11 @@ export function planDirectRendezvousTransfer(
       rendezvousTime: simulatedTime + rendezvousTimeSec * 1000,
       validUntil: simulatedTime + Math.min(rendezvousTimeSec * 0.2, 20 * 86400) * 1000,
     },
+    stages: [
+      { id: 'rendezvous', target: { kind: 'rendezvous', point: rendezvousPoint } },
+      { id: 'gravity-boundary', target: { kind: 'gravity-boundary', bodyId: destinationId } },
+      { id: 'destination', target: { kind: 'body', bodyId: destinationId } },
+    ],
   };
 }
 

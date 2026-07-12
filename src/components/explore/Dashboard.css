@@ -359,6 +359,14 @@
   background: rgba(0, 255, 128, 0.08);
 }
 
+.dashboard-nav-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
 .dashboard-nav-dest {
   font-size: 10px;
   color: #00ff88;
@@ -367,6 +375,8 @@
   text-align: left;
   padding: 3px 0;
   transition: all 0.12s;
+  flex: 0 1 auto;
+  white-space: nowrap;
 }
 
 .dashboard-nav-dest:hover {
@@ -376,6 +386,15 @@
 .dashboard-nav-dest-sub {
   font-size: 7px;
   color: #556677;
+}
+
+.dashboard-nav-stage {
+  min-width: 0;
+  color: #86a8bd;
+  font-size: 8px;
+  line-height: 1.2;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .dashboard-rendezvous-params {

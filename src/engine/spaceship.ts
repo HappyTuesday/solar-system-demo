@@ -65,13 +65,13 @@ export interface BodyInfo {
   radius: number;
 }
 
-export function computeSpaceshipAcceleration(
-  spaceship: SpaceshipState,
+export function computeGravityAcceleration(
+  position: [number, number, number],
   bodies: BodyInfo[],
   softening: number = 1e-7,
 ): [number, number, number] {
   let ax = 0, ay = 0, az = 0;
-  const [sx, sy, sz] = spaceship.position;
+  const [sx, sy, sz] = position;
 
   for (const body of bodies) {
     const dx = sx - body.position[0];
@@ -84,6 +84,23 @@ export function computeSpaceshipAcceleration(
     ay -= factor * dy * body.mass;
     az -= factor * dz * body.mass;
   }
+
+  return [ax, ay, az];
+}
+
+export function computeSpaceshipAcceleration(
+  spaceship: SpaceshipState,
+  bodies: BodyInfo[],
+  softening: number = 1e-7,
+): [number, number, number] {
+  const [gravityX, gravityY, gravityZ] = computeGravityAcceleration(
+    spaceship.position,
+    bodies,
+    softening,
+  );
+  let ax = gravityX;
+  let ay = gravityY;
+  let az = gravityZ;
 
   const thrustWorld = spaceship.thrust;
   ax += thrustWorld[0];
@@ -205,6 +222,10 @@ export const PARK_BRAKE_REFERENCE_AU_PER_SEC = 30 / AU_TO_KM;
 export const PARK_BRAKE_MAX_THRUST_MN = 100;
 export const PARK_BRAKE_MIN_THRUST_MN = 1;
 export const PARK_BRAKE_EPS_AU_PER_SEC = 0.01 / AU_TO_KM;
+export const PARK_HOLD_VELOCITY_DAMPING_SECONDS = 60;
+export const ORBIT_RADIAL_DAMPING_SECONDS = 5;
+export const ORBIT_TANGENTIAL_MATCH_SECONDS = 60;
+export const ORBIT_FULL_BRAKE_THRESHOLD_AU_PER_SEC = 0.1 / AU_TO_KM;
 
 export const MAX_SHIP_SPEED_AU_PER_SEC = 1000 / AU_TO_KM;
 
@@ -232,6 +253,85 @@ export interface ParkBrakeSnapshot {
   facingDirection: [number, number, number];
   thrustMagnitude: number;
   reachedStop: boolean;
+}
+
+export interface ParkHoldSnapshot {
+  facingDirection: [number, number, number];
+  thrustMagnitude: number;
+  targetAcceleration: [number, number, number];
+}
+
+export interface OrbitInsertSnapshot {
+  facingDirection: [number, number, number];
+  thrustMagnitude: number;
+  converged: boolean;
+}
+
+export function orbitInsertSnapshot(
+  position: [number, number, number],
+  velocity: [number, number, number],
+  body: BodyInfo,
+  bodyVelocity: [number, number, number],
+): OrbitInsertSnapshot {
+  const relativePosition: [number, number, number] = [position[0] - body.position[0], position[1] - body.position[1], position[2] - body.position[2]];
+  const relativeVelocity: [number, number, number] = [
+    velocity[0] - bodyVelocity[0],
+    velocity[1] - bodyVelocity[1],
+    velocity[2] - bodyVelocity[2],
+  ];
+  const radius = vec3Length(relativePosition);
+  if (radius < 1e-20) return { facingDirection: [0, 0, 0], thrustMagnitude: 0, converged: false };
+  const radial = vec3Normalize(relativePosition);
+  let tangent = vec3Normalize([-radial[1], radial[0], 0]);
+  const radialSpeed = relativeVelocity[0] * radial[0] + relativeVelocity[1] * radial[1] + relativeVelocity[2] * radial[2];
+  const tangentialSpeed = relativeVelocity[0] * tangent[0] + relativeVelocity[1] * tangent[1] + relativeVelocity[2] * tangent[2];
+  if (tangentialSpeed < 0) tangent = [-tangent[0], -tangent[1], -tangent[2]];
+  const circularSpeed = Math.sqrt((G_AU * body.mass) / radius);
+  const speedError = circularSpeed - Math.abs(tangentialSpeed);
+  const maxAcceleration = SPACECRAFT_CONFIG.maxThrustAU;
+  const radialBrakeMagnitude = Math.abs(radialSpeed) > ORBIT_FULL_BRAKE_THRESHOLD_AU_PER_SEC
+    ? maxAcceleration
+    : Math.min(maxAcceleration, Math.abs(radialSpeed) / ORBIT_RADIAL_DAMPING_SECONDS);
+  const remainingTangentialAcceleration = Math.sqrt(Math.max(
+    0,
+    maxAcceleration * maxAcceleration - radialBrakeMagnitude * radialBrakeMagnitude,
+  ));
+  const tangentialAcceleration = Math.max(
+    -remainingTangentialAcceleration,
+    Math.min(remainingTangentialAcceleration, speedError / ORBIT_TANGENTIAL_MATCH_SECONDS),
+  );
+  const targetAcceleration: [number, number, number] = [
+    tangent[0] * tangentialAcceleration - radial[0] * Math.sign(radialSpeed) * radialBrakeMagnitude,
+    tangent[1] * tangentialAcceleration - radial[1] * Math.sign(radialSpeed) * radialBrakeMagnitude,
+    tangent[2] * tangentialAcceleration - radial[2] * Math.sign(radialSpeed) * radialBrakeMagnitude,
+  ];
+  const magnitude = vec3Length(targetAcceleration);
+  return {
+    facingDirection: vec3Normalize(targetAcceleration),
+    thrustMagnitude: Math.min(100, (magnitude / SPACECRAFT_CONFIG.maxThrustAU) * 100),
+    converged: Math.abs(radialSpeed) <= 0.01 / AU_TO_KM && Math.abs(speedError) <= 0.01 / AU_TO_KM,
+  };
+}
+
+export function parkHoldSnapshot(
+  position: [number, number, number],
+  velocity: [number, number, number],
+  bodies: BodyInfo[],
+): ParkHoldSnapshot {
+  const gravity = computeGravityAcceleration(position, bodies);
+  const targetAcceleration: [number, number, number] = [
+    -gravity[0] - velocity[0] / PARK_HOLD_VELOCITY_DAMPING_SECONDS,
+    -gravity[1] - velocity[1] / PARK_HOLD_VELOCITY_DAMPING_SECONDS,
+    -gravity[2] - velocity[2] / PARK_HOLD_VELOCITY_DAMPING_SECONDS,
+  ];
+  const targetMagnitude = vec3Length(targetAcceleration);
+  const facingDirection = vec3Normalize(targetAcceleration);
+  const thrustMagnitude = Math.max(0, Math.min(
+    PARK_BRAKE_MAX_THRUST_MN,
+    (targetMagnitude / SPACECRAFT_CONFIG.maxThrustAU) * PARK_BRAKE_MAX_THRUST_MN,
+  ));
+
+  return { facingDirection, thrustMagnitude, targetAcceleration };
 }
 
 export function parkBrakeSnapshot(

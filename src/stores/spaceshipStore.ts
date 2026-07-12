@@ -1,20 +1,35 @@
 import { create } from 'zustand';
 import type { SpaceshipState, AttitudeMode } from '../types';
 import { createSpaceshipState } from '../engine/orbitalInjection';
-import type { NavigationPlan } from '../engine/navigation';
-import { planDirectRendezvousTransfer } from '../engine/navigation';
+import type { NavigationPlan, NavigationTarget } from '../engine/navigation';
+import { navigationTargetArrivalDistanceAU, planDirectRendezvousTransfer, resolveCurrentNavigationTarget } from '../engine/navigation';
 import { AU_TO_KM } from '../engine/constants';
 import { jumpSpaceshipState } from '../engine/timeJump';
-import { parkBrakeSnapshot, parkBrakeThrustMagnitude, PARK_BRAKE_EPS_AU_PER_SEC } from '../engine/spaceship';
-import { canEnableCruise, computeCruiseGuidance } from '../engine/cruise';
+import {
+  parkBrakeSnapshot,
+  parkBrakeThrustMagnitude,
+  parkHoldSnapshot,
+  orbitInsertSnapshot,
+  PARK_BRAKE_EPS_AU_PER_SEC,
+  type BodyInfo,
+} from '../engine/spaceship';
+import {
+  canEnableCruise,
+  computeCruiseGuidance,
+  computeCruiseJumpSeconds,
+} from '../engine/cruise';
+import { useExploreStore } from './exploreStore';
 
 export type ExplosionPhase = 'none' | 'exploding' | 'complete';
-export type Gear = 'D' | 'N' | 'R' | 'T' | 'P';
+export type Gear = 'D' | 'N' | 'R' | 'T' | 'P' | 'O';
+export type ParkPhase = 'braking' | 'holding';
+export type CruisePhase = 'idle' | 'coasting';
 
 const DEG_TO_RAD = Math.PI / 180;
 const TANGENTIAL_CORRECTION_EPS_AU_PER_SEC = 0.01 / AU_TO_KM;
-const TANGENTIAL_CORRECTION_REFERENCE_AU_PER_SEC = 20 / AU_TO_KM;
-const TANGENTIAL_CORRECTION_MAX_THRUST_MN = 20;
+const TANGENTIAL_CORRECTION_FINE_SPEED_AU_PER_SEC = 1 / AU_TO_KM;
+const TANGENTIAL_CORRECTION_FULL_THRUST_SPEED_AU_PER_SEC = 20 / AU_TO_KM;
+const TANGENTIAL_CORRECTION_MAX_THRUST_MN = 100;
 const TANGENTIAL_CORRECTION_MIN_THRUST_MN = 1;
 
 export interface SpaceshipStore extends SpaceshipState {
@@ -27,6 +42,8 @@ export interface SpaceshipStore extends SpaceshipState {
   orbitingBodyId: string | null;
 
   navigationPlan: NavigationPlan | null;
+  currentNavigationTarget: NavigationTarget | null;
+  currentNavigationStageIndex: number | null;
   lastReplanTime: number;
 
   explosionPhase: ExplosionPhase;
@@ -35,7 +52,11 @@ export interface SpaceshipStore extends SpaceshipState {
   tangentialCorrectionLastAbs: number | null;
   tangentialCorrectionPrevAttitude: AttitudeMode | null;
   parkInitialDirection: [number, number, number] | null;
+  parkPhase: ParkPhase | null;
   cruiseActive: boolean;
+  cruisePhase: CruisePhase;
+  cruiseNextJumpAtMs: number | null;
+  cruisePreviousTimeScale: number | null;
   totalDistanceKm: number;
   maxSpeedKms: number;
   sessionStartTime: number;
@@ -52,9 +73,11 @@ export interface SpaceshipStore extends SpaceshipState {
   setExplosionPhase: (phase: ExplosionPhase) => void;
   setGear: (g: Gear) => void;
   updateTangentialCorrectionGear: () => void;
-  updateParkGear: () => void;
-  toggleCruise: () => void;
-  updateCruise: () => void;
+  updateParkGear: (bodies: BodyInfo[]) => void;
+  updateOrbitGear: (bodies: BodyInfo[]) => void;
+  toggleCruise: (nowMs: number) => void;
+  updateCruise: (nowMs: number) => void;
+  maybeCompleteRendezvous: () => void;
   updateFlightStats: (distanceKm: number, speedKms: number) => void;
   toggleRunning: () => void;
   toggleDashboard: () => void;
@@ -126,21 +149,28 @@ function vectorDot(a: [number, number, number], b: [number, number, number]): nu
 function directTangentialSpeedSnapshot(
   position: [number, number, number],
   velocity: [number, number, number],
-  plan: NavigationPlan | null,
+  currentNavigationTarget: NavigationTarget | null,
+  simulatedTime: number,
 ): { sign: number; tangentialAbs: number; correctionDirection: [number, number, number] } | null {
-  if (!plan?.rendezvous) return null;
-  const toRendezvous: [number, number, number] = [
-    plan.rendezvous.point[0] - position[0],
-    plan.rendezvous.point[1] - position[1],
-    plan.rendezvous.point[2] - position[2],
+  const target = resolveCurrentNavigationTarget(currentNavigationTarget, position, simulatedTime);
+  if (!target) return null;
+  const toTarget: [number, number, number] = [
+    target.position[0] - position[0],
+    target.position[1] - position[1],
+    target.position[2] - position[2],
   ];
-  const rendezvousDirection = vectorNormalize(toRendezvous);
-  if (vectorLength(rendezvousDirection) < 1e-20) return null;
+  const targetDirection = vectorNormalize(toTarget);
+  if (vectorLength(targetDirection) < 1e-20) return null;
 
-  const tangent = vectorNormalize([-rendezvousDirection[1], rendezvousDirection[0], 0]);
+  const tangent = vectorNormalize([-targetDirection[1], targetDirection[0], 0]);
   if (vectorLength(tangent) < 1e-20) return null;
 
-  const tangentialSpeed = vectorDot(velocity, tangent);
+  const relativeVelocity: [number, number, number] = [
+    velocity[0] - target.velocity[0],
+    velocity[1] - target.velocity[1],
+    velocity[2] - target.velocity[2],
+  ];
+  const tangentialSpeed = vectorDot(relativeVelocity, tangent);
   if (Math.abs(tangentialSpeed) <= TANGENTIAL_CORRECTION_EPS_AU_PER_SEC) return null;
 
   const sign = tangentialSpeed > 0 ? 1 : -1;
@@ -154,10 +184,15 @@ function directTangentialSpeedSnapshot(
 }
 
 function tangentialCorrectionThrustMagnitude(tangentialAbs: number): number {
-  const scaled = (tangentialAbs / TANGENTIAL_CORRECTION_REFERENCE_AU_PER_SEC) * TANGENTIAL_CORRECTION_MAX_THRUST_MN;
-  return Math.max(
-    TANGENTIAL_CORRECTION_MIN_THRUST_MN,
-    Math.min(TANGENTIAL_CORRECTION_MAX_THRUST_MN, scaled),
+  if (tangentialAbs <= TANGENTIAL_CORRECTION_FINE_SPEED_AU_PER_SEC) {
+    return TANGENTIAL_CORRECTION_MIN_THRUST_MN;
+  }
+  const ratio = (tangentialAbs - TANGENTIAL_CORRECTION_FINE_SPEED_AU_PER_SEC)
+    / (TANGENTIAL_CORRECTION_FULL_THRUST_SPEED_AU_PER_SEC - TANGENTIAL_CORRECTION_FINE_SPEED_AU_PER_SEC);
+  return Math.min(
+    TANGENTIAL_CORRECTION_MAX_THRUST_MN,
+    TANGENTIAL_CORRECTION_MIN_THRUST_MN
+      + ratio * (TANGENTIAL_CORRECTION_MAX_THRUST_MN - TANGENTIAL_CORRECTION_MIN_THRUST_MN),
   );
 }
 
@@ -179,6 +214,8 @@ const initialState = {
   nearestBodyId: 'earth' as string | null,
   orbitingBodyId: 'earth' as string | null,
   navigationPlan: null as NavigationPlan | null,
+  currentNavigationTarget: null as NavigationTarget | null,
+  currentNavigationStageIndex: null as number | null,
   lastReplanTime: 0 as number,
   explosionPhase: 'none' as ExplosionPhase,
   gear: 'N' as Gear,
@@ -186,7 +223,11 @@ const initialState = {
   tangentialCorrectionLastAbs: null as number | null,
   tangentialCorrectionPrevAttitude: null as AttitudeMode | null,
   parkInitialDirection: null as [number, number, number] | null,
+  parkPhase: null as ParkPhase | null,
   cruiseActive: false,
+  cruisePhase: 'idle' as CruisePhase,
+  cruiseNextJumpAtMs: null as number | null,
+  cruisePreviousTimeScale: null as number | null,
   totalDistanceKm: 0,
   maxSpeedKms: 0,
   sessionStartTime: now,
@@ -213,13 +254,17 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
   }),
   setExplosionPhase: (phase) => set({ explosionPhase: phase }),
   setGear: (g) => set(s => {
+    if (g === 'O' && !s.orbitingBodyId) {
+      return {};
+    }
     if (g === 'P') {
       const speed = vectorLength(s.velocity);
       if (speed <= PARK_BRAKE_EPS_AU_PER_SEC) {
         return {
-          gear: 'N' as Gear,
+          gear: 'P' as Gear,
           thrust: [0, 0, 0] as [number, number, number],
           parkInitialDirection: null,
+          parkPhase: 'holding' as ParkPhase,
           tangentialCorrectionSign: null,
           tangentialCorrectionLastAbs: null,
         };
@@ -228,6 +273,7 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
       return {
         gear: 'P' as Gear,
         parkInitialDirection: initialDir,
+        parkPhase: 'braking' as ParkPhase,
         attitudeMode: 'inertial' as AttitudeMode,
         direction: initialDir,
         thrust: [-1, 0, 0] as [number, number, number],
@@ -239,6 +285,7 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     return {
       gear: g,
       parkInitialDirection: null,
+      parkPhase: null,
       tangentialCorrectionSign: g === 'T' ? null : s.tangentialCorrectionSign,
       tangentialCorrectionLastAbs: g === 'T' ? null : s.tangentialCorrectionLastAbs,
       tangentialCorrectionPrevAttitude: g === 'T' ? s.attitudeMode : s.tangentialCorrectionPrevAttitude,
@@ -251,70 +298,150 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
         ] as [number, number, number],
     };
   }),
-  updateParkGear: () => set(s => {
+  updateParkGear: (bodies) => set(s => {
     if (s.gear !== 'P') return {};
-    if (!s.parkInitialDirection) {
-      return {
-        gear: 'N' as Gear,
-        thrust: [0, 0, 0] as [number, number, number],
-        thrustMagnitude: 0,
-      };
+    if (s.parkPhase === 'braking' && s.parkInitialDirection) {
+      const snap = parkBrakeSnapshot(s.velocity, s.parkInitialDirection);
+      if (!snap.reachedStop) {
+        return {
+          direction: snap.facingDirection,
+          attitudeMode: 'inertial' as AttitudeMode,
+          thrust: [-1, 0, 0] as [number, number, number],
+          thrustMagnitude: snap.thrustMagnitude,
+        };
+      }
     }
-    const snap = parkBrakeSnapshot(s.velocity, s.parkInitialDirection);
-    if (snap.reachedStop) {
+    const hold = parkHoldSnapshot(s.position, s.velocity, bodies);
+    if (vectorLength(hold.facingDirection) < 1e-20 || hold.thrustMagnitude <= 0) {
       return {
-        gear: 'N' as Gear,
         thrust: [0, 0, 0] as [number, number, number],
         thrustMagnitude: 0,
-        parkInitialDirection: null,
+        parkPhase: 'holding' as ParkPhase,
       };
     }
     return {
-      direction: snap.facingDirection,
+      direction: hold.facingDirection,
       attitudeMode: 'inertial' as AttitudeMode,
-      thrust: [-1, 0, 0] as [number, number, number],
-      thrustMagnitude: snap.thrustMagnitude,
+      thrust: [1, 0, 0] as [number, number, number],
+      thrustMagnitude: hold.thrustMagnitude,
+      parkPhase: 'holding' as ParkPhase,
     };
   }),
-  toggleCruise: () => set(s => {
-    if (s.cruiseActive) {
-      return { cruiseActive: false };
+  updateOrbitGear: (bodies) => set(s => {
+    if (s.gear !== 'O') return {};
+    if (!s.orbitingBodyId) {
+      return { gear: 'N' as Gear, thrust: [0, 0, 0] as [number, number, number], thrustMagnitude: 0 };
     }
-    if (!canEnableCruise(s.position, s.velocity, s.thrust, s.thrustMagnitude, s.navigationPlan)) {
-      return {};
+    const body = bodies.find(candidate => candidate.id === s.orbitingBodyId);
+    if (!body) {
+      return { gear: 'N' as Gear, thrust: [0, 0, 0] as [number, number, number], thrustMagnitude: 0 };
     }
-    return { cruiseActive: true, attitudeMode: 'rendezvous' as AttitudeMode };
+    const resolved = resolveCurrentNavigationTarget(
+      { kind: 'body', bodyId: s.orbitingBodyId },
+      s.position,
+      s.simulatedTime,
+    );
+    if (!resolved) {
+      return { gear: 'N' as Gear, thrust: [0, 0, 0] as [number, number, number], thrustMagnitude: 0 };
+    }
+    const snap = orbitInsertSnapshot(s.position, s.velocity, body, resolved.velocity);
+    if (snap.converged) {
+      return { gear: 'N' as Gear, thrust: [0, 0, 0] as [number, number, number], thrustMagnitude: 0 };
+    }
+    return { direction: snap.facingDirection, attitudeMode: 'inertial' as AttitudeMode, thrust: [1, 0, 0] as [number, number, number], thrustMagnitude: snap.thrustMagnitude };
   }),
-  updateCruise: () => {
+  toggleCruise: (nowMs) => {
+    const s = useSpaceshipStore.getState();
+    if (s.cruiseActive) {
+      if (s.cruisePreviousTimeScale != null) {
+        useExploreStore.getState().setTimeScale(s.cruisePreviousTimeScale);
+      }
+      useSpaceshipStore.setState({
+        cruiseActive: false,
+        cruisePhase: 'idle',
+        cruiseNextJumpAtMs: null,
+        cruisePreviousTimeScale: null,
+      });
+      return;
+    }
+    const cruiseTarget = resolveCurrentNavigationTarget(s.currentNavigationTarget, s.position, s.simulatedTime);
+    if (!canEnableCruise(s.position, s.velocity, cruiseTarget)) return;
+    if (s.gear === 'D' || s.gear === 'R') {
+      useSpaceshipStore.getState().setGear('N');
+    }
+
+    const currentTimeScale = useExploreStore.getState().timeScale;
+    useSpaceshipStore.setState({
+      cruiseActive: true,
+      cruisePhase: 'coasting',
+      cruiseNextJumpAtMs: nowMs,
+      cruisePreviousTimeScale: currentTimeScale,
+      attitudeMode: 'rendezvous' as AttitudeMode,
+    });
+    useExploreStore.getState().setTimeScale(1);
+  },
+  updateCruise: (nowMs) => {
+    const finishCruise = () => {
+      const current = useSpaceshipStore.getState();
+      if (current.cruisePreviousTimeScale != null) {
+        useExploreStore.getState().setTimeScale(current.cruisePreviousTimeScale);
+      }
+      useSpaceshipStore.setState({
+        cruiseActive: false,
+        cruisePhase: 'idle',
+        cruiseNextJumpAtMs: null,
+        cruisePreviousTimeScale: null,
+      });
+    };
     const s = useSpaceshipStore.getState();
     if (!s.cruiseActive) return;
-    if (!s.navigationPlan?.rendezvous) {
-      useSpaceshipStore.setState({ cruiseActive: false });
+    const cruiseTarget = resolveCurrentNavigationTarget(s.currentNavigationTarget, s.position, s.simulatedTime);
+    if (!cruiseTarget) {
+      finishCruise();
       return;
     }
     if (s.gear === 'D' || s.gear === 'R') {
-      useSpaceshipStore.setState({ cruiseActive: false });
+      finishCruise();
       return;
     }
-    const g = computeCruiseGuidance(s.position, s.velocity, s.navigationPlan);
-    if (!g.radialPositive) {
-      useSpaceshipStore.setState({ cruiseActive: false });
+    if (!s.orbitingBodyId) {
+      finishCruise();
       return;
     }
     if (s.gear === 'T') return;
+    const g = computeCruiseGuidance(s.position, s.velocity, cruiseTarget);
+    if (!g.radialPositive) {
+      finishCruise();
+      return;
+    }
     if (g.shouldBrake) {
       useSpaceshipStore.getState().setGear('P');
-      useSpaceshipStore.setState({ cruiseActive: false });
+      finishCruise();
       return;
     }
     if (g.shouldCorrectTangential) {
       useSpaceshipStore.getState().setGear('T');
       return;
     }
+    if (s.cruiseNextJumpAtMs != null && nowMs < s.cruiseNextJumpAtMs) return;
+    const jumpSeconds = Math.min(
+      computeCruiseJumpSeconds(g),
+      s.currentNavigationStageIndex === 0 && s.navigationPlan?.rendezvous
+        ? Math.max(0, (s.navigationPlan.rendezvous.rendezvousTime - s.simulatedTime) / 1000)
+        : Infinity,
+    );
+    if (jumpSeconds < 60) return;
+    useSpaceshipStore.getState().timeJump(s.simulatedTime + jumpSeconds * 1000);
+    useSpaceshipStore.setState({ cruiseNextJumpAtMs: nowMs + 200 });
   },
   updateTangentialCorrectionGear: () => set(s => {
     if (s.gear !== 'T') return {};
-    const tangential = directTangentialSpeedSnapshot(s.position, s.velocity, s.navigationPlan);
+    const tangential = directTangentialSpeedSnapshot(
+      s.position,
+      s.velocity,
+      s.currentNavigationTarget,
+      s.simulatedTime,
+    );
     if (!tangential) {
       return {
         gear: 'N' as Gear,
@@ -364,6 +491,8 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     nearestBodyId: 'earth' as string | null,
     orbitingBodyId: 'earth' as string | null,
     navigationPlan: null as NavigationPlan | null,
+    currentNavigationTarget: null as NavigationTarget | null,
+    currentNavigationStageIndex: null as number | null,
     lastReplanTime: 0 as number,
     explosionPhase: 'none' as ExplosionPhase,
     gear: 'N' as Gear,
@@ -371,7 +500,11 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     tangentialCorrectionLastAbs: null as number | null,
     tangentialCorrectionPrevAttitude: null as AttitudeMode | null,
     parkInitialDirection: null as [number, number, number] | null,
+    parkPhase: null as ParkPhase | null,
     cruiseActive: false,
+    cruisePhase: 'idle' as CruisePhase,
+    cruiseNextJumpAtMs: null as number | null,
+    cruisePreviousTimeScale: null as number | null,
     totalDistanceKm: 0,
     maxSpeedKms: 0,
     sessionStartTime: Date.now(),
@@ -398,18 +531,54 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
       return {
         targetBodyId: id,
         navigationPlan: plan.rendezvous ? plan : null,
+        currentNavigationTarget: plan.rendezvous
+          ? { kind: 'rendezvous' as const, point: plan.rendezvous.point }
+          : { kind: 'body' as const, bodyId: id },
+        currentNavigationStageIndex: plan.rendezvous ? 0 : 2,
         lastReplanTime: s.simulatedTime,
       };
     }
     return {
       targetBodyId: null,
       navigationPlan: null,
+      currentNavigationTarget: null,
+      currentNavigationStageIndex: null,
       gear: s.gear === 'T' ? 'N' as Gear : s.gear,
       tangentialCorrectionSign: null,
       tangentialCorrectionLastAbs: null,
     };
   }),
-  setNavigationPlan: (plan) => set({ navigationPlan: plan }),
+  setNavigationPlan: (plan) => set({
+    navigationPlan: plan,
+    currentNavigationTarget: plan?.rendezvous
+      ? { kind: 'rendezvous', point: plan.rendezvous.point }
+      : null,
+    currentNavigationStageIndex: plan?.rendezvous ? 0 : null,
+  }),
+  maybeCompleteRendezvous: () => {
+    const s = useSpaceshipStore.getState();
+    if (s.currentNavigationStageIndex == null || !s.currentNavigationTarget) return;
+    const resolvedTarget = resolveCurrentNavigationTarget(s.currentNavigationTarget, s.position, s.simulatedTime);
+    if (!resolvedTarget) return;
+    const point = resolvedTarget.position;
+    const distance = vectorLength([
+      point[0] - s.position[0],
+      point[1] - s.position[1],
+      point[2] - s.position[2],
+    ]);
+    if (distance <= navigationTargetArrivalDistanceAU(s.currentNavigationTarget)) {
+      if (s.currentNavigationStageIndex === 0) useSpaceshipStore.getState().setGear('P');
+      const nextStageIndex = s.currentNavigationStageIndex + 1;
+      const nextTarget = s.navigationPlan?.stages?.[nextStageIndex]?.target ?? null;
+      useSpaceshipStore.setState({
+        navigationPlan: s.currentNavigationStageIndex === 0 && s.navigationPlan
+          ? { ...s.navigationPlan, rendezvous: undefined }
+          : s.navigationPlan,
+        currentNavigationTarget: nextTarget,
+        currentNavigationStageIndex: nextTarget ? nextStageIndex : null,
+      });
+    }
+  },
   maybeReplanRendezvous: () => {
     const s = useSpaceshipStore.getState();
     if (!s.navigationPlan?.rendezvous || !s.targetBodyId) return;
@@ -424,6 +593,10 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
     const plan = planDirectRendezvousTransfer(s.position, s.velocity, destinationId, s.simulatedTime);
     useSpaceshipStore.setState({
       navigationPlan: plan.rendezvous ? plan : null,
+      currentNavigationTarget: plan.rendezvous
+        ? { kind: 'rendezvous', point: plan.rendezvous.point }
+        : { kind: 'body', bodyId: destinationId },
+      currentNavigationStageIndex: plan.rendezvous ? 0 : 2,
       lastReplanTime: s.simulatedTime,
     });
   },
@@ -448,6 +621,8 @@ export const useSpaceshipStore = create<SpaceshipStore>((set) => ({
       if (plan.rendezvous) {
         useSpaceshipStore.setState({
           navigationPlan: plan,
+          currentNavigationTarget: { kind: 'rendezvous', point: plan.rendezvous.point },
+          currentNavigationStageIndex: 0,
         });
       }
     }

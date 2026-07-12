@@ -1,8 +1,9 @@
-import { AU_TO_KM, SPACECRAFT_CONFIG } from './constants';
-import { parkBrakeThrustMagnitude, hasEffectiveThrust } from './spaceship';
-import type { NavigationPlan } from './navigation';
+import { SPACECRAFT_CONFIG } from './constants';
+import { parkBrakeThrustMagnitude } from './spaceship';
+import type { NavigationPlan, ResolvedNavigationTarget } from './navigation';
 
-export const CRUISE_TANGENTIAL_TRIGGER_AU_PER_SEC = 1 / AU_TO_KM;
+export const CRUISE_TANGENTIAL_RATIO_TRIGGER = 0.01;
+export const CRUISE_TIME_JUMP_STEPS_SECONDS = [604800, 86400, 43200, 21600, 10800, 3600, 1800, 600, 60] as const;
 
 function vectorLength(v: [number, number, number]): number {
   return Math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2);
@@ -38,12 +39,23 @@ export interface CruiseGuidance {
   radialPositive: boolean;
 }
 
+export function computeCruiseJumpSeconds(guidance: CruiseGuidance): number {
+  if (!guidance.radialPositive || guidance.shouldBrake) return 0;
+  const coastDistanceAU = Math.max(0, guidance.distanceToRendezvousAU - guidance.projectedAdvanceAU);
+  if (guidance.radialSpeedAUPerSec <= 1e-20 || coastDistanceAU <= 1e-20) return 0;
+  const coastSeconds = coastDistanceAU / guidance.radialSpeedAUPerSec;
+  return CRUISE_TIME_JUMP_STEPS_SECONDS.find(step => step <= coastSeconds) ?? 0;
+}
+
 export function computeCruiseGuidance(
   position: [number, number, number],
   velocity: [number, number, number],
-  plan: NavigationPlan,
+  target: NavigationPlan | ResolvedNavigationTarget,
 ): CruiseGuidance {
-  const point = plan.rendezvous?.point ?? position;
+  const resolved = 'position' in target
+    ? target
+    : { position: target.rendezvous?.point ?? position, velocity: [0, 0, 0] as [number, number, number] };
+  const point = resolved.position;
   const toRendezvous: [number, number, number] = [
     point[0] - position[0],
     point[1] - position[1],
@@ -51,10 +63,11 @@ export function computeCruiseGuidance(
   ];
   const distanceToRendezvousAU = vectorLength(toRendezvous);
   const rendezvousDirection = vectorNormalize(toRendezvous);
-  const speed = vectorLength(velocity);
-  const radialSpeedAUPerSec = vectorDot(velocity, rendezvousDirection);
+  const relativeVelocity: [number, number, number] = [velocity[0] - resolved.velocity[0], velocity[1] - resolved.velocity[1], velocity[2] - resolved.velocity[2]];
+  const speed = vectorLength(relativeVelocity);
+  const radialSpeedAUPerSec = vectorDot(relativeVelocity, rendezvousDirection);
   const tangentialReference = vectorNormalize([-rendezvousDirection[1], rendezvousDirection[0], 0]);
-  const tangentialSpeedAUPerSec = vectorDot(velocity, tangentialReference);
+  const tangentialSpeedAUPerSec = vectorDot(relativeVelocity, tangentialReference);
 
   const stopDistanceAU = computeParkStopDistanceAU(speed);
   const projectedAdvanceAU = speed > 1e-20
@@ -66,7 +79,8 @@ export function computeCruiseGuidance(
     && distanceToRendezvousAU > 1e-20
     && projectedAdvanceAU >= distanceToRendezvousAU;
   const shouldCorrectTangential =
-    Math.abs(tangentialSpeedAUPerSec) > CRUISE_TANGENTIAL_TRIGGER_AU_PER_SEC;
+    radialPositive
+    && Math.abs(tangentialSpeedAUPerSec) / radialSpeedAUPerSec >= CRUISE_TANGENTIAL_RATIO_TRIGGER;
 
   return {
     rendezvousDirection,
@@ -84,11 +98,8 @@ export function computeCruiseGuidance(
 export function canEnableCruise(
   position: [number, number, number],
   velocity: [number, number, number],
-  thrust: [number, number, number],
-  thrustMagnitude: number,
-  plan: NavigationPlan | null,
+  target: NavigationPlan | ResolvedNavigationTarget | null,
 ): boolean {
-  if (!plan?.rendezvous) return false;
-  if (hasEffectiveThrust(thrust, thrustMagnitude)) return false;
-  return computeCruiseGuidance(position, velocity, plan).radialPositive;
+  if (!target) return false;
+  return computeCruiseGuidance(position, velocity, target).radialPositive;
 }

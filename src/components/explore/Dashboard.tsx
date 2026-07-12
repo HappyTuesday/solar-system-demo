@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { AU_TO_KM, REAL_DATA } from '../../engine/constants';
 import type { AttitudeMode } from '../../types';
-import { computeRendezvousDisplayParams } from '../../engine/navigation';
+import { computeRendezvousDisplayParams, computeTargetStatusParams, formatNavigationStage, resolveCurrentNavigationTarget } from '../../engine/navigation';
 import { canEnableCruise } from '../../engine/cruise';
 import MiniMap from './MiniMap';
 import TargetSelectionModal from './TargetSelectionModal';
@@ -56,18 +56,24 @@ function Dashboard() {
   const targetBodyId = useSpaceshipStore(s => s.targetBodyId);
   const setTargetBody = useSpaceshipStore(s => s.setTargetBody);
   const navigationPlan = useSpaceshipStore(s => s.navigationPlan);
+  const currentNavigationTarget = useSpaceshipStore(s => s.currentNavigationTarget);
+  const currentNavigationStageIndex = useSpaceshipStore(s => s.currentNavigationStageIndex);
   const position = useSpaceshipStore(s => s.position);
   const velocity = useSpaceshipStore(s => s.velocity);
   const simulatedTime = useSpaceshipStore(s => s.simulatedTime);
   const orbitingBodyId = useSpaceshipStore(s => s.orbitingBodyId);
   const [showTargetModal, setShowTargetModal] = useState(false);
-  const showTangentialGear = Boolean(navigationPlan?.rendezvous);
+  const showTangentialGear = Boolean(currentNavigationTarget);
+  const showOrbitGear = Boolean(orbitingBodyId);
   const cruiseActive = useSpaceshipStore(s => s.cruiseActive);
   const toggleCruise = useSpaceshipStore(s => s.toggleCruise);
-  const thrust = useSpaceshipStore(s => s.thrust);
+  const resolvedCruiseTarget = useMemo(
+    () => resolveCurrentNavigationTarget(currentNavigationTarget, position, simulatedTime),
+    [currentNavigationTarget, position, simulatedTime],
+  );
   const cruiseEnabled = useMemo(
-    () => cruiseActive || canEnableCruise(position, velocity, thrust, thrustMagnitude, navigationPlan),
-    [cruiseActive, position, velocity, thrust, thrustMagnitude, navigationPlan],
+    () => cruiseActive || canEnableCruise(position, velocity, resolvedCruiseTarget),
+    [cruiseActive, position, resolvedCruiseTarget, velocity],
   );
 
   const sliderTrackRef = useRef<HTMLDivElement>(null);
@@ -82,6 +88,18 @@ function Dashboard() {
       orbitingBodyId,
     );
   }, [direction, navigationPlan, orbitingBodyId, position, simulatedTime, velocity]);
+  const targetStatusParams = useMemo(() => {
+    if (navigationPlan?.rendezvous || !targetBodyId) return null;
+    return computeTargetStatusParams(position, velocity, targetBodyId, simulatedTime, orbitingBodyId);
+  }, [navigationPlan, orbitingBodyId, position, simulatedTime, targetBodyId, velocity]);
+  const navigationStageLabel = useMemo(
+    () => formatNavigationStage(
+      navigationPlan?.stages,
+      currentNavigationStageIndex,
+      targetBodyId ? (REAL_DATA[targetBodyId]?.name || targetBodyId) : '',
+    ),
+    [currentNavigationStageIndex, navigationPlan?.stages, targetBodyId],
+  );
 
   const updateThrustFromClientX = useCallback((clientX: number) => {
     const track = sliderTrackRef.current;
@@ -190,12 +208,18 @@ function Dashboard() {
                     onMouseDown={(e) => { e.preventDefault(); setGear('R'); }}
                   >R</button>
                   <button className={`dashboard-gear-btn gear-p${gear === 'P' ? ' active' : ''}`}
-                    title="泊车：自动朝向前进方向并反向制动，速度归零后回到N档"
+                    title="泊车：自动制动至日心静止，并持续抵消引力保持位置"
                     onMouseDown={(e) => { e.preventDefault(); setGear('P'); }}
                   >P</button>
+                  {showOrbitGear && (
+                    <button className={`dashboard-gear-btn gear-t${gear === 'O' ? ' active' : ''}`}
+                      title="绕飞：自动调整姿态与推力，使飞船在当前位置正圆绕飞"
+                      onMouseDown={(e) => { e.preventDefault(); setGear('O'); }}
+                    >O</button>
+                  )}
                   {showTangentialGear && (
                     <button className={`dashboard-gear-btn gear-t${gear === 'T' ? ' active' : ''}`}
-                      title="切向修正：自动调整姿态与推力，切向速度到0或过零后回到N档"
+                      title="切向修正：相对于当前汇合点或目的地的切向速度到0或过零后回到N档"
                       onMouseDown={(e) => { e.preventDefault(); setGear('T'); }}
                     >T</button>
                   )}
@@ -207,6 +231,7 @@ function Dashboard() {
                 {gear === 'R' && <span className="gear-indicator reverse"> [R]</span>}
                 {gear === 'T' && <span className="gear-indicator tangential"> [T切向]</span>}
                 {gear === 'P' && <span className="gear-indicator park"> [P泊车]</span>}
+                {gear === 'O' && <span className="gear-indicator tangential"> [O绕飞]</span>}
               </div>
 
               <div className="dashboard-pads-row">
@@ -214,9 +239,9 @@ function Dashboard() {
                   <button
                     className={`dashboard-cruise-btn${cruiseActive ? ' active' : ''}`}
                     disabled={!cruiseEnabled}
-                    title="巡航：自动挂T修正切向，预测将到达汇合点时挂P制动并停止"
+                    title="巡航：按7天至1分钟分级跳跃，跳后检查切向修正和P档制动；挂P后结束巡航"
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => toggleCruise()}
+                    onClick={() => toggleCruise(performance.now())}
                   >巡航</button>
                 </div>
                 <div className="dashboard-pad-group">
@@ -318,12 +343,17 @@ function Dashboard() {
             <div className="dashboard-column">
               <div className="dashboard-column-title">导航路线</div>
               {targetBodyId ? (
-                <div className="dashboard-nav-dest"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setShowTargetModal(true)}
-                >
-                  目的地：{REAL_DATA[targetBodyId]?.name || targetBodyId}
-                  <span className="dashboard-nav-dest-sub">（修改）</span>
+                <div className="dashboard-nav-summary">
+                  <div className="dashboard-nav-dest"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setShowTargetModal(true)}
+                  >
+                    目的地：{REAL_DATA[targetBodyId]?.name || targetBodyId}
+                    <span className="dashboard-nav-dest-sub">（修改）</span>
+                  </div>
+                  {navigationStageLabel && (
+                    <div className="dashboard-nav-stage">当前{navigationStageLabel}</div>
+                  )}
                 </div>
               ) : (
                 <div className="dashboard-nav-set-btn"
@@ -356,6 +386,15 @@ function Dashboard() {
                     <span>目标 / 汇合点距离</span>
                     <strong>{formatDistance(rendezvousParams.distanceToTargetAU)} / {formatDistance(rendezvousParams.distanceToRendezvousAU)}</strong>
                   </div>
+                </div>
+              ) : targetStatusParams ? (
+                <div className="dashboard-rendezvous-params">
+                  <div><span>飞船到目标距离</span><strong>{formatDistance(targetStatusParams.distanceToTargetAU)}</strong></div>
+                  <div><span>相对总速度</span><strong>{(targetStatusParams.relativeSpeedAUPerSec * AU_TO_KM).toFixed(2)} km/s</strong></div>
+                  <div><span>相对径向 / 切向速度</span><strong>{formatSignedSpeed(targetStatusParams.radialSpeedAUPerSec)} / {formatSignedSpeed(targetStatusParams.tangentialSpeedAUPerSec)}</strong></div>
+                  <div><span>目标引力范围</span><strong>{targetStatusParams.insideTargetGravityRange ? '范围内' : '范围外'}</strong></div>
+                  <div><span>预计进入目标引力范围</span><strong>{targetStatusParams.insideTargetGravityRange ? '已进入' : formatDurationSec(targetStatusParams.timeToTargetGravityRangeSec)}</strong></div>
+                  <div><span>目标捕获状态</span><strong>{targetStatusParams.capturedByTarget ? '已捕获' : '未捕获'}</strong></div>
                 </div>
               ) : null}
             </div>

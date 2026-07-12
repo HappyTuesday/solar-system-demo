@@ -5,7 +5,7 @@ import { REAL_DATA, MU_SUN_AU as MU_SUN } from '../../engine/constants';
 import { useSpaceshipStore } from '../../stores/spaceshipStore';
 import { useExploreStore } from '../../stores/exploreStore';
 import { checkSpaceshipCollision, hasEffectiveThrust } from '../../engine/spaceship';
-import { advanceExploreShipPhysics } from '../../engine/exploreSimulation';
+import { advanceExploreShipPhysics, computeExploreBodyStates } from '../../engine/exploreSimulation';
 import { computeRendezvousPulse } from '../../engine/navigationVisual';
 import { computeRendezvousDirection } from '../../engine/navigation';
 import TimePanel from './TimePanel';
@@ -535,8 +535,14 @@ function ExploreCanvas() {
 
     const animate = (time: number) => {
       useSpaceshipStore.getState().updateTangentialCorrectionGear();
-      useSpaceshipStore.getState().updateParkGear();
-      useSpaceshipStore.getState().updateCruise();
+      const parkStore = useSpaceshipStore.getState();
+      useSpaceshipStore.getState().updateParkGear(
+        computeExploreBodyStates(parkStore.simulatedTime, allIds),
+      );
+      useSpaceshipStore.getState().updateOrbitGear(
+        computeExploreBodyStates(parkStore.simulatedTime, allIds),
+      );
+      useSpaceshipStore.getState().updateCruise(time);
       const store = useSpaceshipStore.getState();
 
       const effectiveThrust = hasEffectiveThrust(store.thrust, store.thrustMagnitude);
@@ -582,8 +588,6 @@ function ExploreCanvas() {
 
         simulatedTime = physics.simulatedTime;
         store.setSimulatedTime(simulatedTime);
-
-        useSpaceshipStore.getState().maybeReplanRendezvous();
 
         const finalBodies = physics.finalBodies;
         const finalBodyMap = new Map(finalBodies.map(body => [body.id, body]));
@@ -704,6 +708,8 @@ function ExploreCanvas() {
             [shipState.position[0], shipState.position[1], shipState.position[2]],
             [shipState.velocity[0], shipState.velocity[1], shipState.velocity[2]],
           );
+          useSpaceshipStore.getState().maybeCompleteRendezvous();
+          useSpaceshipStore.getState().maybeReplanRendezvous();
 
           // Update nearest body ID and orbiting body ID (used by HUD, navigation, attitude modes)
           {

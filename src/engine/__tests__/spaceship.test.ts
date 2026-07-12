@@ -9,6 +9,9 @@ import {
   predictTrajectory,
   parkBrakeThrustMagnitude,
   parkBrakeSnapshot,
+  computeGravityAcceleration,
+  parkHoldSnapshot,
+  orbitInsertSnapshot,
   clampSpeedToMax,
   MAX_SHIP_SPEED_AU_PER_SEC,
   type BodyInfo,
@@ -162,6 +165,53 @@ describe('spaceship', () => {
     it('should report stopped when speed is essentially zero', () => {
       const snap = parkBrakeSnapshot([0, 0, 0], [0, 1, 0]);
       expect(snap.reachedStop).toBe(true);
+    });
+  });
+
+  describe('parkHoldSnapshot', () => {
+    it('faces opposite the local gravitational acceleration to hold a stationary heliocentric position', () => {
+      const gravity = computeGravityAcceleration([1, 0, 0], [makeSun()]);
+      const hold = parkHoldSnapshot([1, 0, 0], [0, 0, 0], [makeSun()]);
+
+      expect(gravity[0]).toBeLessThan(0);
+      expect(hold.facingDirection[0]).toBeGreaterThan(0);
+      expect(hold.thrustMagnitude).toBeGreaterThan(0);
+    });
+
+    it('adds damping opposite residual heliocentric velocity', () => {
+      const hold = parkHoldSnapshot([1, 0, 0], [0, 1e-7, 0], [makeSun()]);
+
+      expect(hold.targetAcceleration[1]).toBeLessThan(0);
+      expect(hold.facingDirection[1]).toBeLessThan(0);
+    });
+
+    it('caps hold thrust at the spacecraft maximum without changing the target direction', () => {
+      const body: BodyInfo = { id: 'heavy', position: [0, 0, 0], mass: 1e38, radius: 1 };
+      const hold = parkHoldSnapshot([1, 0, 0], [0, 0, 0], [body]);
+
+      expect(hold.thrustMagnitude).toBe(100);
+      expect(hold.facingDirection[0]).toBeGreaterThan(0);
+    });
+  });
+
+  describe('orbitInsertSnapshot', () => {
+    it('prioritizes radial braking when entering orbit with a large climb speed', () => {
+      const earth: BodyInfo = {
+        id: 'earth',
+        position: [0, 0, 0],
+        mass: 5.9724e24,
+        radius: 6371 / AU_TO_KM,
+      };
+      const lowOrbitRadius = earth.radius + 430 / AU_TO_KM;
+      const snap = orbitInsertSnapshot(
+        [lowOrbitRadius, 0, 0],
+        [20 / AU_TO_KM, 0, 0],
+        earth,
+        [0, 0, 0],
+      );
+
+      expect(snap.facingDirection[0]).toBeLessThan(-0.99);
+      expect(snap.thrustMagnitude).toBe(100);
     });
   });
 

@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
-  CRUISE_TANGENTIAL_TRIGGER_AU_PER_SEC,
+  CRUISE_TANGENTIAL_RATIO_TRIGGER,
+  CRUISE_TIME_JUMP_STEPS_SECONDS,
   computeParkStopDistanceAU,
   computeCruiseGuidance,
+  computeCruiseJumpSeconds,
   canEnableCruise,
 } from '../cruise';
 import type { NavigationPlan } from '../navigation';
@@ -57,13 +59,31 @@ describe('computeCruiseGuidance', () => {
     expect(g.shouldCorrectTangential).toBe(false);
   });
 
-  it('flags shouldCorrectTangential above the trigger threshold', () => {
-    const above = CRUISE_TANGENTIAL_TRIGGER_AU_PER_SEC * 2;
-    const below = CRUISE_TANGENTIAL_TRIGGER_AU_PER_SEC * 0.5;
-    const gAbove = computeCruiseGuidance([0, 0, 0], [1e-6, above, 0], planTo([1, 0, 0]));
-    const gBelow = computeCruiseGuidance([0, 0, 0], [1e-6, below, 0], planTo([1, 0, 0]));
+  it('flags shouldCorrectTangential when the tangential-to-radial ratio exceeds the trigger', () => {
+    const radial = 1e-6;
+    const gAbove = computeCruiseGuidance(
+      [0, 0, 0],
+      [radial, radial * CRUISE_TANGENTIAL_RATIO_TRIGGER * 2, 0],
+      planTo([1, 0, 0]),
+    );
+    const gBelow = computeCruiseGuidance(
+      [0, 0, 0],
+      [radial, radial * CRUISE_TANGENTIAL_RATIO_TRIGGER * 0.5, 0],
+      planTo([1, 0, 0]),
+    );
     expect(gAbove.shouldCorrectTangential).toBe(true);
     expect(gBelow.shouldCorrectTangential).toBe(false);
+  });
+
+  it('flags tangential correction exactly at the 0.01 ratio threshold', () => {
+    const radial = 1e-6;
+    const g = computeCruiseGuidance(
+      [0, 0, 0],
+      [radial, radial * CRUISE_TANGENTIAL_RATIO_TRIGGER, 0],
+      planTo([1, 0, 0]),
+    );
+
+    expect(g.shouldCorrectTangential).toBe(true);
   });
 
   it('marks radial as non-positive when moving away', () => {
@@ -72,22 +92,77 @@ describe('computeCruiseGuidance', () => {
   });
 });
 
+describe('computeCruiseJumpSeconds', () => {
+  function guidance(overrides: Partial<ReturnType<typeof computeCruiseGuidance>> = {}) {
+    return {
+      rendezvousDirection: [1, 0, 0] as [number, number, number],
+      radialSpeedAUPerSec: 1,
+      tangentialSpeedAUPerSec: 0,
+      distanceToRendezvousAU: 1_000_000,
+      stopDistanceAU: 2,
+      projectedAdvanceAU: 2,
+      shouldBrake: false,
+      shouldCorrectTangential: false,
+      radialPositive: true,
+      ...overrides,
+    };
+  }
+
+  it('jumps 7 days while the braking window is farther away', () => {
+    const result = computeCruiseJumpSeconds(guidance());
+
+    expect(result).toBe(CRUISE_TIME_JUMP_STEPS_SECONDS[0]);
+  });
+
+  it('selects a 24-hour jump when 48 hours remain before the braking window', () => {
+    const result = computeCruiseJumpSeconds(guidance({ distanceToRendezvousAU: 172_802 }));
+
+    expect(result).toBe(CRUISE_TIME_JUMP_STEPS_SECONDS[1]);
+  });
+
+  it('selects a 12-hour jump when 20 hours remain before the braking window', () => {
+    const result = computeCruiseJumpSeconds(guidance({ distanceToRendezvousAU: 72_002 }));
+
+    expect(result).toBe(CRUISE_TIME_JUMP_STEPS_SECONDS[2]);
+  });
+
+  it('selects a 6-hour jump when 8 hours remain before the braking window', () => {
+    const result = computeCruiseJumpSeconds(guidance({ distanceToRendezvousAU: 28_802 }));
+
+    expect(result).toBe(CRUISE_TIME_JUMP_STEPS_SECONDS[3]);
+  });
+
+  it('does not jump when less than one minute remains before the braking window', () => {
+    const result = computeCruiseJumpSeconds(guidance({ distanceToRendezvousAU: 61.9 }));
+
+    expect(result).toBe(0);
+  });
+
+  it('does not jump once the braking condition is already met', () => {
+    const result = computeCruiseJumpSeconds(guidance({ shouldBrake: true }));
+
+    expect(result).toBe(0);
+  });
+
+  it('does not jump when radial motion is non-positive', () => {
+    const result = computeCruiseJumpSeconds(guidance({ radialSpeedAUPerSec: 0, radialPositive: false }));
+
+    expect(result).toBe(0);
+  });
+});
+
 describe('canEnableCruise', () => {
   const plan = planTo([1, 0, 0]);
 
-  it('true when rendezvous exists, no thrust, radial positive', () => {
-    expect(canEnableCruise([0, 0, 0], [1e-6, 0, 0], [0, 0, 0], 0, plan)).toBe(true);
+  it('true when rendezvous exists and radial velocity is positive', () => {
+    expect(canEnableCruise([0, 0, 0], [1e-6, 0, 0], plan)).toBe(true);
   });
 
   it('false without a rendezvous plan', () => {
-    expect(canEnableCruise([0, 0, 0], [1e-6, 0, 0], [0, 0, 0], 0, null)).toBe(false);
-  });
-
-  it('false when there is effective thrust', () => {
-    expect(canEnableCruise([0, 0, 0], [1e-6, 0, 0], [1, 0, 0], 50, plan)).toBe(false);
+    expect(canEnableCruise([0, 0, 0], [1e-6, 0, 0], null)).toBe(false);
   });
 
   it('false when radial speed is not positive', () => {
-    expect(canEnableCruise([0, 0, 0], [-1e-6, 0, 0], [0, 0, 0], 0, plan)).toBe(false);
+    expect(canEnableCruise([0, 0, 0], [-1e-6, 0, 0], plan)).toBe(false);
   });
 });
