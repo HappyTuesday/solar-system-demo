@@ -27,3 +27,4 @@ dist-ssr
 test-*.mjs
 .superpowers/
 .playwright-mcp/
+.worktrees/
